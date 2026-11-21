@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/layout/TopBar';
 import { CommandPalette } from './components/layout/CommandPalette';
@@ -17,6 +17,17 @@ import { MessagesPage } from './pages/MessagesPage';
 import { AutomationPage } from './pages/AutomationPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { DevTablePage } from './pages/DevTablePage';
+import { DevMotionPage } from './pages/DevMotionPage';
+import { CustomerDetailDrawer } from './features/customers/CustomerDetailDrawer';
+import { AddEditCustomerModal } from './features/customers/AddEditCustomerModal';
+import { CustomizeViewModal } from './features/customers/CustomizeViewModal';
+import { DeleteCustomerModal } from './features/customers/DeleteCustomerModal';
+import { StatusConfirmationModal } from './features/customers/StatusConfirmationModal';
+import { RecordPaymentModal } from './features/customers/RecordPaymentModal';
+import { SendMessageModal } from './features/customers/SendMessageModal';
+import { SpeedTestModal } from './features/customers/SpeedTestModal';
+import { CreateTicketModal } from './features/customers/CreateTicketModal';
 import { useStore } from './store/useStore';
 
 const AnimatedRouteWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -39,18 +50,34 @@ const AnimatedRouteWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
 export const AppContent: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const darkMode = useStore((s) => s.darkMode);
+  const themeMode = useStore((s) => s.themeMode);
+  const comfort = useStore((s) => s.comfort);
+  const density = useStore((s) => s.density);
+  const animations = useStore((s) => s.animations);
 
-  // Initialize theme on mount
+  // Initialize theme, comfort mode, density, and motion preference on mount
   useEffect(() => {
-    if (darkMode) {
+    const isDark =
+      themeMode === 'dark' ||
+      (themeMode === 'system' &&
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches) ||
+      darkMode;
+    if (isDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [darkMode]);
+    document.documentElement.setAttribute('data-comfort', comfort || 'soft');
+    document.documentElement.setAttribute('data-density', density || 'compact');
+    document.documentElement.setAttribute('data-motion', animations || 'system');
+  }, [darkMode, themeMode, comfort, density, animations]);
+
+  const reducedMotionSetting = animations === 'reduced' ? 'always' : animations === 'on' ? 'never' : 'user';
 
   return (
-    <div className="flex min-h-screen bg-[#FAF7F5] dark:bg-[#121214] text-gray-800 dark:text-gray-100 font-sans transition-colors duration-200">
+    <MotionConfig reducedMotion={reducedMotionSetting}>
+      <div className="flex min-h-screen bg-[var(--bg-app)] text-[var(--text)] font-sans antialiased">
       {/* Sidebar (Desktop sticky & Mobile drawer) */}
       <Sidebar
         mobileOpen={mobileMenuOpen}
@@ -61,7 +88,7 @@ export const AppContent: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar onMobileMenuOpen={() => setMobileMenuOpen(true)} />
 
-        <main className="flex-1 max-w-[1440px] mx-auto px-4 sm:px-8 w-full py-6">
+        <main className="flex-1 max-w-[1480px] mx-auto px-4 sm:px-6 w-full pt-5 pb-10">
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/" element={<Navigate to="/customers" replace />} />
@@ -161,6 +188,22 @@ export const AppContent: React.FC = () => {
                   </AnimatedRouteWrapper>
                 }
               />
+              <Route
+                path="/dev/table"
+                element={
+                  <AnimatedRouteWrapper>
+                    <DevTablePage />
+                  </AnimatedRouteWrapper>
+                }
+              />
+              <Route
+                path="/dev/motion"
+                element={
+                  <AnimatedRouteWrapper>
+                    <DevMotionPage />
+                  </AnimatedRouteWrapper>
+                }
+              />
               <Route path="*" element={<Navigate to="/customers" replace />} />
             </Routes>
           </AnimatePresence>
@@ -170,9 +213,23 @@ export const AppContent: React.FC = () => {
       {/* Global Interactive Command Palette (Ctrl+K) */}
       <CommandPalette />
 
+      {/* Global Customer Detail Drawer */}
+      <CustomerDetailDrawer />
+
+      {/* Reusable Modals */}
+      <AddEditCustomerModal />
+      <CustomizeViewModal />
+      <DeleteCustomerModal />
+      <StatusConfirmationModal />
+      <RecordPaymentModal />
+      <SendMessageModal />
+      <SpeedTestModal />
+      <CreateTicketModal />
+
       {/* Stacked Toast Notifications */}
       <ToastContainer />
     </div>
+    </MotionConfig>
   );
 };
 

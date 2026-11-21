@@ -19,9 +19,13 @@ import {
   ArrowRight,
   Activity,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Avatar } from '../ui/Avatar';
+import { Tooltip } from '../ui/Tooltip';
+import { SPRING_SNAPPY } from '../../lib/motion';
 import { cn } from '../../lib/utils';
 
 interface SidebarProps {
@@ -34,6 +38,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
   const setCommandPaletteOpen = useStore((s) => s.setCommandPaletteOpen);
   const tickets = useStore((s) => s.tickets);
   const addToast = useStore((s) => s.addToast);
+  const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
+  const toggleSidebarCollapsed = useStore((s) => s.toggleSidebarCollapsed);
+  const sidebarUpgradeDismissed = useStore((s) => s.sidebarUpgradeDismissed);
+  const setSidebarUpgradeDismissed = useStore((s) => s.setSidebarUpgradeDismissed);
 
   const openTicketsCount = tickets.filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
 
@@ -55,206 +63,277 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
+  const renderNavList = (items: typeof mainNav) => (
+    <div className="space-y-0.5">
+      {items.map((item) => {
+        const isActive =
+          location.pathname === item.path ||
+          (item.path === '/customers' && location.pathname === '/');
+        const Icon = item.icon;
+
+        const content = (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            onClick={onMobileClose}
+            className={cn(
+              'relative flex items-center h-[34px] rounded-lg text-[13px] font-medium transition-colors select-none group',
+              sidebarCollapsed ? 'justify-center px-0 w-full' : 'justify-between px-2.5',
+              isActive
+                ? 'text-[var(--brand)] font-semibold'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)]'
+            )}
+          >
+            {/* Sliding Active Pill */}
+            {isActive && (
+              <motion.div
+                layoutId="nav-active"
+                className="absolute inset-0 bg-[var(--brand-soft)] border border-[var(--brand)]/20 rounded-lg pointer-events-none"
+                transition={SPRING_SNAPPY}
+              />
+            )}
+
+            <div className={cn('relative z-10 flex items-center gap-2.5 min-w-0', sidebarCollapsed && 'justify-center')}>
+              <Icon
+                className={cn(
+                  'w-4 h-4 shrink-0 transition-colors',
+                  isActive
+                    ? 'text-[var(--brand)]'
+                    : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'
+                )}
+              />
+              {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
+            </div>
+
+            {!sidebarCollapsed && item.badge !== undefined && (
+              <span
+                className={cn(
+                  'relative z-10 flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-semibold',
+                  isActive
+                    ? 'bg-[var(--brand)] text-white'
+                    : 'bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)]'
+                )}
+              >
+                {item.badge}
+              </span>
+            )}
+          </NavLink>
+        );
+
+        return sidebarCollapsed ? (
+          <Tooltip key={item.path} content={`${item.name}${item.badge ? ` (${item.badge})` : ''}`} side="right">
+            {content}
+          </Tooltip>
+        ) : (
+          content
+        );
+      })}
+    </div>
+  );
+
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-[#FAF7F5] dark:bg-[#141416] border-r border-gray-200/80 dark:border-gray-800/80 px-4 py-5 select-none w-60">
-      {/* Brand Header */}
-      <div className="flex items-center justify-between px-2 mb-4 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#F26B3A] text-white shadow-xs">
-            <Activity className="w-5 h-5 stroke-[2.2]" />
+    <motion.div
+      data-testid="sidebar-container"
+      animate={{ width: sidebarCollapsed ? 64 : 232 }}
+      transition={SPRING_SNAPPY}
+      className={cn(
+        'flex flex-col h-full bg-[var(--bg-sidebar)] border-r border-[var(--border)] select-none overflow-hidden shrink-0',
+        sidebarCollapsed ? 'px-2 py-3' : 'px-3.5 py-3'
+      )}
+    >
+      {/* 1. Brand Header (56px) */}
+      <div className={cn('h-14 flex items-center justify-between shrink-0 mb-1', sidebarCollapsed && 'justify-center')}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--brand)] text-white shadow-2xs shrink-0">
+            <Activity className="w-4 h-4 stroke-[2.2]" />
           </div>
-          <div>
-            <h1 className="text-base font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
-              NetPulse
-            </h1>
-            <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
-              Smart ISP Management
-            </p>
-          </div>
+          <AnimatePresence>
+            {!sidebarCollapsed && (
+              <motion.div
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.15 }}
+                className="min-w-0 overflow-hidden"
+              >
+                <h1 className="text-[14px] font-bold tracking-tight text-[var(--text)] truncate leading-tight">
+                  NetPulse
+                </h1>
+                <p className="text-[11px] text-[var(--text-muted)] truncate leading-tight">
+                  ISP Operations
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
+        {/* Mobile close */}
         {onMobileClose && (
           <button
             type="button"
             onClick={onMobileClose}
-            className="md:hidden p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="md:hidden p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)]"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {/* Search Menu Trigger Button */}
-      <button
-        type="button"
-        onClick={() => setCommandPaletteOpen(true)}
-        className="flex items-center justify-between w-full px-3 py-2 mb-3 text-xs text-gray-400 bg-white dark:bg-[#1E1E22] border border-gray-200/80 dark:border-gray-800 rounded-xl shadow-xs hover:border-[#F26B3A]/40 transition-colors group shrink-0"
-      >
-        <div className="flex items-center gap-2">
-          <Search className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#F26B3A] transition-colors" />
-          <span>Search menu...</span>
-        </div>
-        <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-          Ctrl K
-        </kbd>
-      </button>
-
-      {/* Navigation List (thin auto-hiding scrollbar) */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1 -mr-1 scrollbar-none">
-        {/* Main Section */}
-        <div className="space-y-1">
-          {mainNav.map((item) => {
-            const isActive =
-              location.pathname === item.path ||
-              (item.path === '/customers' && location.pathname === '/');
-            const Icon = item.icon;
-
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={onMobileClose}
-                className={cn(
-                  'relative flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 group',
-                  isActive
-                    ? 'text-[#F26B3A] font-bold bg-[#FFF1EA] dark:bg-[#F26B3A]/15'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/40'
-                )}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebarActivePill"
-                    className="absolute inset-0 bg-[#FFF1EA] dark:bg-[#F26B3A]/15 rounded-xl border border-[#F26B3A]/20"
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <div className="relative z-10 flex items-center gap-3">
-                  <Icon
-                    className={cn(
-                      'w-[18px] h-[18px] transition-colors',
-                      isActive ? 'text-[#F26B3A]' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'
-                    )}
-                  />
-                  <span>{item.name}</span>
-                </div>
-
-                {item.badge !== undefined && (
-                  <span
-                    className={cn(
-                      'relative z-10 flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-bold',
-                      isActive
-                        ? 'bg-[#F26B3A] text-white'
-                        : 'bg-orange-100 dark:bg-orange-950/60 text-[#F26B3A]'
-                    )}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
-        </div>
-
-        {/* Tools Section */}
-        <div className="pt-2">
-          <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 block mb-1">
-            Tools
-          </span>
-          <div className="space-y-1">
-            {toolsNav.map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
-
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={onMobileClose}
-                  className={cn(
-                    'relative flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 group',
-                    isActive
-                      ? 'text-[#F26B3A] font-bold bg-[#FFF1EA] dark:bg-[#F26B3A]/15'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/40'
-                  )}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="sidebarActivePill"
-                      className="absolute inset-0 bg-[#FFF1EA] dark:bg-[#F26B3A]/15 rounded-xl border border-[#F26B3A]/20"
-                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                  <div className="relative z-10 flex items-center gap-3">
-                    <Icon
-                      className={cn(
-                        'w-[18px] h-[18px] transition-colors',
-                        isActive ? 'text-[#F26B3A]' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'
-                      )}
-                    />
-                    <span>{item.name}</span>
-                  </div>
-                </NavLink>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Pinned Bottom Area */}
-      <div className="mt-auto shrink-0 space-y-3 pt-3">
-        {/* Upgrade to Pro Card */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#FFF5F0] via-[#FFEADB] to-[#FEDBC9] dark:from-[#2A1810] dark:via-[#25140D] dark:to-[#1E110A] border border-[#F26B3A]/25 shadow-xs relative overflow-hidden">
-          <div className="relative z-10">
-            <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100">Upgrade to Pro</h4>
-            <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-0.5 leading-snug">
-              Multi-gigabit capacity & automated traffic shaping.
-            </p>
+      {/* 2. Search Menu Trigger Button */}
+      <div className="shrink-0 mb-3">
+        {sidebarCollapsed ? (
+          <Tooltip content="Search menu (Ctrl+K)" side="right">
             <button
               type="button"
-              onClick={() => {
-                addToast({
-                  type: 'success',
-                  title: 'Pro Upgrade Requested',
-                  message: 'An enterprise sales specialist has been notified.',
-                });
-              }}
-              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F26B3A] text-white text-[11px] font-bold hover:bg-[#E05220] transition-colors shadow-xs"
+              onClick={() => setCommandPaletteOpen(true)}
+              className="flex items-center justify-center w-full h-[34px] rounded-lg text-[var(--text-muted)] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--brand)]/40 hover:text-[var(--brand)] transition-colors"
             >
-              <span>Upgrade Now</span>
-              <ArrowRight className="w-3 h-3" />
+              <Search className="w-4 h-4" />
             </button>
-          </div>
-        </div>
-
-        {/* Help Center */}
-        <NavLink
-          to="/settings"
-          onClick={onMobileClose}
-          className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/40 rounded-xl transition-colors"
-        >
-          <HelpCircle className="w-4 h-4 text-gray-400" />
-          <span>Help center</span>
-        </NavLink>
-
-        {/* User Profile Block */}
-        <div className="pt-2.5 border-t border-gray-200/80 dark:border-gray-800/80 flex items-center gap-3 px-1">
-          <Avatar name="Hariharan B" size="md" online={true} />
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">
-              Hariharan B
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCommandPaletteOpen(true)}
+            className="flex items-center justify-between w-full h-[34px] px-2.5 text-[12px] text-[var(--text-muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg hover:border-[var(--brand)]/40 transition-colors group"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--brand)] transition-colors shrink-0" />
+              <span className="truncate">Search menu...</span>
             </div>
-            <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
-              Network Admin
+            <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-muted)] bg-[var(--surface-subtle)] rounded border border-[var(--border)] shrink-0">
+              Ctrl K
+            </kbd>
+          </button>
+        )}
+      </div>
+
+      {/* 3. Navigation List (flex-1 overflow-y-auto scrollbar-thin) */}
+      <div className="flex-1 overflow-y-auto space-y-4 pr-0.5 scrollbar-thin">
+        {renderNavList(mainNav)}
+
+        {/* Tools Section */}
+        <div>
+          {!sidebarCollapsed ? (
+            <div className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+              Tools
             </div>
-          </div>
+          ) : (
+            <div className="my-2 border-t border-[var(--border-subtle)]" />
+          )}
+          {renderNavList(toolsNav)}
         </div>
       </div>
-    </div>
+
+      {/* 4. Footer (Upgrade card, Help center, profile 52px, plus collapse toggle) */}
+      <div className="mt-auto shrink-0 space-y-2 pt-2 border-t border-[var(--border)]">
+        {/* Compact Upgrade card: dismissible & hidden on height < 760px */}
+        <AnimatePresence>
+          {!sidebarCollapsed && !sidebarUpgradeDismissed && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.15 }}
+              className="hidden [@media(min-height:760px)]:block p-3 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border)] relative overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setSidebarUpgradeDismissed(true)}
+                className="absolute top-2 right-2 p-1 text-[var(--text-muted)] hover:text-[var(--text)] rounded-md transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+              <h4 className="text-[12px] font-semibold text-[var(--text)] pr-4">Upgrade to Pro</h4>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-snug">
+                Multi-gigabit capacity & traffic shaping.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  addToast({
+                    type: 'success',
+                    title: 'Pro Upgrade Requested',
+                    message: 'An enterprise sales specialist has been notified.',
+                  });
+                }}
+                className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--brand)] text-white text-[11px] font-semibold hover:bg-[var(--brand-hover)] transition-colors shadow-2xs"
+              >
+                <span>Upgrade Now</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Help Center */}
+        {sidebarCollapsed ? (
+          <Tooltip content="Help center" side="right">
+            <NavLink
+              to="/settings"
+              onClick={onMobileClose}
+              className="flex items-center justify-center w-full h-[34px] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors"
+            >
+              <HelpCircle className="w-4 h-4 text-[var(--text-muted)]" />
+            </NavLink>
+          </Tooltip>
+        ) : (
+          <NavLink
+            to="/settings"
+            onClick={onMobileClose}
+            className="flex items-center gap-2.5 px-2.5 h-[34px] text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
+          >
+            <HelpCircle className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+            <span>Help center</span>
+          </NavLink>
+        )}
+
+        {/* User Profile Block & Collapse Toggle (52px tall) */}
+        <div className="h-[52px] flex items-center justify-between px-1">
+          {sidebarCollapsed ? (
+            <Tooltip content="Hariharan B (Network Admin)" side="right">
+              <div className="flex justify-center w-full">
+                <Avatar name="Hariharan B" size="sm" online={true} />
+              </div>
+            </Tooltip>
+          ) : (
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <Avatar name="Hariharan B" size="sm" online={true} />
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-semibold text-[var(--text)] truncate">
+                  Hariharan B
+                </div>
+                <div className="text-[11px] text-[var(--text-muted)] truncate">
+                  Network Admin
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop Collapse/Expand Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            data-testid="sidebar-toggle-btn"
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="hidden md:flex items-center justify-center p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors shrink-0"
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 
   return (
     <>
-      {/* Desktop Sidebar (Sticky, full height, no outer scroll) */}
+      {/* Desktop Sticky Sidebar */}
       <aside className="hidden md:flex shrink-0 h-screen sticky top-0 z-30 overflow-hidden">
         {sidebarContent}
       </aside>
