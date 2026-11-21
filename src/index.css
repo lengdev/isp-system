@@ -14,6 +14,9 @@
     --toolbar-icon: 14px;
     --table-fs: 12px;
 
+    /* Focus Ring Token */
+    --focus-ring: #4F46E5;
+
     /* Shared Form Input Control Tokens (40px / 14px / 10px radius / 13px placeholder) */
     --input-h: 40px;
     --input-fs: 14px;
@@ -79,10 +82,14 @@
     --option-hover-bg: #F4F4F5;
     --option-selected-hover-bg: #E0E7FF;
 
-    /* Elevation & Shadows */
-    --shadow-card: 0 1px 2px rgba(25, 27, 31, 0.04), 0 1px 1px rgba(25, 27, 31, 0.02);
-    --shadow-popover: 0 12px 32px -8px rgba(20, 22, 28, 0.18);
-    --shadow-modal: 0 24px 64px -12px rgba(20, 22, 28, 0.22);
+    /* Elevation & Soft Shadows (Spec 3.3) */
+    --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+    --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.03);
+    --shadow-md: 0 8px 20px -6px rgba(16, 24, 40, 0.10);
+    --shadow-lg: 0 20px 48px -12px rgba(16, 24, 40, 0.16);
+    --shadow-card: var(--shadow-sm);
+    --shadow-popover: var(--shadow-md);
+    --shadow-modal: var(--shadow-lg);
     --backdrop: rgba(20, 22, 28, 0.45);
     --page-gradient: none;
   }
@@ -126,9 +133,11 @@
     --surface-raised: #212429;
     --surface-subtle: #18191D;
 
-    --border: rgba(255, 255, 255, 0.08);
-    --border-subtle: rgba(255, 255, 255, 0.05);
-    --border-strong: rgba(255, 255, 255, 0.14);
+    --border: rgba(255, 255, 255, 0.10);
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-strong: rgba(255, 255, 255, 0.16);
+
+    --focus-ring: #818CF8;
 
     --text: #E7E9EE;
     --text-secondary: #B4B9C4;
@@ -164,9 +173,14 @@
     --option-hover-bg: rgba(255, 255, 255, 0.06);
     --option-selected-hover-bg: rgba(99, 102, 241, 0.22);
 
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 1px rgba(0, 0, 0, 0.18);
-    --shadow-popover: 0 12px 32px -8px rgba(0, 0, 0, 0.45);
-    --shadow-modal: 0 24px 64px -12px rgba(0, 0, 0, 0.65);
+    /* Soft Shadows (Dark: Spec 3.3) */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.20);
+    --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.38);
+    --shadow-lg: 0 20px 48px -12px rgba(0, 0, 0, 0.45);
+    --shadow-card: var(--shadow-sm);
+    --shadow-popover: var(--shadow-md);
+    --shadow-modal: var(--shadow-lg);
     --backdrop: rgba(0, 0, 0, 0.65);
     --page-gradient: none;
   }
@@ -210,11 +224,21 @@
     color: var(--text);
   }
 
-  /* Smooth theme transitions (200ms on surfaces only) */
-  body, header, aside, main, table, tr, th, td, button, input, select, textarea {
-    transition-property: background-color, border-color, color, box-shadow;
-    transition-duration: 200ms;
-    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Global Focus System (Spec 3.2: No black flash, one clean focus mechanism) */
+  *:focus {
+    outline: none;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  input:focus-visible,
+  textarea:focus-visible,
+  [data-combobox-trigger]:focus-visible {
+    outline: none;
   }
 
   /* Khmer text support */

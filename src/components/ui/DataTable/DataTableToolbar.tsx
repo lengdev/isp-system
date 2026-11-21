@@ -23,6 +23,7 @@ import { DataTableMultiSort, MultiSortRule } from './DataTableMultiSort';
 import { DataTableExport } from './DataTableExport';
 import { DataTableMoreMenu } from './DataTableMoreMenu';
 import { DataTableFilterPopover } from './DataTableFilterPopover';
+import { DataTableCheckbox } from './DataTableCheckbox';
 import { cn } from '../../../lib/utils';
 
 export interface DataTableToolbarProps<T> {
@@ -306,18 +307,25 @@ export const DataTableToolbar = <T extends Record<string, any>>({
                     Reset
                   </button>
                 </div>
-                <div className="space-y-1 max-h-56 overflow-y-auto">
+                <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                   {hideableColumns.map((col) => {
                     const isVisible = visibleColumnIds.includes(col.id);
                     return (
-                      <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--surface-subtle)] cursor-pointer">
-                        <input
-                          type="checkbox"
+                      <label
+                        key={col.id}
+                        className={cn(
+                          'flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer select-none text-[12px] transition-colors',
+                          isVisible
+                            ? 'text-[var(--text)] hover:bg-[var(--surface-subtle)]'
+                            : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-secondary)]'
+                        )}
+                      >
+                        <DataTableCheckbox
                           checked={isVisible}
                           onChange={() => onToggleColumnVisibility(col.id)}
-                          className="rounded text-[var(--brand)] focus:ring-[var(--brand-ring)] w-3.5 h-3.5 accent-[var(--brand)]"
+                          ariaLabel={`Toggle ${typeof col.header === 'string' ? col.header : col.id}`}
                         />
-                        <span className="truncate text-[var(--text-secondary)]">
+                        <span className="truncate font-medium">
                           {typeof col.header === 'string' ? col.header : col.id}
                         </span>
                       </label>

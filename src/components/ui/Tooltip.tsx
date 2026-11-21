@@ -63,7 +63,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
             transition={{ duration: 0.12 }}
             role="tooltip"
             className={cn(
-              'absolute z-50 pointer-events-none px-2 py-1 text-[11px] font-medium rounded-md shadow-md bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 whitespace-nowrap select-none',
+              'absolute z-50 pointer-events-none px-2 py-1 text-[11px] font-semibold rounded-md shadow-[var(--shadow-md)] bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 whitespace-nowrap select-none',
               positionClasses[effectivePosition]
             )}
           >

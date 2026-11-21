@@ -27,7 +27,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { StatusChangePopover } from './StatusChangePopover';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { formatCurrency, formatNumber, cn } from '../../lib/utils';
-import { DataTable, DataTableColumnDef, RowAction } from '../../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox } from '../../components/ui/DataTable';
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -546,12 +546,11 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
           {/* Top header row: Checkbox, Avatar, Name/Email, Actions dropdown */}
           <div className="flex items-start justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                <input
-                  type="checkbox"
+              <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center">
+                <DataTableCheckbox
                   checked={isSelected}
                   onChange={onSelect}
-                  className="rounded border-[var(--border-strong)] text-[var(--brand)] focus:ring-[var(--brand-ring)] w-4 h-4 cursor-pointer accent-[var(--brand)] mr-0.5"
+                  ariaLabel={`Select ${c.fullName}`}
                 />
               </div>
               <Avatar

@@ -17,8 +17,10 @@ export const RecordPaymentModal: React.FC = () => {
 
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [amount, setAmount] = useState<number | string>(54.99);
+  const [initialAmount, setInitialAmount] = useState<number | string>(54.99);
   const [method, setMethod] = useState('Credit Card');
-  const [reference, setReference] = useState(`TXN-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [reference, setReference] = useState('');
+  const [initialReference, setInitialReference] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -30,17 +32,22 @@ export const RecordPaymentModal: React.FC = () => {
 
   useEffect(() => {
     if (modalState.isOpen) {
+      let initAmt = 54.99;
       if (modalState.customerId) {
         setSelectedCustomerId(modalState.customerId);
         const c = customers.find((cust) => cust.id === modalState.customerId);
         if (c) {
-          setAmount(c.balanceDue > 0 ? c.balanceDue : c.monthlyPrice);
+          initAmt = c.balanceDue > 0 ? c.balanceDue : c.monthlyPrice;
         }
       } else if (customers.length > 0) {
         setSelectedCustomerId(customers[0].id);
-        setAmount(customers[0].balanceDue > 0 ? customers[0].balanceDue : customers[0].monthlyPrice);
+        initAmt = customers[0].balanceDue > 0 ? customers[0].balanceDue : customers[0].monthlyPrice;
       }
-      setReference(`TXN-${Math.floor(100000 + Math.random() * 900000)}`);
+      const initRef = `TXN-${Math.floor(100000 + Math.random() * 900000)}`;
+      setAmount(initAmt);
+      setInitialAmount(initAmt);
+      setReference(initRef);
+      setInitialReference(initRef);
       setIsSubmitting(false);
       setIsSuccess(false);
       setIsDirty(false);
@@ -150,15 +157,19 @@ export const RecordPaymentModal: React.FC = () => {
                   {currency}{selectedCustomer.balanceDue.toFixed(2)}
                 </span>
               </div>
-              {selectedCustomer.balanceDue > 0 && (
+              {selectedCustomer.balanceDue > 0 ? (
                 <button
                   type="button"
                   onClick={handlePayFullAmount}
-                  className="mt-1 text-xs font-semibold text-[#F26B3A] hover:underline cursor-pointer flex items-center gap-1"
+                  className="mt-1 text-xs font-semibold text-[var(--brand)] hover:underline cursor-pointer flex items-center gap-1"
                 >
                   <Zap className="w-3 h-3 fill-current" />
                   <span>Pay full amount</span>
                 </button>
+              ) : (
+                <span className="text-[11px] text-[var(--text-muted)] mt-1 block">
+                  No balance due - recording a credit
+                </span>
               )}
             </div>
           </div>
@@ -186,7 +197,10 @@ export const RecordPaymentModal: React.FC = () => {
               prefixAdornment={currency}
               value={amount}
               formatOnBlur={true}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setIsDirty(e.target.value !== String(initialAmount));
+              }}
               placeholder="0.00"
             />
           </Field>

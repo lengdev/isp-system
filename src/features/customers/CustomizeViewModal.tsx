@@ -6,6 +6,7 @@ import { Field } from '../../components/ui/Field';
 import { Button } from '../../components/ui/Button';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { INITIAL_COLUMNS } from '../../data/mockData';
+import { cn } from '../../lib/utils';
 
 export const CustomizeViewModal: React.FC = () => {
   const modalState = useStore((s) => s.modalState.customizeView);
@@ -103,15 +104,16 @@ export const CustomizeViewModal: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                    className={cn(
+                      'w-4 h-4 rounded-[4px] border transition-colors flex items-center justify-center',
                       col.visible
-                        ? 'bg-[#F26B3A] border-[#F26B3A] text-white'
-                        : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800'
-                    }`}
+                        ? 'bg-[#4F46E5] border-[#4F46E5] text-white shadow-xs'
+                        : 'border-[var(--border-strong)] bg-[var(--surface)] dark:border-[rgba(255,255,255,0.20)]'
+                    )}
                   >
-                    {col.visible && <Check className="w-3 h-3 stroke-[3]" />}
+                    {col.visible && <Check className="w-3 h-3 stroke-[2.75]" />}
                   </div>
-                  <span className="font-medium text-xs text-gray-800 dark:text-gray-200">
+                  <span className="font-medium text-xs text-[var(--text)]">
                     {col.label}
                   </span>
                 </div>

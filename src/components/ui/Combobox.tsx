@@ -544,32 +544,30 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 }}
                 className="rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] flex flex-col overflow-hidden select-none"
               >
-                {/* Search Input Box */}
+                {/* Search Input Box (Spec 4.1: borderless input, 36px, bottom hairline, 14px icon, 13px text, transparent bg, NO orange border/ring) */}
                 {searchable && (
-                  <div className="p-2 border-b border-[var(--border-subtle)] bg-[var(--surface-subtle)] shrink-0">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" />
-                      <input
-                        ref={searchInputRef}
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
-                          setHighlightedIndex(0);
-                        }}
-                        placeholder="Search..."
-                        className="w-full pl-8 pr-7 py-1.5 text-[12px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
-                      />
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchQuery('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)] p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
+                  <div className="relative h-9 flex items-center px-3 border-b border-[var(--border-subtle)] bg-transparent shrink-0">
+                    <Search className="w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none shrink-0 mr-2" />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setHighlightedIndex(0);
+                      }}
+                      placeholder="Search..."
+                      className="w-full h-full text-[13px] bg-transparent border-none text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-0 select-text"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="p-1 text-[var(--text-muted)] hover:text-[var(--text)] rounded transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -679,22 +677,22 @@ export const Combobox: React.FC<ComboboxProps> = ({
           setHighlightedIndex(itemIndex);
         }}
         className={cn(
-          'flex items-center justify-between w-full px-2.5 rounded-[8px] text-left transition-colors select-none',
-          opt.description ? 'h-[44px]' : 'h-[36px]',
-          size === 'sm' ? 'text-[12px]' : 'text-[14px]',
+          'flex items-center justify-between w-full px-2.5 rounded-[6px] text-left select-none',
+          opt.description ? 'h-[40px]' : 'h-[32px]',
+          size === 'sm' ? 'text-[12px]' : 'text-[13px]',
           opt.disabled
             ? 'opacity-50 cursor-not-allowed pointer-events-none'
             : isSelected
               ? isKeyboardActive
-                ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)] ring-2 ring-inset ring-[var(--option-selected-icon)]'
+                ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)] ring-2 ring-inset ring-[var(--option-selected-icon)] transition-colors duration-100'
                 : isHovered
-                  ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)]'
-                  : 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)]'
+                  ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)] transition-colors duration-100'
+                  : 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] transition-colors duration-100'
               : isKeyboardActive
-                ? 'bg-[var(--option-hover-bg)] text-[var(--text)] ring-2 ring-inset ring-[var(--option-selected-icon)]'
+                ? 'bg-[var(--option-hover-bg)] text-[var(--text)] ring-2 ring-inset ring-[var(--option-selected-icon)] transition-colors duration-100'
                 : isHovered
-                  ? 'bg-[var(--option-hover-bg)] text-[var(--text)]'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)]'
+                  ? 'bg-[var(--option-hover-bg)] text-[var(--text)] transition-colors duration-100'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)] transition-colors duration-100'
         )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -719,14 +717,17 @@ export const Combobox: React.FC<ComboboxProps> = ({
             </span>
           )}
 
-          <div className="min-w-0 flex-1">
-            <div className={cn('truncate font-normal text-[var(--text)]', size === 'sm' ? 'text-[12px]' : 'text-[14px]')}>
+          <div className="min-w-0 flex-1 flex items-center gap-1.5 truncate">
+            <span className={cn('truncate font-normal text-[var(--text)]', size === 'sm' ? 'text-[12px]' : 'text-[13px]')}>
               {highlightMatch(opt.label, searchQuery)}
-            </div>
+            </span>
             {opt.description && (
-              <div className="text-[12px] text-[var(--text-muted)] font-normal truncate">
-                {opt.description}
-              </div>
+              <>
+                <span className="text-[var(--text-muted)] text-[11px] select-none shrink-0">•</span>
+                <span className="text-[11px] text-[var(--text-muted)] font-normal truncate">
+                  {opt.description}
+                </span>
+              </>
             )}
           </div>
 

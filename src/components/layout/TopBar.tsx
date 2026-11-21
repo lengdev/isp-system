@@ -107,12 +107,12 @@ export const TopBar: React.FC<TopBarProps> = ({ onMobileMenuOpen }) => {
               value={filters.searchQuery}
               onChange={(e) => setFilters({ searchQuery: e.target.value })}
               placeholder="Search customers, IP, MAC, phone, plan..."
-              className="w-full h-9 pl-9 pr-12 text-[13px] bg-[var(--surface)] border border-[var(--border)] rounded-[10px] text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] focus:border-[var(--brand)] transition-all shadow-xs"
+              className="w-full h-9 pl-9 pr-12 text-[13px] bg-[var(--surface)] dark:bg-[rgba(255,255,255,0.04)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-[10px] text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(234,106,60,0.14)] transition-[border-color,box-shadow] duration-120 ease-out shadow-xs"
             />
             <button
               type="button"
               onClick={() => setCommandPaletteOpen(true)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-muted)] bg-[var(--surface-subtle)] rounded border border-[var(--border)] hover:text-[var(--text)]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[11px] font-medium text-[var(--text-muted)] bg-[rgba(16,24,40,0.06)] dark:bg-[rgba(255,255,255,0.08)] rounded-[4px] pointer-events-none select-none hover:text-[var(--text)]"
             >
               ⌘K
             </button>

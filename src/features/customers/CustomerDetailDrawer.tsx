@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   X,
   CreditCard,
@@ -27,6 +27,8 @@ import {
   FileText,
   AlertTriangle,
   RotateCw,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -95,6 +97,7 @@ const CopyDefinitionItem: React.FC<{
 
 export const CustomerDetailDrawer: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const isDrawerOpen = useStore((s) => s.isDrawerOpen);
   const openDrawer = useStore((s) => s.openDrawer);
@@ -280,114 +283,175 @@ export const CustomerDetailDrawer: React.FC = () => {
     { id: 'notes', label: 'Notes' },
   ];
 
-  return (
-    <Drawer
-      isOpen={isDrawerOpen}
-      onClose={handleClose}
-      width="customer"
-      showPrevNext={true}
-      hasPrev={hasPrev}
-      hasNext={hasNext}
-      onPrev={handlePrev}
-      onNext={handleNext}
-      counterLabel={`${currentIndex + 1} of ${customers.length}`}
-      title={
-        <div className="flex items-center gap-3">
+  const customHeader = (
+    <div className="px-6 pt-5 pb-3 border-b border-[var(--border)] space-y-3 bg-[var(--surface)] select-none">
+      {/* Row 1: 48px avatar with online dot, name 18px/600, status badge popover, 32px ghost buttons (Prev, Next, Close) */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <Avatar
             name={customer.fullName}
             size="md"
             online={customer.onlineStatus === 'online'}
+            className="w-12 h-12 text-[16px] font-bold shrink-0"
           />
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-[15px] text-[var(--text)] truncate">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-[18px] font-semibold text-[var(--text)] tracking-tight truncate">
                 {customer.fullName}
-              </span>
+              </h2>
               <StatusChangePopover
                 currentStatus={customer.status}
                 customerId={customer.id}
               />
             </div>
-            <p className="text-[11px] text-[var(--text-muted)] truncate">
-              <span className="font-mono">{customer.code}</span> • {customer.planName}
-            </p>
           </div>
         </div>
-      }
+
+        {/* 32px ghost buttons */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[12px] font-medium text-[var(--text-muted)] px-1.5 tabular-nums">
+            {currentIndex + 1} of {customers.length}
+          </span>
+          <UiTooltip content="Previous subscriber (K)">
+            <button
+              type="button"
+              onClick={handlePrev}
+              disabled={!hasPrev}
+              aria-label="Previous subscriber"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronUp className="w-4 h-4 stroke-[2]" />
+            </button>
+          </UiTooltip>
+          <UiTooltip content="Next subscriber (J)">
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!hasNext}
+              aria-label="Next subscriber"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronDown className="w-4 h-4 stroke-[2]" />
+            </button>
+          </UiTooltip>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close drawer"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors"
+          >
+            <X className="w-4 h-4 stroke-[2]" />
+          </button>
+        </div>
+      </div>
+
+      {/* Row 2: Customer code with copy button, plan name, "Customer since {date}" (12px muted) */}
+      <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)] flex-wrap">
+        <div className="flex items-center gap-1 font-mono font-medium text-[var(--text)] bg-[var(--surface-subtle)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]">
+          <span>{customer.code}</span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(customer.code);
+              addToast({ type: 'info', title: 'Copied', message: 'Customer ID copied to clipboard' });
+            }}
+            className="text-[var(--text-muted)] hover:text-[var(--text)] ml-0.5"
+            title="Copy customer code"
+          >
+            <Copy className="w-3 h-3" />
+          </button>
+        </div>
+        <span>•</span>
+        <span className="font-medium text-[var(--text)]">{customer.planName}</span>
+        <span>•</span>
+        <span>Customer since {formatDate(customer.installationDate || '2024-01-01')}</span>
+      </div>
+
+      {/* Row 3: Single non-wrapping action row */}
+      <div className="flex items-center gap-2 flex-nowrap overflow-x-auto pt-0.5 scrollbar-none">
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={() => openModal('addEditCustomer', { customerId: customer.id })}
+          className="h-8 text-[12px] px-3 gap-1.5 shrink-0"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+          <span>Edit profile</span>
+        </Button>
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => openModal('recordPayment', { customerId: customer.id })}
+          className="h-8 text-[12px] px-2.5 gap-1.5 shrink-0"
+        >
+          <CreditCard className="w-3.5 h-3.5" />
+          <span>Record payment</span>
+        </Button>
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => openModal('sendMessage', { customerId: customer.id, isBulk: false })}
+          className="h-8 text-[12px] px-2.5 gap-1.5 shrink-0"
+        >
+          <Mail className="w-3.5 h-3.5" />
+          <span>Send message</span>
+        </Button>
+
+        <UiTooltip content={customer.status === 'Suspended' ? 'Activate subscriber' : 'Suspend subscriber'}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              openModal('statusConfirmation', {
+                customerIds: [customer.id],
+                targetStatus: customer.status === 'Suspended' ? 'Active' : 'Suspended',
+              })
+            }
+            className="h-8 w-8 p-0 flex items-center justify-center shrink-0"
+          >
+            <Power className="w-3.5 h-3.5" />
+          </Button>
+        </UiTooltip>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => openModal('deleteConfirmation', { customerIds: [customer.id] })}
+          className="h-8 w-8 p-0 flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0 ml-auto"
+          title="Delete subscriber"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <Drawer
+      isOpen={isDrawerOpen}
+      onClose={handleClose}
+      width="customer"
+      customHeader={customHeader}
       footer={
-        <div className="w-full flex items-center justify-between gap-2 overflow-x-auto py-1">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => openModal('recordPayment', { customerId: customer.id })}
-              className="h-8 text-[12px] px-2.5"
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>Record Payment</span>
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                openModal('addEditCustomer', { customerId: customer.id })
-              }
-              className="h-8 text-[12px] px-2.5"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>Edit</span>
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                openModal('statusConfirmation', {
-                  customerIds: [customer.id],
-                  targetStatus:
-                    customer.status === 'Suspended' ? 'Active' : 'Suspended',
-                })
-              }
-              className="h-8 text-[12px] px-2.5"
-            >
-              <Power className="w-3.5 h-3.5" />
-              <span>{customer.status === 'Suspended' ? 'Activate' : 'Suspend'}</span>
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                openModal('sendMessage', {
-                  customerId: customer.id,
-                  isBulk: false,
-                })
-              }
-              className="h-8 text-[12px] px-2.5"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Message</span>
-            </Button>
-          </div>
-
+        <div className="w-full flex items-center justify-between px-6 py-3 text-[12px] text-[var(--text-muted)] bg-[var(--surface)] border-t border-[var(--border)]">
+          <span>Last updated 2 min ago</span>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() =>
-              openModal('deleteConfirmation', {
-                customerIds: [customer.id],
-              })
-            }
-            className="h-8 text-[12px] px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0"
-            title="Delete subscriber"
+            onClick={() => {
+              handleClose();
+              navigate(`/customers?search=${encodeURIComponent(customer.code)}`);
+            }}
+            className="h-7 text-[12px] text-[var(--brand)] hover:underline px-2"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            Open full page
           </Button>
         </div>
       }
     >
-      <div className="p-5 space-y-5 text-[12px]">
+      <div className="px-6 py-5 space-y-5 text-[12px] max-sm:px-4">
         {/* Navigation Tabs using indigo tokens for selected */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border)] overflow-x-auto scrollbar-none shrink-0">
           {tabs.map((tab) => {
@@ -501,8 +565,8 @@ export const CustomerDetailDrawer: React.FC = () => {
             {/* 2-Col Definition Grid with Copy Buttons */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                  Connection & Hardware Details
+                <h4 className="text-[13px] font-semibold text-[var(--text)]">
+                  Connection and hardware details
                 </h4>
                 <button
                   type="button"
@@ -557,8 +621,8 @@ export const CustomerDetailDrawer: React.FC = () => {
             {/* Inline Notes Preview */}
             <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                  Subscriber Notes
+                <span className="text-[13px] font-semibold text-[var(--text)]">
+                  Subscriber notes
                 </span>
                 <button
                   type="button"

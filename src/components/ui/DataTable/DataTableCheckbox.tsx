@@ -28,10 +28,9 @@ export const DataTableCheckbox: React.FC<DataTableCheckboxProps> = ({
   const active = checked || indeterminate;
 
   return (
-    <label
-      onClick={(e) => e.stopPropagation()}
+    <span
       className={cn(
-        'relative inline-flex items-center justify-center cursor-pointer select-none w-4 h-4',
+        'relative inline-flex items-center justify-center cursor-pointer select-none w-4 h-4 shrink-0',
         className
       )}
     >
@@ -43,21 +42,22 @@ export const DataTableCheckbox: React.FC<DataTableCheckboxProps> = ({
         aria-label={ariaLabel}
         className="sr-only peer"
       />
-      <div
+      <span
         className={cn(
-          'w-4 h-4 rounded-[4px] border-[1.5px] transition-colors flex items-center justify-center outline-none',
+          'w-4 h-4 rounded-[4px] border-[1.5px] transition-all duration-120 flex items-center justify-center outline-none',
           'peer-focus-visible:ring-2 peer-focus-visible:ring-[#4F46E5] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--surface)]',
           active
-            ? 'bg-[#4F46E5] border-[#4F46E5] text-white'
-            : 'bg-[var(--surface)] border-[#D6D2CA] dark:border-[rgba(255,255,255,0.25)] hover:border-[#4F46E5]'
+            ? 'bg-[#4F46E5] border-[#4F46E5] text-white shadow-xs'
+            : 'bg-[var(--surface)] border-[var(--border-strong)] hover:border-[#4F46E5] dark:border-[rgba(255,255,255,0.20)]'
         )}
       >
         {indeterminate ? (
-          <Minus className="w-3 h-3 text-white stroke-[3]" />
+          <Minus className="w-3 h-3 text-white stroke-[2.75]" />
         ) : checked ? (
-          <Check className="w-3 h-3 text-white stroke-[3]" />
+          <Check className="w-3 h-3 text-white stroke-[2.75]" />
         ) : null}
-      </div>
-    </label>
+      </span>
+    </span>
   );
 };
+

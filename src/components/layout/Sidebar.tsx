@@ -77,19 +77,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
             to={item.path}
             onClick={onMobileClose}
             className={cn(
-              'relative flex items-center h-[34px] rounded-lg text-[13px] font-medium transition-colors select-none group',
-              sidebarCollapsed ? 'justify-center px-0 w-full' : 'justify-between px-2.5',
+              'relative flex items-center h-[34px] rounded-lg text-[13px] font-semibold tracking-[-0.01em] select-none group transition-colors',
+              sidebarCollapsed ? 'justify-center w-9' : 'justify-between px-2.5 w-full',
               isActive
                 ? 'text-[var(--brand)] font-semibold'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[rgba(16,24,40,0.04)] dark:hover:bg-[rgba(255,255,255,0.05)]'
             )}
           >
-            {/* Sliding Active Pill */}
+            {/* Sliding Active Pill (Spec 3.4: no border, no outline, animate background only) */}
             {isActive && (
               <motion.div
                 layoutId="nav-active"
-                className="absolute inset-0 bg-[var(--brand-soft)] border border-[var(--brand)]/20 rounded-lg pointer-events-none"
-                transition={SPRING_SNAPPY}
+                className="absolute inset-0 bg-[rgba(234,106,60,0.10)] dark:bg-[rgba(240,123,79,0.14)] rounded-lg pointer-events-none"
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
               />
             )}
 
@@ -106,14 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
             </div>
 
             {!sidebarCollapsed && item.badge !== undefined && (
-              <span
-                className={cn(
-                  'relative z-10 flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-semibold',
-                  isActive
-                    ? 'bg-[var(--brand)] text-white'
-                    : 'bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)]'
-                )}
-              >
+              <span className="relative z-10 flex items-center justify-center min-w-4 h-4 px-1.5 rounded-full text-[11px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-muted)]">
                 {item.badge}
               </span>
             )}
@@ -121,9 +114,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
         );
 
         return sidebarCollapsed ? (
-          <Tooltip key={item.path} content={`${item.name}${item.badge ? ` (${item.badge})` : ''}`} side="right">
-            {content}
-          </Tooltip>
+          <div key={item.path} className="w-full flex justify-center py-0.5">
+            <Tooltip
+              content={`${item.name}${item.badge ? ` (${item.badge})` : ''}`}
+              side="right"
+              className="flex justify-center"
+            >
+              {content}
+            </Tooltip>
+          </div>
         ) : (
           content
         );
@@ -135,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
     <motion.div
       data-testid="sidebar-container"
       animate={{ width: sidebarCollapsed ? 64 : 232 }}
-      transition={SPRING_SNAPPY}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
         'flex flex-col h-full bg-[var(--bg-sidebar)] border-r border-[var(--border)] select-none overflow-hidden shrink-0',
         sidebarCollapsed ? 'px-2 py-3' : 'px-3.5 py-3'
@@ -195,13 +194,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
           <button
             type="button"
             onClick={() => setCommandPaletteOpen(true)}
-            className="flex items-center justify-between w-full h-[34px] px-2.5 text-[12px] text-[var(--text-muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg hover:border-[var(--brand)]/40 transition-colors group"
+            className="flex items-center justify-between w-full h-[34px] px-2.5 text-[12px] text-[var(--text-muted)] bg-[var(--surface)] dark:bg-[rgba(255,255,255,0.04)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-lg focus:outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(234,106,60,0.14)] transition-[border-color,box-shadow] duration-120 ease-out group"
           >
             <div className="flex items-center gap-2 truncate">
               <Search className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--brand)] transition-colors shrink-0" />
               <span className="truncate">Search menu...</span>
             </div>
-            <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-muted)] bg-[var(--surface-subtle)] rounded border border-[var(--border)] shrink-0">
+            <kbd className="px-1.5 py-0.5 text-[11px] font-medium text-[var(--text-muted)] bg-[rgba(16,24,40,0.06)] dark:bg-[rgba(255,255,255,0.08)] rounded-[4px] pointer-events-none select-none shrink-0">
               Ctrl K
             </kbd>
           </button>
@@ -290,42 +289,59 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
         )}
 
         {/* User Profile Block & Collapse Toggle (52px tall) */}
-        <div className="h-[52px] flex items-center justify-between px-1">
-          {sidebarCollapsed ? (
-            <Tooltip content="Hariharan B (Network Admin)" side="right">
-              <div className="flex justify-center w-full">
-                <Avatar name="Hariharan B" size="sm" online={true} />
-              </div>
-            </Tooltip>
-          ) : (
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <Avatar name="Hariharan B" size="sm" online={true} />
-              <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-semibold text-[var(--text)] truncate">
-                  Hariharan B
-                </div>
-                <div className="text-[11px] text-[var(--text-muted)] truncate">
-                  Network Admin
-                </div>
-              </div>
-            </div>
+        <div
+          className={cn(
+            'flex items-center',
+            sidebarCollapsed
+              ? 'flex-col justify-center gap-2 py-1'
+              : 'h-[52px] justify-between px-1'
           )}
+        >
+          {sidebarCollapsed ? (
+            <>
+              <Tooltip content="Hariharan B (Network Admin)" side="right">
+                <Avatar name="Hariharan B" size="sm" online={true} />
+              </Tooltip>
+              <Tooltip content="Expand sidebar" side="right">
+                <button
+                  type="button"
+                  onClick={toggleSidebarCollapsed}
+                  data-testid="sidebar-toggle-btn"
+                  aria-label="Expand sidebar"
+                  title="Expand sidebar"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors"
+                >
+                  <PanelLeftOpen className="w-4 h-4" />
+                </button>
+              </Tooltip>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <Avatar name="Hariharan B" size="sm" online={true} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-semibold text-[var(--text)] truncate">
+                    Hariharan B
+                  </div>
+                  <div className="text-[11px] text-[var(--text-muted)] truncate">
+                    Network Admin
+                  </div>
+                </div>
+              </div>
 
-          {/* Desktop Collapse/Expand Toggle Button */}
-          <button
-            type="button"
-            onClick={toggleSidebarCollapsed}
-            data-testid="sidebar-toggle-btn"
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="hidden md:flex items-center justify-center p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors shrink-0"
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen className="w-4 h-4" />
-            ) : (
-              <PanelLeftClose className="w-4 h-4" />
-            )}
-          </button>
+              {/* Desktop Collapse/Expand Toggle Button */}
+              <button
+                type="button"
+                onClick={toggleSidebarCollapsed}
+                data-testid="sidebar-toggle-btn"
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="hidden md:flex items-center justify-center p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors shrink-0"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </motion.div>

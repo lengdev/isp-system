@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
-import { modalVariants, transitions } from '../../lib/motion';
+import { modalVariants } from '../../lib/motion';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -110,7 +111,8 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden">
           {/* Backdrop with 6px blur */}
@@ -184,7 +186,7 @@ export const Modal: React.FC<ModalProps> = ({
                     type="button"
                     onClick={handleAttemptClose}
                     data-testid="modal-close-btn"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] transition-colors shrink-0 -mr-1 mt-0.5"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] focus:outline-none focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] focus-visible:outline-offset-2 transition-colors shrink-0 -mr-1 mt-0.5"
                     aria-label="Close dialog"
                   >
                     <X className="w-4 h-4" />
@@ -224,53 +226,89 @@ export const Modal: React.FC<ModalProps> = ({
                 {footer}
               </div>
             )}
-
-            {/* Dirty Form Discard Confirmation Overlay */}
-            <AnimatePresence>
-              {showDiscardConfirm && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute inset-0 z-30 bg-[var(--surface-raised)]/95 backdrop-blur-xs flex items-center justify-center p-6 text-center select-none"
-                >
-                  <div className="max-w-xs space-y-3">
-                    <div className="w-10 h-10 rounded-full bg-[var(--warning-bg)] text-[var(--warning-text)] mx-auto flex items-center justify-center">
-                      <AlertCircle className="w-5 h-5 stroke-[2.2]" />
-                    </div>
-                    <h4 className="text-[16px] font-semibold text-[var(--text)]">
-                      Discard unsaved changes?
-                    </h4>
-                    <p className="text-[12px] text-[var(--text-muted)]">
-                      You have modified form values. If you leave now, your changes will be lost.
-                    </p>
-                    <div className="flex items-center justify-center gap-2.5 pt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowDiscardConfirm(false)}
-                      >
-                        Keep Editing
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => {
-                          setShowDiscardConfirm(false);
-                          onClose();
-                        }}
-                      >
-                        Discard
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
         </div>
       )}
     </AnimatePresence>
+
+    {/* Separate Portaled Discard Confirmation Dialog (Spec 9.1: rendered in its own Portal on document.body) */}
+    {typeof document !== 'undefined' &&
+      createPortal(
+        <AnimatePresence>
+          {showDiscardConfirm && (
+            <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 select-none">
+              {/* Scrim covering parent modal and page */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => setShowDiscardConfirm(false)}
+                className="fixed inset-0 bg-[var(--backdrop)] backdrop-blur-[4px]"
+              />
+
+              {/* Centered card min(400px, 100vw-32px), rounded-2xl, --surface-raised, 1px --border, --shadow-lg, p-5 */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.12 }}
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="discard-confirm-title"
+                aria-describedby="discard-confirm-desc"
+                className="relative z-10 w-full max-w-[400px] rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-lg)] p-5 space-y-4"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="w-9 h-9 rounded-xl bg-[var(--warning-bg)] text-[var(--warning-text)] flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-5 h-5 stroke-[2.2]" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4
+                      id="discard-confirm-title"
+                      className="text-[16px] font-semibold text-[var(--text)] tracking-tight"
+                    >
+                      Discard changes?
+                    </h4>
+                    <p
+                      id="discard-confirm-desc"
+                      className="text-[13px] text-[var(--text-muted)] mt-1 leading-snug"
+                    >
+                      You have unsaved changes. If you leave now, they will be lost.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer right-aligned gap-2: Keep editing (outline, default focus, Esc) and Discard (danger solid #DC2626) */}
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    autoFocus
+                    onClick={() => setShowDiscardConfirm(false)}
+                    className="h-9 px-3.5 text-[13px] font-medium"
+                  >
+                    Keep editing
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => {
+                      setShowDiscardConfirm(false);
+                      onClose();
+                    }}
+                    className="h-9 px-3.5 text-[13px] font-medium bg-[#DC2626] hover:bg-[#B91C1C]"
+                  >
+                    Discard
+                  </Button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
   );
 };
 export interface ModalFooterProps {

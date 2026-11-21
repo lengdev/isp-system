@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   useReactTable,
   getCoreRowModel,
@@ -164,7 +165,9 @@ export const DataTable = <T extends Record<string, any>>({
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch {}
+      } catch (e) {
+        void e;
+      }
     }
     const initial: VisibilityState = {};
     columns.forEach((c) => {
@@ -196,7 +199,9 @@ export const DataTable = <T extends Record<string, any>>({
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch {}
+      } catch (e) {
+        void e;
+      }
     }
     return [
       {
@@ -443,13 +448,17 @@ export const DataTable = <T extends Record<string, any>>({
       });
     });
 
-    // Row Actions Menu column if rowActions provided (44px)
+    // Row Actions Menu column if rowActions provided (56px)
     if (rowActions) {
       mapped.push({
         id: 'actions',
-        size: 44,
+        size: 56,
         enableResizing: false,
-        header: () => <span className="text-center block text-[12px] font-semibold text-[var(--text-muted)]">Action</span>,
+        header: () => (
+          <span className="text-center block text-[12px] font-semibold text-[var(--text-muted)]">
+            Action
+          </span>
+        ),
         cell: ({ row }) => {
           const actions = rowActions(row.original);
           if (actions.length === 0) return null;
@@ -457,19 +466,43 @@ export const DataTable = <T extends Record<string, any>>({
           return (
             <div
               onClick={(e) => e.stopPropagation()}
-              className="text-center opacity-100 sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+              className="text-center flex items-center justify-center"
             >
               <button
                 type="button"
                 onClick={(e) => {
+                  e.stopPropagation();
+                  if (contextMenu?.row === row.original) {
+                    setContextMenu(null);
+                    return;
+                  }
                   const rect = e.currentTarget.getBoundingClientRect();
+                  const menuWidth = 220;
+                  const padding = 12;
+                  // Always align to the right edge of the button (expanding leftwards)
+                  let x = rect.right - menuWidth;
+                  if (x < padding) {
+                    x = padding;
+                  }
+                  if (x + menuWidth > window.innerWidth - padding) {
+                    x = window.innerWidth - padding - menuWidth;
+                  }
+                  let y = rect.bottom + 4;
+                  const menuHeight = 280;
+                  if (y + menuHeight > window.innerHeight - padding) {
+                    y = Math.max(padding, rect.top - menuHeight - 4);
+                  }
+                  if (y < padding) {
+                    y = padding;
+                  }
                   setContextMenu({
-                    x: rect.left,
-                    y: rect.bottom + 4,
+                    x,
+                    y,
                     row: row.original,
                   });
                 }}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface-subtle)]/70 hover:bg-[var(--surface-subtle)] border border-[var(--border-subtle)] hover:border-[var(--border)] transition-colors shadow-2xs"
+                title="Row actions"
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />
               </button>
@@ -688,7 +721,9 @@ export const DataTable = <T extends Record<string, any>>({
         }
         storeState.setFilters(updates);
       }
-    } catch {}
+    } catch (e) {
+      void e;
+    }
   }, [table]);
 
   // Sync filters from URL on initial mount
@@ -1015,14 +1050,10 @@ export const DataTable = <T extends Record<string, any>>({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <input
-                            type="checkbox"
+                          <DataTableCheckbox
                             checked={row.getIsSelected()}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              row.toggleSelected();
-                            }}
-                            className="rounded border-[var(--border-strong)] text-[var(--brand)] focus:ring-[var(--brand-ring)] w-3.5 h-3.5 cursor-pointer accent-[var(--brand)] shrink-0"
+                            onChange={() => row.toggleSelected()}
+                            ariaLabel={`Select row ${row.id}`}
                           />
                           <div className="font-semibold text-xs text-[var(--text)] truncate">
                             {String(
@@ -1332,9 +1363,22 @@ export const DataTable = <T extends Record<string, any>>({
                           onContextMenu={(e) => {
                             if (rowActions) {
                               e.preventDefault();
+                              const menuWidth = 220;
+                              const padding = 12;
+                              let x = e.clientX;
+                              if (x + menuWidth > window.innerWidth - padding) {
+                                x = Math.max(padding, e.clientX - menuWidth);
+                              }
+                              if (x < padding) x = padding;
+                              let y = e.clientY + 4;
+                              const menuHeight = 280;
+                              if (y + menuHeight > window.innerHeight - padding) {
+                                y = Math.max(padding, e.clientY - menuHeight - 4);
+                              }
+                              if (y < padding) y = padding;
                               setContextMenu({
-                                x: e.clientX,
-                                y: e.clientY,
+                                x,
+                                y,
                                 row: row.original,
                               });
                             }
@@ -1605,32 +1649,48 @@ export const DataTable = <T extends Record<string, any>>({
         </div>
       )}
 
-      {/* 6. Context Menu at Cursor */}
-      {contextMenu && rowActions && (
+      {/* 6. Context Menu at Cursor / Action button (Portaled, auto-flipped left, backdrop dismiss) */}
+      {contextMenu && rowActions && createPortal(
         <div
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="fixed z-50 w-48 rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] py-1 text-xs select-none"
+          className="fixed inset-0 z-[9999] pointer-events-auto bg-transparent"
+          onClick={() => setContextMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu(null);
+          }}
         >
-          {rowActions(contextMenu.row).map((act, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => {
-                act.onClick(contextMenu.row);
-                setContextMenu(null);
-              }}
-              className={cn(
-                'w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors',
-                act.danger
-                  ? 'text-red-600 hover:bg-[#FDECEA] dark:hover:bg-red-950/30'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]'
-              )}
-            >
-              {act.icon}
-              <span>{act.label}</span>
-            </button>
-          ))}
-        </div>
+          <div
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
+            className="fixed w-[220px] rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] py-1.5 text-xs select-none max-h-[320px] overflow-y-auto"
+          >
+            {rowActions(contextMenu.row).map((act, i) => {
+              if (act.divider) {
+                return <div key={i} className="my-1 border-t border-[var(--border-subtle)]" />;
+              }
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    act.onClick(contextMenu.row);
+                    setContextMenu(null);
+                  }}
+                  className={cn(
+                    'w-full h-8 flex items-center gap-2.5 px-3 text-left transition-colors text-[12px] font-medium',
+                    act.danger
+                      ? 'text-red-600 hover:bg-[#FDECEA] dark:hover:bg-red-950/30'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]'
+                  )}
+                >
+                  {act.icon}
+                  <span className="truncate">{act.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* 7. Bulk Action Bar slot */}

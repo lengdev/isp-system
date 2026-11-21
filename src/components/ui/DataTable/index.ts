@@ -9,4 +9,5 @@ export * from './DataTableExport';
 export * from './DataTableFilterPopover';
 export * from './DataTableMoreMenu';
 export * from './DataTableImportModal';
+export * from './DataTableCheckbox';
 export * from './DataTableShortcutsModal';
