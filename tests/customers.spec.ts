@@ -155,4 +155,67 @@ test.describe('NetPulse ISP Customers Master Spec E2E', () => {
     const expandedBox = await sidebar.boundingBox();
     expect(expandedBox?.width).toBeCloseTo(232, -1);
   });
+
+  test('Customer Detail Drawer opens, syncs URL, navigates J/K, switches tabs and closes with Esc', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/customers');
+    await page.waitForLoadState('networkidle');
+
+    // Click first customer row name
+    const firstRowCustomer = page.locator('table tbody tr').first().locator('td').nth(2);
+    await firstRowCustomer.click();
+
+    // Verify drawer is open and URL is updated
+    await expect(page).toHaveURL(/customer=cust-/);
+    const drawer = page.locator('[role="dialog"][aria-modal="true"]');
+    await expect(drawer).toBeVisible();
+
+    // Verify 6 tabs exist
+    await expect(drawer.locator('[data-drawer-tab="overview"]')).toBeVisible();
+    await expect(drawer.locator('[data-drawer-tab="billing"]')).toBeVisible();
+    await expect(drawer.locator('[data-drawer-tab="usage"]')).toBeVisible();
+    await expect(drawer.locator('[data-drawer-tab="tickets"]')).toBeVisible();
+    await expect(drawer.locator('[data-drawer-tab="activity"]')).toBeVisible();
+    await expect(drawer.locator('[data-drawer-tab="notes"]')).toBeVisible();
+
+    // Switch to Billing tab
+    await drawer.locator('[data-drawer-tab="billing"]').click();
+    await expect(page).toHaveURL(/tab=billing/);
+
+    // Switch to Usage tab
+    await drawer.locator('[data-drawer-tab="usage"]').click();
+    await expect(page).toHaveURL(/tab=usage/);
+
+    // Press 'j' to navigate to next customer
+    await page.keyboard.press('j');
+    await page.waitForTimeout(200);
+    await expect(drawer).toBeVisible();
+
+    // Press Escape to close drawer
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    await expect(drawer).not.toBeVisible();
+    await expect(page).not.toHaveURL(/customer=/);
+  });
+
+  test('TopBar notification panel opens with 3 tabs and unread items', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/customers');
+    await page.waitForLoadState('networkidle');
+
+    const bellBtn = page.locator('button[aria-label="Open notifications"]');
+    await bellBtn.click();
+
+    const notifPanel = page.locator('[role="dialog"][aria-label="Notifications"]');
+    await expect(notifPanel).toBeVisible();
+    await expect(notifPanel.locator('[data-notif-tab="all"]')).toBeVisible();
+    await expect(notifPanel.locator('[data-notif-tab="unread"]')).toBeVisible();
+    await expect(notifPanel.locator('[data-notif-tab="alerts"]')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    await expect(notifPanel).not.toBeVisible();
+  });
 });

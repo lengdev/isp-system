@@ -43,6 +43,9 @@ export interface Customer {
   lastPingMs: number;
   assignedTechnician?: string;
   tags?: string[];
+  pppoeUsername?: string;
+  routerModel?: string;
+  coordinates?: string;
 }
 
 export interface Invoice {
