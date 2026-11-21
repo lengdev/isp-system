@@ -22,6 +22,7 @@ import { Tooltip } from './Tooltip';
 export interface ComboboxOption {
   value: string;
   label: string;
+  shortLabel?: string;
   description?: string;
   icon?: React.ReactNode;
   avatar?: string;
@@ -75,6 +76,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [isKeyboardNav, setIsKeyboardNav] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -103,9 +105,9 @@ export const Combobox: React.FC<ComboboxProps> = ({
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const collisionPadding = 12;
-    const offset = 6;
+    const offset = 4;
 
-    const width = Math.max(rect.width, 240);
+    const width = Math.max(rect.width, 220);
     let left = rect.left;
     if (left + width > window.innerWidth - collisionPadding) {
       left = window.innerWidth - width - collisionPadding;
@@ -116,7 +118,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
 
     const spaceBelow = window.innerHeight - rect.bottom - collisionPadding - offset;
     const spaceAbove = rect.top - collisionPadding - offset;
-    const openUpward = spaceBelow < 250 && spaceAbove > spaceBelow;
+    const openUpward = spaceBelow < 220 && spaceAbove > spaceBelow;
     const maxHeight = Math.min(320, Math.max(140, openUpward ? spaceAbove : spaceBelow));
 
     if (openUpward) {
@@ -155,6 +157,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
     return options.filter(
       (opt) =>
         opt.label.toLowerCase().includes(q) ||
+        (opt.shortLabel && opt.shortLabel.toLowerCase().includes(q)) ||
         (opt.description && opt.description.toLowerCase().includes(q)) ||
         (opt.group && opt.group.toLowerCase().includes(q))
     );
@@ -181,7 +184,11 @@ export const Combobox: React.FC<ComboboxProps> = ({
   const canCreate =
     creatable &&
     searchQuery.trim().length > 0 &&
-    !options.some((opt) => opt.label.toLowerCase() === searchQuery.trim().toLowerCase());
+    !options.some(
+      (opt) =>
+        opt.label.toLowerCase() === searchQuery.trim().toLowerCase() ||
+        (opt.shortLabel && opt.shortLabel.toLowerCase() === searchQuery.trim().toLowerCase())
+    );
 
   // Listen to open/close and positioning
   useEffect(() => {
@@ -189,11 +196,10 @@ export const Combobox: React.FC<ComboboxProps> = ({
       updatePosition();
       setHighlightedIndex(0);
       if (searchable) {
-        setTimeout(() => searchInputRef.current?.focus(), 50);
+        setTimeout(() => searchInputRef.current?.focus(), 40);
       }
 
       const handleScrollOrResize = (e: Event) => {
-        // If scroll originates inside panel, ignore
         if (panelRef.current && panelRef.current.contains(e.target as Node)) {
           return;
         }
@@ -212,7 +218,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
     }
   }, [isOpen, searchable, updatePosition]);
 
-  // Click outside to close (works with Portal!)
+  // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -305,12 +311,14 @@ export const Combobox: React.FC<ComboboxProps> = ({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
+        setIsKeyboardNav(true);
         setHighlightedIndex((prev) =>
           prev < visibleItems.length - 1 ? prev + 1 : 0
         );
         break;
       case 'ArrowUp':
         e.preventDefault();
+        setIsKeyboardNav(true);
         setHighlightedIndex((prev) =>
           prev > 0 ? prev - 1 : visibleItems.length - 1
         );
@@ -335,20 +343,22 @@ export const Combobox: React.FC<ComboboxProps> = ({
         break;
       case 'Home':
         e.preventDefault();
+        setIsKeyboardNav(true);
         setHighlightedIndex(0);
         break;
       case 'End':
         e.preventDefault();
+        setIsKeyboardNav(true);
         setHighlightedIndex(visibleItems.length - 1);
         break;
     }
   };
 
-  // Standard heights: 40px for modals / standard, 36px for sm/toolbar
+  // Spec: Toolbar 32px / 12px text / 8px radius; Form/Modal 40px (44px on mobile) / 14px text / 10px radius
   const sizeStyles = {
-    sm: 'h-8 text-xs px-2.5 rounded-lg',
-    md: 'h-10 text-sm px-3 rounded-[10px]',
-    lg: 'h-10 text-sm px-3.5 rounded-[10px]',
+    sm: 'h-8 min-h-[32px] text-[12px] px-2.5 rounded-[8px]',
+    md: 'h-10 max-sm:h-11 min-h-[40px] max-sm:min-h-[44px] text-[14px] max-sm:text-[16px] px-3 rounded-[10px]',
+    lg: 'h-11 min-h-[44px] text-[14px] px-3.5 rounded-[10px]',
   };
 
   // Single selected option
@@ -375,7 +385,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
           part.toLowerCase() === query.toLowerCase() ? (
             <mark
               key={i}
-              className="bg-orange-100 dark:bg-orange-950/60 text-[#F26B3A] font-bold rounded px-0.5"
+              className="bg-[var(--option-selected-bg)] text-[var(--option-selected-icon)] font-medium rounded px-0.5"
             >
               {part}
             </mark>
@@ -387,7 +397,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
     );
   };
 
-  // Calculate chip collapsing: show up to 2 chips, rest collapse into +N
+  // Chips stay on one line (24px, indigo tint, max-w 140px with tooltip); overflow collapses into +N
   const visibleChips = selectedOptionsList.slice(0, 2);
   const hiddenCount = Math.max(0, selectedOptionsList.length - 2);
   const hiddenLabels =
@@ -396,10 +406,10 @@ export const Combobox: React.FC<ComboboxProps> = ({
   return (
     <div
       ref={containerRef}
-      className={cn('relative inline-block w-full text-left', className)}
+      className={cn('relative w-full', className)}
       onKeyDown={handleKeyDown}
     >
-      {/* Trigger Button: Strictly fixed height, overflow-hidden, no layout shift */}
+      {/* Trigger Button */}
       <button
         ref={triggerRef}
         type="button"
@@ -414,22 +424,23 @@ export const Combobox: React.FC<ComboboxProps> = ({
           }
         }}
         className={cn(
-          'w-full flex items-center justify-between border bg-white dark:bg-[#18181B] transition-all select-none focus:outline-none focus:ring-[3px] focus:ring-[#F26B3A]/20 focus:border-[#F26B3A] overflow-hidden',
+          'w-full flex items-center justify-between border bg-[var(--surface)] text-[var(--text)] transition-colors select-none focus:outline-none overflow-hidden relative',
+          multiple ? 'pr-16' : 'pr-9',
           isOpen
-            ? 'border-[#F26B3A] ring-[3px] ring-[#F26B3A]/20'
+            ? 'border-[var(--brand)] ring-2 ring-[var(--brand-ring)]'
             : error
-            ? 'border-red-500'
-            : 'border-gray-200/90 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
+              ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
+              : 'border-[var(--border)] hover:border-[var(--border-strong)]',
           sizeStyles[size],
-          disabled && 'opacity-60 cursor-not-allowed bg-gray-50 dark:bg-gray-800/40',
+          disabled && 'opacity-60 cursor-not-allowed bg-[var(--surface-subtle)]',
           triggerClassName
         )}
       >
         {/* Left Content Area: Single line only, chips or label */}
-        <div className="flex-1 flex items-center gap-1.5 min-w-0 overflow-hidden pr-2">
+        <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden text-left">
           {multiple ? (
             selectedValues.length === 0 ? (
-              <span className="text-gray-400 dark:text-gray-500 truncate text-xs sm:text-sm">
+              <span className="text-[var(--text-subtle)] truncate text-[13px] font-normal">
                 {placeholder}
               </span>
             ) : (
@@ -437,21 +448,22 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 {visibleChips.map((opt) => (
                   <span
                     key={opt.value}
-                    className="inline-flex items-center gap-1 px-2 h-6 text-xs font-medium rounded-md bg-[#FFF1EA] dark:bg-orange-950/40 text-[#F26B3A] border border-[#F26B3A]/20 shrink-0"
+                    className="inline-flex items-center gap-1.5 px-2 h-6 text-[12px] font-medium rounded-md bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] border border-[var(--option-selected-border)] shrink-0"
                   >
-                    <span className="truncate max-w-[120px]">{opt.label}</span>
-                    <span
+                    <span className="truncate max-w-[140px]">{opt.shortLabel || opt.label}</span>
+                    <button
+                      type="button"
                       onClick={(e) => handleRemoveChip(e, opt.value)}
-                      className="cursor-pointer hover:text-red-600 dark:hover:text-red-400 p-0.5 rounded transition-colors"
+                      className="w-3.5 h-3.5 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
                       title="Remove"
                     >
                       <X className="w-3 h-3 stroke-[2.5]" />
-                    </span>
+                    </button>
                   </span>
                 ))}
                 {hiddenCount > 0 && (
                   <Tooltip content={hiddenLabels}>
-                    <span className="h-6 px-1.5 flex items-center text-[11px] font-bold rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 shrink-0">
+                    <span className="h-6 px-1.5 flex items-center text-[11px] font-bold rounded-md bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)] shrink-0">
                       +{hiddenCount}
                     </span>
                   </Tooltip>
@@ -461,39 +473,39 @@ export const Combobox: React.FC<ComboboxProps> = ({
           ) : singleSelectedOption ? (
             <div className="flex items-center gap-2 truncate">
               {singleSelectedOption.icon && (
-                <span className="shrink-0 text-gray-500 dark:text-gray-400">
+                <span className="shrink-0 text-[var(--text-muted)] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]">
                   {singleSelectedOption.icon}
                 </span>
               )}
-              <span className="font-normal text-gray-900 dark:text-gray-100 truncate text-xs sm:text-sm">
-                {singleSelectedOption.label}
+              <span className="font-normal text-[var(--text)] truncate">
+                {singleSelectedOption.shortLabel || singleSelectedOption.label}
               </span>
             </div>
           ) : (
-            <span className="text-gray-400 dark:text-gray-500 truncate text-xs sm:text-sm">
+            <span className="text-[var(--text-subtle)] truncate text-[13px] font-normal">
               {placeholder}
             </span>
           )}
         </div>
 
         {/* Right Icons: Clear + Chevron/Loading */}
-        <div className="flex items-center gap-1 shrink-0 text-gray-400 dark:text-gray-500">
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 shrink-0 text-[var(--text-muted)] pointer-events-auto">
           {clearable && selectedValues.length > 0 && !disabled && (
             <span
               onClick={handleClearAll}
-              className="p-1 hover:text-gray-700 dark:hover:text-gray-200 rounded transition-colors cursor-pointer"
+              className="p-0.5 hover:text-[var(--text)] rounded transition-colors cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3.5 h-3.5 stroke-[2]" />
             </span>
           )}
 
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin text-[#F26B3A]" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
           ) : (
             <ChevronDown
               className={cn(
-                'w-4 h-4 transition-transform duration-200',
-                isOpen && 'rotate-180 text-[#F26B3A]'
+                'w-3.5 h-3.5 stroke-[1.75] transition-transform duration-200',
+                isOpen && 'rotate-180 text-[var(--brand)]'
               )}
             />
           )}
@@ -519,7 +531,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   scale: 0.96,
                   y: coords.openUpward ? 4 : -4,
                 }}
-                transition={{ duration: 0.15, ease: 'easeOut' }}
+                transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
                 style={{
                   position: 'fixed',
                   top: coords.top !== undefined ? `${coords.top}px` : undefined,
@@ -530,13 +542,13 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   maxHeight: `${coords.maxHeight}px`,
                   zIndex: 9999,
                 }}
-                className="rounded-xl bg-white dark:bg-[#1E1E22] border border-gray-200/90 dark:border-gray-800 shadow-[0_12px_32px_-8px_rgba(16,24,40,0.18)] flex flex-col overflow-hidden select-none"
+                className="rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] flex flex-col overflow-hidden select-none"
               >
                 {/* Search Input Box */}
                 {searchable && (
-                  <div className="p-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1A1A1D] shrink-0">
+                  <div className="p-2 border-b border-[var(--border-subtle)] bg-[var(--surface-subtle)] shrink-0">
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" />
                       <input
                         ref={searchInputRef}
                         type="text"
@@ -546,13 +558,13 @@ export const Combobox: React.FC<ComboboxProps> = ({
                           setHighlightedIndex(0);
                         }}
                         placeholder="Search..."
-                        className="w-full pl-8 pr-7 py-1.5 text-xs bg-white dark:bg-[#18181B] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[#F26B3A]"
+                        className="w-full pl-8 pr-7 py-1.5 text-[12px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
                       />
                       {searchQuery && (
                         <button
                           type="button"
                           onClick={() => setSearchQuery('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)] p-0.5"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -563,11 +575,11 @@ export const Combobox: React.FC<ComboboxProps> = ({
 
                 {/* Multi-Select Header: Select All / Clear All */}
                 {multiple && (
-                  <div className="flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-50/70 dark:bg-gray-800/40 border-b border-gray-100 dark:border-gray-800 shrink-0 select-none">
+                  <div className="flex items-center justify-between px-3 py-1.5 text-[12px] font-medium text-[var(--text-muted)] bg-[var(--surface-subtle)] border-b border-[var(--border-subtle)] shrink-0 select-none">
                     <button
                       type="button"
                       onClick={handleSelectAll}
-                      className="hover:text-[#F26B3A] transition-colors"
+                      className="text-[var(--option-selected-icon)] hover:opacity-80 transition-opacity font-medium"
                     >
                       Select All
                     </button>
@@ -589,16 +601,17 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   id={`listbox-${uniqueId}`}
                   role="listbox"
                   aria-multiselectable={multiple}
-                  className="overflow-y-auto flex-1 p-1 divide-y divide-gray-50 dark:divide-gray-800/40 scrollbar-thin"
+                  onMouseMove={() => setIsKeyboardNav(false)}
+                  className="overflow-y-auto flex-1 p-1.5 flex flex-col gap-[2px] scrollbar-thin"
                 >
                   {filteredOptions.length === 0 && !canCreate ? (
-                    <div className="py-6 px-3 text-center text-xs text-gray-400 select-none">
+                    <div className="py-6 px-3 text-center text-[12px] text-[var(--text-muted)] select-none">
                       No matching options found.
                     </div>
                   ) : groupBy && groupedOptions ? (
                     Object.entries(groupedOptions).map(([groupName, groupOpts]) => (
                       <div key={groupName} className="py-1">
-                        <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 sticky top-0 bg-white/95 dark:bg-[#1E1E22]/95 backdrop-blur-xs">
+                        <div className="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] sticky top-0 bg-[var(--surface-raised)]/95 backdrop-blur-xs">
                           {groupName}
                         </div>
                         {groupOpts.map((opt) => renderOptionRow(opt))}
@@ -613,7 +626,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                     <button
                       type="button"
                       onClick={handleCreate}
-                      className="flex items-center gap-2 w-full px-2.5 py-2 text-xs font-semibold text-[#F26B3A] hover:bg-[#FFF1EA] dark:hover:bg-orange-950/30 rounded-lg transition-colors text-left"
+                      className="flex items-center gap-2 w-full px-2.5 py-2 text-[12px] font-medium text-[var(--option-selected-icon)] hover:bg-[var(--option-hover-bg)] rounded-[8px] transition-colors text-left"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Create "{searchQuery.trim()}"</span>
@@ -623,15 +636,15 @@ export const Combobox: React.FC<ComboboxProps> = ({
 
                 {/* Multi-Select Footer with 'N selected' and 'Done' */}
                 {multiple && (
-                  <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50/70 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 select-none">
-                    <span>
+                  <div className="px-3 py-2 text-[12px] font-medium text-[var(--text-muted)] bg-[var(--surface-subtle)] border-t border-[var(--border-subtle)] flex items-center justify-between shrink-0 select-none">
+                    <span className="text-[var(--option-selected-icon)] font-medium">
                       {selectedValues.length} selected
                       {maxSelected && ` (max ${maxSelected})`}
                     </span>
                     <button
                       type="button"
                       onClick={() => setIsOpen(false)}
-                      className="px-2.5 py-1 text-xs font-semibold rounded-md bg-[#F26B3A] text-white hover:bg-[#d85627] transition-colors"
+                      className="px-3 py-1 text-[12px] font-semibold rounded-md bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] transition-colors"
                     >
                       Done
                     </button>
@@ -649,6 +662,8 @@ export const Combobox: React.FC<ComboboxProps> = ({
     const isSelected = selectedValues.includes(opt.value);
     const itemIndex = visibleItems.findIndex((o) => o.value === opt.value);
     const isHighlighted = itemIndex === highlightedIndex;
+    const isKeyboardActive = isHighlighted && isKeyboardNav;
+    const isHovered = isHighlighted && !isKeyboardNav;
 
     return (
       <button
@@ -659,55 +674,78 @@ export const Combobox: React.FC<ComboboxProps> = ({
         disabled={opt.disabled}
         data-index={itemIndex}
         onClick={() => handleSelectOption(opt.value)}
-        onMouseEnter={() => setHighlightedIndex(itemIndex)}
+        onMouseEnter={() => {
+          setIsKeyboardNav(false);
+          setHighlightedIndex(itemIndex);
+        }}
         className={cn(
-          'flex items-center justify-between w-full px-2.5 py-2 my-0.5 rounded-lg text-xs text-left transition-colors select-none',
-          isSelected
-            ? 'bg-[#FFF1EA] dark:bg-orange-950/30 text-[#F26B3A] font-semibold'
-            : isHighlighted
-            ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50',
-          opt.disabled && 'opacity-40 cursor-not-allowed pointer-events-none'
+          'flex items-center justify-between w-full px-2.5 rounded-[8px] text-left transition-colors select-none',
+          opt.description ? 'h-[44px]' : 'h-[36px]',
+          size === 'sm' ? 'text-[12px]' : 'text-[14px]',
+          opt.disabled
+            ? 'opacity-50 cursor-not-allowed pointer-events-none'
+            : isSelected
+              ? isKeyboardActive
+                ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)] ring-2 ring-inset ring-[var(--option-selected-icon)]'
+                : isHovered
+                  ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)]'
+                  : 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)]'
+              : isKeyboardActive
+                ? 'bg-[var(--option-hover-bg)] text-[var(--text)] ring-2 ring-inset ring-[var(--option-selected-icon)]'
+                : isHovered
+                  ? 'bg-[var(--option-hover-bg)] text-[var(--text)]'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)]'
         )}
       >
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {multiple && (
             <div
               className={cn(
-                'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                'w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors',
                 isSelected
-                  ? 'bg-[#F26B3A] border-[#F26B3A] text-white'
-                  : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800'
+                  ? 'bg-[var(--option-selected-icon)] border-[var(--option-selected-icon)] text-white'
+                  : 'border-[var(--border-strong)] bg-[var(--surface)]'
               )}
             >
-              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+              {isSelected && (
+                <Check className="w-3 h-3 stroke-[3]" />
+              )}
             </div>
           )}
 
-          {opt.icon && <span className="shrink-0 text-gray-400">{opt.icon}</span>}
+          {opt.icon && (
+            <span className="shrink-0 text-[var(--text-muted)] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]">
+              {opt.icon}
+            </span>
+          )}
 
           <div className="min-w-0 flex-1">
-            <div className="truncate font-medium text-gray-900 dark:text-gray-100">
+            <div className={cn('truncate font-normal text-[var(--text)]', size === 'sm' ? 'text-[12px]' : 'text-[14px]')}>
               {highlightMatch(opt.label, searchQuery)}
             </div>
             {opt.description && (
-              <div className="text-[11px] text-gray-400 dark:text-gray-500 font-normal truncate mt-0.5">
+              <div className="text-[12px] text-[var(--text-muted)] font-normal truncate">
                 {opt.description}
               </div>
             )}
           </div>
 
           {opt.badge && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500">
+            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
               {opt.badge}
             </span>
           )}
         </div>
 
-        {!multiple && isSelected && (
-          <Check className="w-4 h-4 text-[#F26B3A] shrink-0 ml-2" />
+        {!multiple && (
+          <div className="w-4 h-4 shrink-0 ml-2 flex items-center justify-center">
+            {isSelected && (
+              <Check className="w-4 h-4 stroke-[2] text-[var(--option-selected-icon)]" />
+            )}
+          </div>
         )}
       </button>
     );
   }
 };
+export default Combobox;

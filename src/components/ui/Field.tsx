@@ -4,6 +4,21 @@ import { AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // ==========================================
+// Form Section Heading (<FormSectionTitle>)
+// ==========================================
+
+export const FormSectionTitle: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className }) => (
+  <div className={cn('pt-2 mt-4 mb-2 border-b border-[var(--border-subtle)] pb-1.5', className)}>
+    <span className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wider select-none">
+      {children}
+    </span>
+  </div>
+);
+
+// ==========================================
 // Field Container (<Field>)
 // ==========================================
 
@@ -31,56 +46,61 @@ export const Field: React.FC<FieldProps> = ({
   const generatedId = useId();
   const fieldId = id || generatedId;
 
+  // Clean label: labels never contain "(Multi)" or "(Searchable)" hints
+  const cleanLabel =
+    typeof label === 'string'
+      ? label.replace(/\s*\((Multi|Searchable)\)/gi, '')
+      : label;
+
   return (
     <div className={cn('w-full flex flex-col', className)}>
       {sectionTitle && (
-        <div className="pb-1.5 mb-3 border-b border-gray-100 dark:border-gray-800">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-            {sectionTitle}
-          </span>
-        </div>
+        <FormSectionTitle>{sectionTitle}</FormSectionTitle>
       )}
 
-      {label && (
+      {cleanLabel && (
         <label
           htmlFor={fieldId}
-          className="text-[13px] font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex items-center select-none"
+          className="text-[13px] font-medium leading-[18px] text-[var(--text-secondary)] mb-1.5 flex items-center select-none"
         >
-          {label}
-          {required && <span className="text-[#F26B3A] ml-1 font-bold">*</span>}
+          {cleanLabel}
+          {required && (
+            <span
+              className="text-[13px] text-[var(--brand)] ml-[2px] leading-none select-none"
+              aria-hidden="true"
+            >
+              *
+            </span>
+          )}
         </label>
       )}
 
       <div className="relative w-full">{children}</div>
 
-      {/* Helper text or animated error */}
-      <div className="min-h-[18px] mt-1.5">
-        <AnimatePresence mode="wait">
-          {error ? (
-            <motion.div
-              key="error"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.15 }}
-              className="flex items-center gap-1.5 text-xs text-red-500 font-medium"
-            >
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
-              <span>{error}</span>
-            </motion.div>
-          ) : helperText ? (
-            <motion.p
-              key="helper"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-xs text-gray-500 dark:text-gray-400"
-            >
-              {helperText}
-            </motion.p>
-          ) : null}
-        </AnimatePresence>
-      </div>
+      {/* Helper text or animated error (animated in with alert icon + one shake) */}
+      <AnimatePresence mode="wait">
+        {(error || helperText) && (
+          <motion.div
+            key={error ? 'error' : 'helper'}
+            initial={{ opacity: 0, height: 0, y: -2 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -2 }}
+            transition={{ duration: 0.12 }}
+            className="overflow-hidden mt-1.5"
+          >
+            {error ? (
+              <div className="flex items-center gap-1.5 text-[12px] text-[var(--danger-text)] font-medium animate-shake">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
+                <span>{error}</span>
+              </div>
+            ) : (
+              <p className="text-[12px] text-[var(--text-muted)]">
+                {helperText}
+              </p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -90,7 +110,10 @@ export const Field: React.FC<FieldProps> = ({
 // ==========================================
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  icon?: React.ReactNode;
+  prefixIcon?: React.ReactNode;
   prefixAdornment?: React.ReactNode;
+  suffixIcon?: React.ReactNode;
   suffixAdornment?: React.ReactNode;
   hasError?: boolean;
   formatOnBlur?: boolean;
@@ -100,7 +123,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   (
     {
       className,
+      icon,
+      prefixIcon,
       prefixAdornment,
+      suffixIcon,
       suffixAdornment,
       hasError,
       type = 'text',
@@ -122,20 +148,26 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       onBlur?.(e);
     };
 
+    const leadingAdornment = icon || prefixIcon || prefixAdornment;
+    const trailingAdornment = suffixIcon || suffixAdornment;
+    const hasLeading = Boolean(leadingAdornment);
+    const hasTrailing = Boolean(trailingAdornment);
+
     return (
       <div
         className={cn(
-          'relative flex items-center w-full h-10 rounded-[10px] border bg-white dark:bg-[#18181B] transition-all overflow-hidden focus-within:ring-[3px] focus-within:ring-[#F26B3A]/20 focus-within:border-[#F26B3A]',
+          'relative flex items-center w-full h-[40px] max-sm:h-[44px] rounded-[10px] border bg-[var(--surface)] transition-colors',
+          'focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]',
           hasError
-            ? 'border-red-500 ring-2 ring-red-500/20'
-            : 'border-gray-200/90 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
-          props.disabled && 'opacity-60 cursor-not-allowed bg-gray-50 dark:bg-gray-800/40',
+            ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
+            : 'border-[var(--border)] hover:border-[var(--border-strong)]',
+          props.disabled && 'opacity-60 cursor-not-allowed bg-[var(--surface-subtle)]',
           className
         )}
       >
-        {prefixAdornment && (
-          <div className="h-full px-3 flex items-center justify-center bg-gray-50 dark:bg-gray-800/60 border-r border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-xs font-semibold select-none shrink-0">
-            {prefixAdornment}
+        {hasLeading && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-[var(--text-muted)] pointer-events-none select-none text-[13px] font-medium [&>svg]:w-4 [&>svg]:h-4">
+            {leadingAdornment}
           </div>
         )}
 
@@ -146,15 +178,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           defaultValue={defaultValue}
           onBlur={handleBlur}
           className={cn(
-            'flex-1 h-full px-3 text-sm text-gray-900 dark:text-gray-100 bg-transparent placeholder:text-gray-400 focus:outline-none tabular-nums font-normal',
+            'w-full h-full text-[14px] max-sm:text-[16px] leading-[20px] max-sm:leading-[24px] text-[var(--text)] bg-transparent focus:outline-none tabular-nums font-normal',
+            hasLeading ? 'pl-10' : 'pl-3',
+            hasTrailing ? 'pr-10' : 'pr-3',
             props.disabled && 'cursor-not-allowed'
           )}
           {...props}
         />
 
-        {suffixAdornment && (
-          <div className="h-full px-3 flex items-center justify-center bg-gray-50 dark:bg-gray-800/60 border-l border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-xs font-semibold select-none shrink-0">
-            {suffixAdornment}
+        {hasTrailing && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-[var(--text-muted)] pointer-events-none select-none text-[13px] font-normal [&>svg]:w-4 [&>svg]:h-4">
+            {trailingAdornment}
           </div>
         )}
       </div>
@@ -173,7 +207,7 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, maxLength, hasError, value, onChange, ...props }, ref) => {
+  ({ className, maxLength = 500, hasError, value, onChange, ...props }, ref) => {
     const [charCount, setCharCount] = useState(
       typeof value === 'string' ? value.length : 0
     );
@@ -186,11 +220,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div
         className={cn(
-          'relative w-full rounded-[10px] border bg-white dark:bg-[#18181B] transition-all overflow-hidden focus-within:ring-[3px] focus-within:ring-[#F26B3A]/20 focus-within:border-[#F26B3A]',
+          'relative w-full rounded-[10px] border bg-[var(--surface)] transition-colors overflow-hidden',
+          'focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]',
           hasError
-            ? 'border-red-500 ring-2 ring-red-500/20'
-            : 'border-gray-200/90 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
-          props.disabled && 'opacity-60 cursor-not-allowed bg-gray-50 dark:bg-gray-800/40',
+            ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
+            : 'border-[var(--border)] hover:border-[var(--border-strong)]',
+          props.disabled && 'opacity-60 cursor-not-allowed bg-[var(--surface-subtle)]',
           className
         )}
       >
@@ -200,7 +235,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           maxLength={maxLength}
           onChange={handleChange}
           className={cn(
-            'w-full min-h-[96px] max-h-[200px] p-3 text-sm text-gray-900 dark:text-gray-100 bg-transparent placeholder:text-gray-400 focus:outline-none resize-none',
+            'w-full min-h-[96px] max-h-[220px] px-3 py-2.5 text-[14px] max-sm:text-[16px] leading-[20px] max-sm:leading-[24px] text-[var(--text)] bg-transparent focus:outline-none resize-none font-normal',
             props.disabled && 'cursor-not-allowed'
           )}
           {...props}
@@ -208,7 +243,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 
         {maxLength !== undefined && (
           <div className="px-3 pb-2 flex justify-end">
-            <span className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums">
+            <span className="text-[11px] text-[var(--text-muted)] tabular-nums">
               {charCount} / {maxLength}
             </span>
           </div>

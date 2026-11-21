@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
+import { modalVariants, transitions } from '../../lib/motion';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -53,7 +54,6 @@ export const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Recheck scroll after render
       setTimeout(checkScroll, 60);
       window.addEventListener('resize', checkScroll);
       return () => window.removeEventListener('resize', checkScroll);
@@ -92,19 +92,19 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen, showDiscardConfirm, handleAttemptClose]);
 
-  // Strict sizes
+  // Spec sizes: sm 440 / md 560 / lg 720 / xl 880 (min(size, 100vw-32px))
   const sizeMap = {
-    sm: 'max-w-[440px]',
-    md: 'max-w-[560px]',
-    lg: 'max-w-[720px]',
-    xl: 'max-w-[880px]',
+    sm: 'sm:max-w-[440px]',
+    md: 'sm:max-w-[560px]',
+    lg: 'sm:max-w-[720px]',
+    xl: 'sm:max-w-[880px]',
   };
 
   const iconColorStyles = {
-    orange: 'bg-[#FFF1EA] dark:bg-orange-950/40 text-[#F26B3A]',
-    red: 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400',
-    green: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
-    amber: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
+    orange: 'bg-[var(--brand-soft)] text-[var(--brand)]',
+    red: 'bg-[var(--danger-bg)] text-[var(--danger-text)]',
+    green: 'bg-[var(--success-bg)] text-[var(--success-text)]',
+    amber: 'bg-[var(--warning-bg)] text-[var(--warning-text)]',
   };
 
   return (
@@ -118,27 +118,27 @@ export const Modal: React.FC<ModalProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             onClick={handleAttemptClose}
-            className="fixed inset-0 bg-black/40 backdrop-blur-[6px]"
+            className="fixed inset-0 bg-[var(--backdrop)] backdrop-blur-[6px]"
           />
 
           {/* Modal Container: Bottom sheet on mobile (<640px), centered dialog on >=sm */}
           <motion.div
             ref={modalRef}
-            initial={{ opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            transition={{ type: 'spring', damping: 32, stiffness: 380 }}
+            variants={modalVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             role="dialog"
             aria-modal="true"
             aria-describedby={ariaDescribedBy}
             className={cn(
-              'relative w-full rounded-t-2xl sm:rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/90 dark:border-gray-800 shadow-[0_24px_64px_-12px_rgba(16,24,40,0.28)] z-10 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[calc(100dvh-64px)]',
+              'relative w-full rounded-t-2xl sm:rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-modal)] z-10 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[calc(100dvh-64px)]',
               sizeMap[size],
               className
             )}
           >
             {/* Mobile Drag Handle */}
-            <div className="sm:hidden w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto my-2.5 shrink-0" />
+            <div className="sm:hidden w-10 h-1 bg-[var(--border-strong)] rounded-full mx-auto my-2.5 shrink-0" />
 
             {/* Header: px-6 pt-5 pb-4 */}
             {(title || icon || showCloseButton) && (
@@ -146,7 +146,7 @@ export const Modal: React.FC<ModalProps> = ({
                 className={cn(
                   'flex items-start justify-between px-6 pt-4 sm:pt-5 pb-4 shrink-0 transition-colors',
                   canScrollUp
-                    ? 'border-b border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-[#1C1C1F]/95 backdrop-blur-xs'
+                    ? 'border-b border-[var(--border)] bg-[var(--surface-raised)]/95 backdrop-blur-xs'
                     : 'border-b border-transparent'
                 )}
               >
@@ -163,14 +163,14 @@ export const Modal: React.FC<ModalProps> = ({
                   )}
                   <div className="min-w-0">
                     {typeof title === 'string' ? (
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight truncate">
+                      <h3 className="text-[18px] font-semibold text-[var(--text)] tracking-tight truncate">
                         {title}
                       </h3>
                     ) : (
                       title
                     )}
                     {subtitle && (
-                      <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                      <p className="text-[13px] text-[var(--text-muted)] mt-0.5 truncate">
                         {subtitle}
                       </p>
                     )}
@@ -181,7 +181,7 @@ export const Modal: React.FC<ModalProps> = ({
                   <button
                     type="button"
                     onClick={handleAttemptClose}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 transition-colors shrink-0 -mr-1 mt-0.5"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] transition-colors shrink-0 -mr-1 mt-0.5"
                     aria-label="Close dialog"
                   >
                     <X className="w-4 h-4" />
@@ -198,11 +198,11 @@ export const Modal: React.FC<ModalProps> = ({
               )}
             />
 
-            {/* Body: px-6 py-5 with gap-5 */}
+            {/* Body: px-6 py-5, gap-4 */}
             <div
               ref={bodyRef}
               onScroll={checkScroll}
-              className="px-6 py-4 sm:py-5 overflow-y-auto flex-1 scrollbar-thin scrollbar-gutter-stable"
+              className="px-6 py-5 overflow-y-auto flex-1 scrollbar-thin scrollbar-gutter-stable space-y-4"
             >
               {children}
             </div>
@@ -217,7 +217,7 @@ export const Modal: React.FC<ModalProps> = ({
 
             {/* Footer: sticky at bottom, px-6 py-4 */}
             {footer && (
-              <div className="px-6 py-3.5 sm:py-4 bg-[#FAFAFA] dark:bg-[#18181B] border-t border-gray-100 dark:border-gray-800 shrink-0">
+              <div className="px-6 py-3.5 sm:py-4 bg-[var(--surface-subtle)] border-t border-[var(--border)] shrink-0">
                 {footer}
               </div>
             )}
@@ -229,16 +229,16 @@ export const Modal: React.FC<ModalProps> = ({
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute inset-0 z-30 bg-white/95 dark:bg-[#1C1C1F]/95 backdrop-blur-xs flex items-center justify-center p-6 text-center select-none"
+                  className="absolute inset-0 z-30 bg-[var(--surface-raised)]/95 backdrop-blur-xs flex items-center justify-center p-6 text-center select-none"
                 >
                   <div className="max-w-xs space-y-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
-                      <AlertCircle className="w-5 h-5 stroke-[2.5]" />
+                    <div className="w-10 h-10 rounded-full bg-[var(--warning-bg)] text-[var(--warning-text)] mx-auto flex items-center justify-center">
+                      <AlertCircle className="w-5 h-5 stroke-[2.2]" />
                     </div>
-                    <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                    <h4 className="text-[16px] font-semibold text-[var(--text)]">
                       Discard unsaved changes?
                     </h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-[12px] text-[var(--text-muted)]">
                       You have modified form values. If you leave now, your changes will be lost.
                     </p>
                     <div className="flex items-center justify-center gap-2.5 pt-2">
@@ -270,22 +270,19 @@ export const Modal: React.FC<ModalProps> = ({
     </AnimatePresence>
   );
 };
-
-// ==========================================
-// Standard Modal Footer Helper (<ModalFooter>)
-// ==========================================
-
 export interface ModalFooterProps {
   onCancel?: () => void;
-  onSubmit?: () => void;
+  onSubmit?: (e?: any) => void;
   cancelText?: string;
   submitText?: string;
-  submitVariant?: 'primary' | 'danger';
+  submitVariant?: 'primary' | 'danger' | 'secondary' | string;
+  submitIcon?: React.ReactNode;
   isSubmitting?: boolean;
   isSuccess?: boolean;
   submitDisabled?: boolean;
   leftSlot?: React.ReactNode;
-  submitIcon?: React.ReactNode;
+  children?: React.ReactNode;
+  className?: string;
 }
 
 export const ModalFooter: React.FC<ModalFooterProps> = ({
@@ -294,59 +291,79 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
   cancelText = 'Cancel',
   submitText = 'Save Changes',
   submitVariant = 'primary',
+  submitIcon,
   isSubmitting = false,
   isSuccess = false,
   submitDisabled = false,
   leftSlot,
-  submitIcon,
+  children,
+  className,
 }) => {
-  return (
-    <div className="flex items-center justify-between w-full">
-      <div className="flex items-center gap-2">{leftSlot}</div>
+  if (children) {
+    return (
+      <div className={cn('flex items-center justify-between w-full gap-3', className)}>
+        {leftSlot ? <div className="text-[12px] text-[var(--text-muted)]">{leftSlot}</div> : <div />}
+        <div className="flex items-center gap-2.5">{children}</div>
+      </div>
+    );
+  }
 
-      <div className="flex items-center gap-3 ml-auto">
+  return (
+    <div className={cn('flex items-center justify-between w-full gap-3', className)}>
+      {leftSlot ? <div className="text-[12px] text-[var(--text-muted)]">{leftSlot}</div> : <div />}
+      <div className="flex items-center gap-2.5 ml-auto">
         {onCancel && (
           <Button
             type="button"
             variant="outline"
             size="md"
-            disabled={isSubmitting}
             onClick={onCancel}
-            className="h-10 px-4 text-sm font-medium"
+            disabled={isSubmitting}
+            className="h-10 px-4 text-[13px] font-medium"
           >
             {cancelText}
           </Button>
         )}
-
-        <Button
-          type={onSubmit ? 'button' : 'submit'}
-          onClick={onSubmit}
-          variant={submitVariant}
-          size="md"
-          disabled={submitDisabled || isSubmitting}
-          className={cn(
-            'h-10 px-5 text-sm font-medium transition-all duration-200 gap-1.5',
-            isSuccess && 'bg-emerald-600 hover:bg-emerald-600 border-emerald-600 text-white'
-          )}
-        >
-          {isSuccess ? (
-            <>
-              <Check className="w-4 h-4 stroke-[3] animate-in zoom-in-75 duration-200" />
-              <span>Saved!</span>
-            </>
-          ) : isSubmitting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Saving...</span>
-            </>
-          ) : (
-            <>
-              {submitIcon || <Check className="w-4 h-4" />}
-              <span>{submitText}</span>
-            </>
-          )}
-        </Button>
+        {onSubmit && (
+          <Button
+            type="button"
+            variant={submitVariant as any}
+            size="md"
+            onClick={onSubmit}
+            disabled={submitDisabled || isSubmitting}
+            className={cn(
+              'h-10 px-4 text-[13px] font-medium transition-all gap-1.5',
+              isSuccess && 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-text)]/30'
+            )}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : isSuccess ? (
+              <>
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>Saved</span>
+              </>
+            ) : (
+              <>
+                {submitIcon || <Check className="w-4 h-4" />}
+                <span>{submitText}</span>
+              </>
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );
 };
+
+export const ModalBody: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className }) => (
+  <div className={cn('space-y-4', className)}>{children}</div>
+);
+
+export default Modal;
