@@ -1,0 +1,285 @@
+import React, { useState } from 'react';
+import { Wifi, Plus, Edit2, Trash2, Check, Zap, ArrowDown, ArrowUp } from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { Plan, ConnectionType } from '../types';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+
+export const PlansPage: React.FC = () => {
+  const plans = useStore((s) => s.plans);
+  const addPlan = useStore((s) => s.addPlan);
+  const updatePlan = useStore((s) => s.updatePlan);
+  const deletePlan = useStore((s) => s.deletePlan);
+  const currency = useStore((s) => s.currency);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+  const [name, setName] = useState('');
+  const [speedMbps, setSpeedMbps] = useState(300);
+  const [uploadMbps, setUploadMbps] = useState(150);
+  const [monthlyPrice, setMonthlyPrice] = useState(54.99);
+  const [dataCapGB, setDataCapGB] = useState<number | ''>('');
+  const [type, setType] = useState<ConnectionType>('Fiber');
+  const [description, setDescription] = useState('');
+
+  const handleOpenAdd = () => {
+    setEditingPlanId(null);
+    setName('');
+    setSpeedMbps(300);
+    setUploadMbps(150);
+    setMonthlyPrice(54.99);
+    setDataCapGB('');
+    setType('Fiber');
+    setDescription('');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (plan: Plan) => {
+    setEditingPlanId(plan.id);
+    setName(plan.name);
+    setSpeedMbps(plan.speedMbps);
+    setUploadMbps(plan.uploadMbps);
+    setMonthlyPrice(plan.monthlyPrice);
+    setDataCapGB(plan.dataCapGB || '');
+    setType(plan.type);
+    setDescription(plan.description || '');
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      name,
+      speedMbps: Number(speedMbps),
+      uploadMbps: Number(uploadMbps),
+      monthlyPrice: Number(monthlyPrice),
+      dataCapGB: dataCapGB === '' ? null : Number(dataCapGB),
+      type,
+      description,
+    };
+
+    if (editingPlanId) {
+      updatePlan(editingPlanId, payload);
+    } else {
+      addPlan(payload);
+    }
+    setIsModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-6 pb-12 select-none">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+            Internet Plans Catalog
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Configure speed tiers, bandwidth limits, and subscription pricing
+          </p>
+        </div>
+        <Button variant="primary" size="md" onClick={handleOpenAdd} className="text-xs font-bold">
+          <Plus className="w-4 h-4" />
+          <span>+ Add New Plan</span>
+        </Button>
+      </div>
+
+      {/* Plans Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {plans.map((p) => (
+          <div
+            key={p.id}
+            className="flex flex-col justify-between p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft hover:shadow-soft-hover transition-all"
+          >
+            <div>
+              <div className="flex items-start justify-between gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF1EA] text-[#F26B3A] dark:bg-orange-950/60 uppercase">
+                  {p.type}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleOpenEdit(p)}
+                    className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => deletePlan(p.id)}
+                    className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 mt-2">{p.name}</h3>
+              <p className="text-[11px] text-gray-400 mt-1 line-clamp-2">
+                {p.description || 'High-speed broadband connectivity.'}
+              </p>
+
+              {/* Price */}
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-3xl font-black text-gray-900 dark:text-gray-100">
+                  {currency}{p.monthlyPrice.toFixed(2)}
+                </span>
+                <span className="text-xs text-gray-400">/month</span>
+              </div>
+
+              {/* Speeds */}
+              <div className="mt-4 p-3 rounded-xl bg-gray-50/70 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-gray-500">
+                    <ArrowDown className="w-3.5 h-3.5 text-[#F26B3A]" /> Download:
+                  </span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">
+                    {p.speedMbps} Mbps
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-gray-500">
+                    <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> Upload:
+                  </span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">
+                    {p.uploadMbps} Mbps
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-gray-200/60 dark:border-gray-700">
+                  <span className="text-gray-500">Monthly Cap:</span>
+                  <span className="font-bold text-[#F26B3A]">
+                    {p.dataCapGB ? `${p.dataCapGB} GB` : 'Unlimited'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-400">
+              <span>Subscribers</span>
+              <span className="font-bold text-gray-700 dark:text-gray-300">
+                {p.subscribersCount || 0} active
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add / Edit Plan Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingPlanId ? 'Edit Internet Plan' : 'Add New Internet Plan'}
+        subtitle="Configure broadband specs and monthly billing rate"
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <div>
+            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+              Plan Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Fiber Ultra 500M"
+              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                Download Speed (Mbps) *
+              </label>
+              <input
+                type="number"
+                required
+                value={speedMbps}
+                onChange={(e) => setSpeedMbps(Number(e.target.value))}
+                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+              />
+            </div>
+            <div>
+              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                Upload Speed (Mbps) *
+              </label>
+              <input
+                type="number"
+                required
+                value={uploadMbps}
+                onChange={(e) => setUploadMbps(Number(e.target.value))}
+                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                Monthly Price ({currency}) *
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={monthlyPrice}
+                onChange={(e) => setMonthlyPrice(Number(e.target.value))}
+                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+              />
+            </div>
+            <div>
+              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                Connection Type
+              </label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as ConnectionType)}
+                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+              >
+                <option value="Fiber">Fiber Optic</option>
+                <option value="Wireless">Fixed Wireless</option>
+                <option value="DSL">DSL Copper</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+              Monthly Data Cap (GB, leave blank for Unlimited)
+            </label>
+            <input
+              type="number"
+              value={dataCapGB}
+              onChange={(e) => setDataCapGB(e.target.value === '' ? '' : Number(e.target.value))}
+              placeholder="Leave blank for Unlimited"
+              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+            />
+          </div>
+
+          <div>
+            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+              Marketing Description
+            </label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Highlights e.g. Ideal for multi-gigabit smart homes..."
+              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <Button size="sm" variant="outline" type="button" onClick={() => setIsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" variant="primary" type="submit">
+              <Check className="w-3.5 h-3.5" />
+              <span>{editingPlanId ? 'Save Changes' : 'Create Plan'}</span>
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+};
