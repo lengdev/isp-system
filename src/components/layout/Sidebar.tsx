@@ -208,8 +208,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
         )}
       </div>
 
-      {/* 3. Navigation List (flex-1 overflow-y-auto scrollbar-thin) */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-0.5 scrollbar-thin">
+      {/* 3. Navigation List (flex-1 min-h-0 overflow-y-auto scrollbar-thin) */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-0.5 scrollbar-thin">
         {renderNavList(mainNav)}
 
         {/* Tools Section */}
@@ -334,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
   return (
     <>
       {/* Desktop Sticky Sidebar */}
-      <aside className="hidden md:flex shrink-0 h-screen sticky top-0 z-30 overflow-hidden">
+      <aside className="hidden md:flex shrink-0 h-dvh sticky top-0 z-30">
         {sidebarContent}
       </aside>
 

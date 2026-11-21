@@ -35,7 +35,7 @@ export const CustomersPage: React.FC = () => {
     <div className="w-full pb-16 space-y-4 select-none">
       {/* 1. Page Header: Title, 13px muted subtitle, single "+ Add New Customer" (32px, 12px) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-[24px] font-semibold text-[var(--text)] tracking-tight">
             Customers
           </h2>
@@ -44,15 +44,16 @@ export const CustomersPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <Button
             variant="primary"
             size="sm"
             onClick={() => openModal('addEditCustomer')}
-            className="h-8 px-3 text-[12px] font-semibold gap-1.5"
+            className="h-8 px-3 text-[12px] font-semibold gap-1.5 shrink-0"
+            title="Add New Customer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add New Customer</span>
+            <span className="hidden min-[480px]:inline">Add New Customer</span>
           </Button>
         </div>
       </div>
