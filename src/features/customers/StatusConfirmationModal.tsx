@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Power, CheckCircle2 } from 'lucide-react';
+import { Power, CheckCircle2, AlertTriangle, Check } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { Modal } from '../../components/ui/Modal';
-import { Button } from '../../components/ui/Button';
+import { Modal, ModalFooter } from '../../components/ui/Modal';
+import { Field } from '../../components/ui/Field';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 
 export const StatusConfirmationModal: React.FC = () => {
@@ -11,21 +11,24 @@ export const StatusConfirmationModal: React.FC = () => {
   const bulkSetCustomerStatus = useStore((s) => s.bulkSetCustomerStatus);
   const setCustomerStatus = useStore((s) => s.setCustomerStatus);
   const customers = useStore((s) => s.customers);
+  const addToast = useStore((s) => s.addToast);
 
   const { customerIds, targetStatus } = modalState;
   const [reason, setReason] = useState('Non-payment / Past Due');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const isSuspend = targetStatus === 'Suspended';
   const targetCustomer =
     customerIds.length === 1 ? customers.find((c) => c.id === customerIds[0]) : null;
 
+  // Split label vs description
   const reasonOptions: ComboboxOption[] = [
-    { value: 'Non-payment / Past Due', label: 'Non-payment / Past Due balance' },
-    { value: 'Customer Seasonal Hold', label: 'Customer Seasonal Hold / Vacation' },
-    { value: 'Violation of Acceptable Use Policy', label: 'Terms of Service / AUP Violation' },
-    { value: 'Equipment Failure / Optical Line Cut', label: 'Hardware Failure / Optical Line Cut' },
-    { value: 'Administrative Maintenance', label: 'Administrative Maintenance Hold' },
+    { value: 'Non-payment / Past Due', label: 'Non-payment', description: 'Overdue balance past grace period' },
+    { value: 'Seasonal Hold', label: 'Seasonal Vacation Hold', description: 'Customer requested pause' },
+    { value: 'Violation of AUP', label: 'ToS / AUP Violation', description: 'Security abuse or terms breach' },
+    { value: 'Hardware Failure', label: 'Equipment Failure', description: 'ONT line cut or faulty optics' },
+    { value: 'Maintenance Hold', label: 'Maintenance Hold', description: 'Temporary operational freeze' },
   ];
 
   const handleConfirm = async () => {
@@ -36,74 +39,70 @@ export const StatusConfirmationModal: React.FC = () => {
       await bulkSetCustomerStatus(customerIds, targetStatus, reason);
     }
     setIsSubmitting(false);
-    closeModal('statusConfirmation');
+    setIsSuccess(true);
+
+    setTimeout(() => {
+      addToast({
+        type: isSuspend ? 'warning' : 'success',
+        title: isSuspend ? 'Service Suspended' : 'Service Activated',
+        message: `${customerIds.length} account${customerIds.length === 1 ? '' : 's'} set to ${targetStatus}.`,
+      });
+      closeModal('statusConfirmation');
+    }, 600);
   };
 
   return (
     <Modal
       isOpen={modalState.isOpen}
       onClose={() => closeModal('statusConfirmation')}
-      title={
-        <div className="flex items-center gap-2">
-          {isSuspend ? (
-            <Power className="w-5 h-5 text-amber-500" />
-          ) : (
-            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-          )}
-          <span>{isSuspend ? 'Suspend Connection' : 'Activate Connection'}</span>
-        </div>
-      }
       size="sm"
+      icon={
+        isSuspend ? (
+          <Power className="w-5 h-5" />
+        ) : (
+          <CheckCircle2 className="w-5 h-5" />
+        )
+      }
+      iconColor={isSuspend ? 'amber' : 'green'}
+      title={isSuspend ? 'Suspend Connection' : 'Activate Connection'}
+      subtitle={`Update status to ${targetStatus} for subscriber account${customerIds.length === 1 ? '' : 's'}`}
+      footer={
+        <ModalFooter
+          onCancel={() => closeModal('statusConfirmation')}
+          onSubmit={handleConfirm}
+          submitText={isSuspend ? 'Suspend Connection' : 'Activate Connection'}
+          submitVariant={isSuspend ? 'danger' : 'primary'}
+          isSubmitting={isSubmitting}
+          isSuccess={isSuccess}
+        />
+      }
     >
-      <div className="space-y-4 text-xs">
-        <p className="text-gray-600 dark:text-gray-300">
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           {customerIds.length === 1 ? (
             <>
-              Change status to <strong className="font-bold">{targetStatus}</strong> for subscriber{' '}
-              <strong>{targetCustomer?.fullName}</strong>.
+              Change connection status to <strong className="font-semibold text-gray-900 dark:text-gray-100">{targetStatus}</strong> for{' '}
+              <strong className="font-semibold text-gray-900 dark:text-gray-100">{targetCustomer?.fullName}</strong> ({targetCustomer?.code}).
             </>
           ) : (
             <>
-              Update status to <strong className="font-bold">{targetStatus}</strong> for{' '}
-              <strong>{customerIds.length}</strong> selected subscribers.
+              Update connection status to <strong className="font-semibold text-gray-900 dark:text-gray-100">{targetStatus}</strong> for{' '}
+              <strong className="font-semibold text-gray-900 dark:text-gray-100">{customerIds.length}</strong> selected subscriber accounts.
             </>
           )}
         </p>
 
         {isSuspend && (
-          <div>
-            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-              Suspension Reason (Creatable)
-            </label>
+          <Field label="Suspension reason" helperText="Recorded in subscriber audit trail">
             <Combobox
               options={reasonOptions}
               value={reason}
               onChange={(val) => setReason(val as string)}
               creatable={true}
-              size="lg"
+              size="md"
             />
-          </div>
+          </Field>
         )}
-
-        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => closeModal('statusConfirmation')}
-            className="h-9 px-3.5"
-          >
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            variant="primary"
-            isLoading={isSubmitting}
-            onClick={handleConfirm}
-            className="h-9 px-4 font-semibold"
-          >
-            <span>Confirm {targetStatus}</span>
-          </Button>
-        </div>
       </div>
     </Modal>
   );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpDown,
@@ -9,14 +9,15 @@ import {
   AlignJustify,
   Filter,
   X,
-  Wifi,
   SlidersHorizontal,
+  RotateCcw,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { CustomerStatus, TableViewMode } from '../../types';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { Popover } from '../../components/ui/Popover';
 import { Toggle } from '../../components/ui/Toggle';
+import { Button } from '../../components/ui/Button';
 import { cn } from '../../lib/utils';
 
 export const FilterToolbar: React.FC = () => {
@@ -33,15 +34,25 @@ export const FilterToolbar: React.FC = () => {
   const showStatistics = useStore((s) => s.showStatistics);
   const toggleStatistics = useStore((s) => s.toggleStatistics);
 
-  // Compute status counts dynamically
-  const statusCounts = {
+  // Popover state and draft filters
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [draftFilters, setDraftFilters] = useState(filters);
+
+  useEffect(() => {
+    if (isFilterOpen) {
+      setDraftFilters(filters);
+    }
+  }, [isFilterOpen, filters]);
+
+  // Compute status counts dynamically for filter pills
+  const statusCounts = useMemo(() => ({
     All: customers.length,
     Active: customers.filter((c) => c.status === 'Active').length,
     Suspended: customers.filter((c) => c.status === 'Suspended').length,
     Overdue: customers.filter((c) => c.status === 'Overdue').length,
     Pending: customers.filter((c) => c.status === 'Pending').length,
     Disconnected: customers.filter((c) => c.status === 'Disconnected').length,
-  };
+  }), [customers]);
 
   const statusPills: { label: string; value: 'All' | CustomerStatus; count: number }[] = [
     { label: 'All Customers', value: 'All', count: statusCounts.All },
@@ -65,40 +76,40 @@ export const FilterToolbar: React.FC = () => {
   };
 
   // Distinct cities for filter combobox
-  const cities = Array.from(new Set(customers.map((c) => c.city))).sort();
+  const cities = useMemo(() => Array.from(new Set(customers.map((c) => c.city))).sort(), [customers]);
 
   // Combobox Options
-  const planOptions: ComboboxOption[] = plans.map((p) => ({
+  const planOptions: ComboboxOption[] = useMemo(() => plans.map((p) => ({
     value: p.name,
     label: p.name,
     description: `${p.speedMbps} Mbps • $${p.monthlyPrice}/mo`,
     group: p.type,
-  }));
+  })), [plans]);
 
-  const cityOptions: ComboboxOption[] = cities.map((c) => ({
+  const cityOptions: ComboboxOption[] = useMemo(() => cities.map((c) => ({
     value: c,
     label: c,
-  }));
+  })), [cities]);
 
   const connectionTypeOptions: ComboboxOption[] = [
-    { value: 'Fiber', label: 'Fiber Optic' },
-    { value: 'Wireless', label: 'Fixed Wireless' },
-    { value: 'DSL', label: 'DSL Copper' },
+    { value: 'Fiber', label: 'Fiber' },
+    { value: 'Wireless', label: 'Wireless' },
+    { value: 'DSL', label: 'DSL' },
   ];
 
   const statusOptions: ComboboxOption[] = [
-    { value: 'Active', label: 'Active (Connected)' },
-    { value: 'Suspended', label: 'Suspended (Blocked)' },
-    { value: 'Overdue', label: 'Overdue (Payment Pending)' },
-    { value: 'Pending', label: 'Pending (Provisioning)' },
-    { value: 'Disconnected', label: 'Disconnected (Cancelled)' },
+    { value: 'Active', label: 'Active' },
+    { value: 'Suspended', label: 'Suspended' },
+    { value: 'Overdue', label: 'Overdue' },
+    { value: 'Pending', label: 'Pending' },
+    { value: 'Disconnected', label: 'Disconnected' },
   ];
 
-  const technicianOptions: ComboboxOption[] = technicians.map((t) => ({
+  const technicianOptions: ComboboxOption[] = useMemo(() => technicians.map((t) => ({
     value: t.name,
     label: t.name,
     description: t.zone,
-  }));
+  })), [technicians]);
 
   const viewModeOptions: ComboboxOption[] = [
     { value: 'table', label: 'Table View', icon: <TableIcon className="w-3.5 h-3.5" /> },
@@ -115,6 +126,7 @@ export const FilterToolbar: React.FC = () => {
     { value: 'installationDate', label: 'Installation Date' },
   ];
 
+  // Applied filters count
   const activeFiltersCount =
     filters.status.length +
     filters.plan.length +
@@ -123,6 +135,48 @@ export const FilterToolbar: React.FC = () => {
     filters.technician.length +
     (filters.minBalance !== undefined ? 1 : 0) +
     (filters.maxBalance !== undefined ? 1 : 0);
+
+  // Draft filters count
+  const draftActiveCount =
+    draftFilters.status.length +
+    draftFilters.plan.length +
+    draftFilters.city.length +
+    draftFilters.connectionType.length +
+    draftFilters.technician.length +
+    (draftFilters.minBalance !== undefined ? 1 : 0) +
+    (draftFilters.maxBalance !== undefined ? 1 : 0);
+
+  // Live count preview for draft filters
+  const liveCount = useMemo(() => {
+    return customers.filter((c) => {
+      if (draftFilters.status.length > 0 && !draftFilters.status.includes(c.status)) return false;
+      if (draftFilters.plan.length > 0 && !draftFilters.plan.includes(c.planName)) return false;
+      if (draftFilters.city.length > 0 && !draftFilters.city.includes(c.city)) return false;
+      if (draftFilters.connectionType.length > 0 && !draftFilters.connectionType.includes(c.connectionType)) return false;
+      if (draftFilters.technician.length > 0 && (!c.assignedTechnician || !draftFilters.technician.includes(c.assignedTechnician))) return false;
+      if (draftFilters.minBalance !== undefined && c.balanceDue < draftFilters.minBalance) return false;
+      if (draftFilters.maxBalance !== undefined && c.balanceDue > draftFilters.maxBalance) return false;
+      return true;
+    }).length;
+  }, [customers, draftFilters]);
+
+  const handleApplyFilters = () => {
+    setFilters(draftFilters);
+    setIsFilterOpen(false);
+  };
+
+  const handleResetDraft = () => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      status: [],
+      plan: [],
+      city: [],
+      connectionType: [],
+      technician: [],
+      minBalance: undefined,
+      maxBalance: undefined,
+    }));
+  };
 
   return (
     <div className="space-y-3 select-none">
@@ -176,9 +230,11 @@ export const FilterToolbar: React.FC = () => {
             />
           </div>
 
-          {/* Filter Popover (Multi-Select Comboboxes inside) */}
+          {/* Redesigned 360px Filter Popover */}
           <Popover
             align="right"
+            isOpen={isFilterOpen}
+            onOpenChange={setIsFilterOpen}
             trigger={
               <button
                 type="button"
@@ -199,123 +255,173 @@ export const FilterToolbar: React.FC = () => {
               </button>
             }
             content={
-              <div className="w-80 space-y-3 p-1 select-none">
-                <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-800 dark:text-gray-200">
-                    Filter Subscribers
-                  </h4>
-                  {activeFiltersCount > 0 && (
+              <div className="w-[360px] max-w-[calc(100vw-32px)] flex flex-col select-none">
+                {/* Popover Header: Sentence case "Filters", count badge, Reset all */}
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1E1E22]">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      Filters
+                    </h4>
+                    {draftActiveCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#FFF1EA] dark:bg-orange-950/40 text-[#F26B3A]">
+                        {draftActiveCount}
+                      </span>
+                    )}
+                  </div>
+                  {draftActiveCount > 0 && (
                     <button
                       type="button"
-                      onClick={resetFilters}
-                      className="text-xs font-semibold text-[#F26B3A] hover:underline"
+                      onClick={handleResetDraft}
+                      className="text-xs font-medium text-gray-500 hover:text-[#F26B3A] dark:hover:text-[#F26B3A] transition-colors"
                     >
-                      Reset All
+                      Reset all
                     </button>
                   )}
                 </div>
 
-                {/* Plan Combobox (Multi) */}
-                <div>
-                  <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1">
-                    Internet Plan (Multi-select)
-                  </label>
-                  <Combobox
-                    options={planOptions}
-                    value={filters.plan}
-                    onChange={(val) => setFilters({ plan: val })}
-                    multiple={true}
-                    placeholder="All Plans..."
-                    size="sm"
-                  />
-                </div>
-
-                {/* Connection Type Combobox (Multi) */}
-                <div>
-                  <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1">
-                    Connection Type
-                  </label>
-                  <Combobox
-                    options={connectionTypeOptions}
-                    value={filters.connectionType}
-                    onChange={(val) => setFilters({ connectionType: val })}
-                    multiple={true}
-                    placeholder="All Types..."
-                    size="sm"
-                  />
-                </div>
-
-                {/* City Combobox (Multi) */}
-                <div>
-                  <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1">
-                    City / Region
-                  </label>
-                  <Combobox
-                    options={cityOptions}
-                    value={filters.city}
-                    onChange={(val) => setFilters({ city: val })}
-                    multiple={true}
-                    placeholder="All Cities..."
-                    size="sm"
-                  />
-                </div>
-
-                {/* Status Combobox (Multi) */}
-                <div>
-                  <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1">
-                    Subscriber Status
-                  </label>
-                  <Combobox
-                    options={statusOptions}
-                    value={filters.status}
-                    onChange={(val) => setFilters({ status: val })}
-                    multiple={true}
-                    placeholder="All Statuses..."
-                    size="sm"
-                  />
-                </div>
-
-                {/* Balance Status */}
-                <div>
-                  <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1">
-                    Balance Status
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFilters({
-                          minBalance: filters.minBalance === 1 ? undefined : 1,
-                          maxBalance: undefined,
-                        })
-                      }
-                      className={cn(
-                        'flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-                        filters.minBalance === 1
-                          ? 'bg-[#FFF1EA] dark:bg-orange-950/40 border-[#F26B3A] text-[#F26B3A]'
-                          : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                      )}
-                    >
-                      Has Balance Due
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFilters({
-                          maxBalance: filters.maxBalance === 0 ? undefined : 0,
-                          minBalance: undefined,
-                        })
-                      }
-                      className={cn(
-                        'flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-                        filters.maxBalance === 0
-                          ? 'bg-[#FFF1EA] dark:bg-orange-950/40 border-[#F26B3A] text-[#F26B3A]'
-                          : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                      )}
-                    >
-                      Zero Balance ($0)
-                    </button>
+                {/* Popover Scrollable Body: px-5 py-4 with gap-4 */}
+                <div className="px-5 py-4 space-y-4 max-h-[380px] overflow-y-auto scrollbar-thin">
+                  {/* Plan */}
+                  <div>
+                    <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300 block mb-1.5">
+                      Internet Plan
+                    </label>
+                    <Combobox
+                      options={planOptions}
+                      value={draftFilters.plan}
+                      onChange={(val) => setDraftFilters((prev) => ({ ...prev, plan: val }))}
+                      multiple={true}
+                      placeholder="All Plans..."
+                      size="sm"
+                    />
                   </div>
+
+                  {/* Connection Type */}
+                  <div>
+                    <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300 block mb-1.5">
+                      Connection Type
+                    </label>
+                    <Combobox
+                      options={connectionTypeOptions}
+                      value={draftFilters.connectionType}
+                      onChange={(val) => setDraftFilters((prev) => ({ ...prev, connectionType: val }))}
+                      multiple={true}
+                      placeholder="All Types..."
+                      size="sm"
+                    />
+                  </div>
+
+                  {/* City */}
+                  <div>
+                    <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300 block mb-1.5">
+                      City
+                    </label>
+                    <Combobox
+                      options={cityOptions}
+                      value={draftFilters.city}
+                      onChange={(val) => setDraftFilters((prev) => ({ ...prev, city: val }))}
+                      multiple={true}
+                      placeholder="All Cities..."
+                      size="sm"
+                    />
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300 block mb-1.5">
+                      Subscriber Status
+                    </label>
+                    <Combobox
+                      options={statusOptions}
+                      value={draftFilters.status}
+                      onChange={(val) => setDraftFilters((prev) => ({ ...prev, status: val }))}
+                      multiple={true}
+                      placeholder="All Statuses..."
+                      size="sm"
+                    />
+                  </div>
+
+                  {/* Technician */}
+                  <div>
+                    <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300 block mb-1.5">
+                      Assigned Technician
+                    </label>
+                    <Combobox
+                      options={technicianOptions}
+                      value={draftFilters.technician}
+                      onChange={(val) => setDraftFilters((prev) => ({ ...prev, technician: val }))}
+                      multiple={true}
+                      placeholder="All Technicians..."
+                      size="sm"
+                    />
+                  </div>
+
+                  {/* Balance Status */}
+                  <div>
+                    <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300 block mb-1.5">
+                      Balance Due
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftFilters((prev) => ({
+                            ...prev,
+                            minBalance: prev.minBalance === 1 ? undefined : 1,
+                            maxBalance: undefined,
+                          }))
+                        }
+                        className={cn(
+                          'py-2 px-2.5 rounded-lg text-xs font-medium border transition-colors',
+                          draftFilters.minBalance === 1
+                            ? 'bg-[#FFF1EA] dark:bg-orange-950/40 border-[#F26B3A] text-[#F26B3A]'
+                            : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        )}
+                      >
+                        Has Balance
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftFilters((prev) => ({
+                            ...prev,
+                            maxBalance: prev.maxBalance === 0 ? undefined : 0,
+                            minBalance: undefined,
+                          }))
+                        }
+                        className={cn(
+                          'py-2 px-2.5 rounded-lg text-xs font-medium border transition-colors',
+                          draftFilters.maxBalance === 0
+                            ? 'bg-[#FFF1EA] dark:bg-orange-950/40 border-[#F26B3A] text-[#F26B3A]'
+                            : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        )}
+                      >
+                        Zero Balance ($0)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Popover Sticky Footer: Reset + Apply with Live Result Count */}
+                <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800 bg-[#FAFAFA] dark:bg-[#18181B] shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetDraft}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleApplyFilters}
+                    className="h-8 px-4 text-xs font-semibold"
+                  >
+                    Show {liveCount} {liveCount === 1 ? 'result' : 'results'}
+                  </Button>
                 </div>
               </div>
             }
@@ -440,6 +546,27 @@ export const FilterToolbar: React.FC = () => {
                   type="button"
                   onClick={() =>
                     setFilters({ city: filters.city.filter((c) => c !== ci) })
+                  }
+                  className="hover:text-red-600"
+                >
+                  <X className="w-3 h-3 stroke-[2.5]" />
+                </button>
+              </span>
+            ))}
+
+            {/* Technician chips */}
+            {filters.technician.map((tech) => (
+              <span
+                key={`tech-${tech}`}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FFF1EA] dark:bg-orange-950/40 text-[#F26B3A] text-xs font-medium border border-[#F26B3A]/20"
+              >
+                Technician: {tech}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFilters({
+                      technician: filters.technician.filter((t) => t !== tech),
+                    })
                   }
                   className="hover:text-red-600"
                 >

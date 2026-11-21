@@ -3,7 +3,8 @@ import { Wifi, Plus, Edit2, Trash2, Check, ArrowDown, ArrowUp } from 'lucide-rea
 import { useStore } from '../store/useStore';
 import { Plan, ConnectionType } from '../types';
 import { Button } from '../components/ui/Button';
-import { Modal } from '../components/ui/Modal';
+import { Modal, ModalFooter } from '../components/ui/Modal';
+import { Field, Input, Textarea } from '../components/ui/Field';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 
 export const PlansPage: React.FC = () => {
@@ -54,8 +55,8 @@ export const PlansPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
     const payload = {
       name,
       speedMbps: Number(speedMbps),
@@ -181,122 +182,96 @@ export const PlansPage: React.FC = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingPlanId ? 'Edit Internet Plan' : 'Add New Internet Plan'}
-        subtitle="Configure broadband specs and monthly billing rate"
         size="md"
+        icon={<Wifi className="w-5 h-5" />}
+        iconColor="orange"
+        title={editingPlanId ? 'Edit Internet Plan' : 'Add New Internet Plan'}
+        subtitle="Configure broadband speed tiers, bandwidth limits, and monthly pricing"
+        footer={
+          <ModalFooter
+            onCancel={() => setIsModalOpen(false)}
+            onSubmit={handleSubmit}
+            submitText={editingPlanId ? 'Save Changes' : 'Create Plan'}
+            submitDisabled={!name.trim() || !speedMbps || !monthlyPrice}
+          />
+        }
       >
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          <div>
-            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-              Plan Name *
-            </label>
-            <input
-              type="text"
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Plan name" required helperText="Visible on customer portal and invoice">
+            <Input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Fiber Ultra 500M"
-              className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
             />
-          </div>
+          </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                Download Speed (Mbps) *
-              </label>
-              <input
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Download speed" required>
+              <Input
                 type="number"
                 required
+                suffixAdornment="Mbps"
                 value={speedMbps}
                 onChange={(e) => setSpeedMbps(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
-            </div>
-            <div>
-              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                Upload Speed (Mbps) *
-              </label>
-              <input
+            </Field>
+
+            <Field label="Upload speed" required>
+              <Input
                 type="number"
                 required
+                suffixAdornment="Mbps"
                 value={uploadMbps}
                 onChange={(e) => setUploadMbps(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
-            </div>
+            </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                Monthly Price ({currency}) *
-              </label>
-              <input
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Monthly price" required>
+              <Input
                 type="number"
                 step="0.01"
                 required
+                prefixAdornment={currency}
+                formatOnBlur={true}
                 value={monthlyPrice}
                 onChange={(e) => setMonthlyPrice(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
-            </div>
-            <div>
-              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                Connection Type
-              </label>
+            </Field>
+
+            <Field label="Connection medium">
               <Combobox
                 options={connectionTypeOptions}
                 value={type}
                 onChange={(val) => setType(val as ConnectionType)}
                 searchable={false}
                 clearable={false}
-                size="lg"
+                size="md"
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-              Monthly Data Cap (GB, leave blank for Unlimited)
-            </label>
-            <input
+          <Field label="Monthly data cap" helperText="Leave empty for unlimited unmetered bandwidth">
+            <Input
               type="number"
+              suffixAdornment="GB"
               value={dataCapGB}
               onChange={(e) => setDataCapGB(e.target.value === '' ? '' : Number(e.target.value))}
-              placeholder="Leave blank for Unlimited"
-              className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+              placeholder="Unlimited"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-              Marketing Description
-            </label>
-            <textarea
+          <Field label="Marketing description">
+            <Textarea
               rows={2}
+              maxLength={200}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Highlights e.g. Ideal for multi-gigabit smart homes..."
-              className="w-full p-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+              placeholder="Highlights e.g. Ideal for multi-gigabit smart homes and 4K streaming..."
             />
-          </div>
-
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
-            <Button
-              size="sm"
-              variant="outline"
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="h-9 px-3.5"
-            >
-              Cancel
-            </Button>
-            <Button size="sm" variant="primary" type="submit" className="h-9 px-4 font-semibold">
-              <Check className="w-3.5 h-3.5" />
-              <span>{editingPlanId ? 'Save Changes' : 'Create Plan'}</span>
-            </Button>
-          </div>
+          </Field>
         </form>
       </Modal>
     </div>

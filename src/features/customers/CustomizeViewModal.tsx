@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { RotateCcw, Check, SlidersHorizontal } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { Modal } from '../../components/ui/Modal';
+import { Modal, ModalFooter } from '../../components/ui/Modal';
+import { Field } from '../../components/ui/Field';
 import { Button } from '../../components/ui/Button';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { INITIAL_COLUMNS } from '../../data/mockData';
@@ -20,12 +21,14 @@ export const CustomizeViewModal: React.FC = () => {
       .map((col) => ({
         value: col.id,
         label: col.label,
-        description: `Column identifier: ${col.id}`,
+        description: `Identifier: ${col.id}`,
       }));
   }, [columns]);
 
   const visibleColumnIds = useMemo(() => {
-    return columns.filter((c) => c.visible && c.id !== 'select' && c.id !== 'action').map((c) => c.id);
+    return columns
+      .filter((c) => c.visible && c.id !== 'select' && c.id !== 'action')
+      .map((c) => c.id);
   }, [columns]);
 
   const handleVisibleColumnsChange = (newSelected: string[]) => {
@@ -52,50 +55,55 @@ export const CustomizeViewModal: React.FC = () => {
     <Modal
       isOpen={modalState.isOpen}
       onClose={() => closeModal('customizeView')}
-      title="Customize Table View"
-      subtitle="Toggle visible columns and customize subscriber data density"
       size="md"
+      icon={<SlidersHorizontal className="w-5 h-5" />}
+      iconColor="orange"
+      title="Customize Table View"
+      subtitle="Toggle visible columns and configure subscriber data density"
+      footer={
+        <ModalFooter
+          leftSlot={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              className="h-9 px-3 text-xs gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset to Default</span>
+            </Button>
+          }
+          onSubmit={() => closeModal('customizeView')}
+          submitText="Done"
+        />
+      }
     >
-      <div className="space-y-4 text-xs select-none">
-        <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
-          <span className="font-semibold text-gray-500">Visible Columns</span>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="flex items-center gap-1 text-xs font-semibold text-[#F26B3A] hover:underline"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>Reset to Default</span>
-          </button>
-        </div>
-
+      <div className="space-y-4">
         {/* Multi-select Combobox for Column Visibility */}
-        <div>
-          <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-            Toggle Display Columns (Multi-select)
-          </label>
+        <Field label="Visible columns" helperText="Choose which subscriber attributes are displayed in the table">
           <Combobox
             options={columnOptions}
             value={visibleColumnIds}
             onChange={(val) => handleVisibleColumnsChange(val as string[])}
             multiple={true}
             placeholder="Choose columns..."
-            size="lg"
+            size="md"
           />
-        </div>
+        </Field>
 
-        <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+        <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 scrollbar-thin select-none">
           {columns
             .filter((c) => c.id !== 'select' && c.id !== 'action')
             .map((col) => (
               <div
                 key={col.id}
                 onClick={() => toggleColumn(col.id)}
-                className="flex items-center justify-between p-2.5 rounded-[10px] border border-gray-200/80 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1E1E22] hover:border-[#F26B3A]/40 cursor-pointer transition-colors"
+                className="flex items-center justify-between p-3 rounded-[10px] border border-gray-200/80 dark:border-gray-800 bg-gray-50/50 dark:bg-[#18181B] hover:border-[#F26B3A]/40 cursor-pointer transition-colors"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`w-4 h-4 rounded border flex items-center justify-center ${
+                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                       col.visible
                         ? 'bg-[#F26B3A] border-[#F26B3A] text-white'
                         : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800'
@@ -103,22 +111,13 @@ export const CustomizeViewModal: React.FC = () => {
                   >
                     {col.visible && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">{col.label}</span>
+                  <span className="font-medium text-xs text-gray-800 dark:text-gray-200">
+                    {col.label}
+                  </span>
                 </div>
                 <span className="text-[11px] text-gray-400 font-mono">{col.id}</span>
               </div>
             ))}
-        </div>
-
-        <div className="flex justify-end pt-3 border-t border-gray-100 dark:border-gray-800">
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => closeModal('customizeView')}
-            className="h-9 px-4 font-semibold"
-          >
-            Done
-          </Button>
         </div>
       </div>
     </Modal>

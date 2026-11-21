@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Check, ArrowRight, ArrowLeft, User, Wifi, FileCheck } from 'lucide-react';
+import { Check, ArrowRight, ArrowLeft, User, Wifi, FileCheck, Loader2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
+import { Field, Input, Textarea } from '../../components/ui/Field';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { ConnectionType, CustomerStatus } from '../../types';
 
@@ -37,12 +38,15 @@ export const AddEditCustomerModal: React.FC = () => {
   const technicians = useStore((s) => s.technicians);
   const addCustomer = useStore((s) => s.addCustomer);
   const updateCustomer = useStore((s) => s.updateCustomer);
+  const addToast = useStore((s) => s.addToast);
 
   const isEdit = Boolean(modalState.customerId);
   const existingCustomer = customers.find((c) => c.id === modalState.customerId);
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const {
     register,
@@ -51,7 +55,7 @@ export const AddEditCustomerModal: React.FC = () => {
     watch,
     reset,
     trigger,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
@@ -77,6 +81,10 @@ export const AddEditCustomerModal: React.FC = () => {
   useEffect(() => {
     if (modalState.isOpen) {
       setStep(1);
+      setDirection('forward');
+      setIsSubmitting(false);
+      setIsSuccess(false);
+
       if (isEdit && existingCustomer) {
         reset({
           fullName: existingCustomer.fullName,
@@ -115,26 +123,26 @@ export const AddEditCustomerModal: React.FC = () => {
     }
   }, [modalState.isOpen, isEdit, existingCustomer, plans, technicians, reset]);
 
-  // Combobox Options
+  // Clean Combobox Options
   const planOptions: ComboboxOption[] = plans.map((p) => ({
     value: p.id,
-    label: `${p.name} — $${p.monthlyPrice}/mo`,
-    description: `${p.speedMbps} Mbps Down / ${p.uploadMbps} Mbps Up`,
+    label: `${p.name} ($${p.monthlyPrice}/mo)`,
+    description: `${p.speedMbps} Mbps Down • ${p.uploadMbps} Mbps Up • ${p.type}`,
     group: p.type,
   }));
 
   const connectionTypeOptions: ComboboxOption[] = [
-    { value: 'Fiber', label: 'Fiber Optic (GPON/XGS-PON)' },
-    { value: 'Wireless', label: 'Fixed Wireless (PtMP)' },
-    { value: 'DSL', label: 'DSL Copper' },
+    { value: 'Fiber', label: 'Fiber Optic', description: 'GPON / XGS-PON symmetrical' },
+    { value: 'Wireless', label: 'Fixed Wireless', description: 'PtMP high-capacity microwave link' },
+    { value: 'DSL', label: 'DSL Copper', description: 'Legacy copper twisted-pair' },
   ];
 
   const statusOptions: ComboboxOption[] = [
-    { value: 'Active', label: 'Active (Provisioned & Connected)' },
-    { value: 'Pending', label: 'Pending Installation' },
-    { value: 'Suspended', label: 'Suspended (Hold)' },
-    { value: 'Overdue', label: 'Overdue' },
-    { value: 'Disconnected', label: 'Disconnected' },
+    { value: 'Active', label: 'Active', description: 'Provisioned and traffic passing' },
+    { value: 'Pending', label: 'Pending', description: 'Installation scheduled, awaiting ONT' },
+    { value: 'Suspended', label: 'Suspended', description: 'Administrative or non-payment hold' },
+    { value: 'Overdue', label: 'Overdue', description: 'Past billing cycle due date' },
+    { value: 'Disconnected', label: 'Disconnected', description: 'Service terminated' },
   ];
 
   const cityOptions: ComboboxOption[] = [
@@ -149,20 +157,23 @@ export const AddEditCustomerModal: React.FC = () => {
   const technicianOptions: ComboboxOption[] = technicians.map((t) => ({
     value: t.name,
     label: t.name,
-    description: `${t.zone} (${t.status})`,
+    description: `${t.zone} • ${t.status}`,
   }));
 
   const tagOptions: ComboboxOption[] = [
-    { value: 'Residential', label: 'Residential' },
-    { value: 'Business', label: 'Business / Enterprise' },
-    { value: 'VIP', label: 'VIP Priority' },
-    { value: 'Static IP', label: 'Static IP Requested' },
+    { value: 'Residential', label: 'Residential', description: 'Standard home broadband' },
+    { value: 'Business', label: 'Business', description: 'Commercial enterprise SLA' },
+    { value: 'VIP', label: 'VIP Priority', description: 'Executive account tier' },
+    { value: 'Static IP', label: 'Static IP', description: 'Dedicated public IPv4 routed' },
   ];
 
   const handleNextStep = async () => {
     if (step === 1) {
       const valid = await trigger(['fullName', 'email', 'phone', 'address', 'city']);
-      if (valid) setStep(2);
+      if (valid) {
+        setDirection('forward');
+        setStep(2);
+      }
     } else if (step === 2) {
       const valid = await trigger([
         'planId',
@@ -172,8 +183,16 @@ export const AddEditCustomerModal: React.FC = () => {
         'dueDate',
         'status',
       ]);
-      if (valid) setStep(3);
+      if (valid) {
+        setDirection('forward');
+        setStep(3);
+      }
     }
+  };
+
+  const handlePrevStep = () => {
+    setDirection('backward');
+    setStep((s) => (s - 1) as any);
   };
 
   const onSubmit = async (data: CustomerFormData) => {
@@ -219,28 +238,126 @@ export const AddEditCustomerModal: React.FC = () => {
     }
 
     setIsSubmitting(false);
-    closeModal('addEditCustomer');
+    setIsSuccess(true);
+
+    setTimeout(() => {
+      addToast({
+        type: 'success',
+        title: isEdit ? 'Customer Updated' : 'Customer Enrolled',
+        message: `${data.fullName} is now provisioned with ${chosenPlan.name}.`,
+      });
+      closeModal('addEditCustomer');
+    }, 600);
+  };
+
+  const stepVariants = {
+    initial: (dir: 'forward' | 'backward') => ({
+      opacity: 0,
+      x: dir === 'forward' ? 24 : -24,
+    }),
+    animate: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.2, ease: 'easeOut' },
+    },
+    exit: (dir: 'forward' | 'backward') => ({
+      opacity: 0,
+      x: dir === 'forward' ? -24 : 24,
+      transition: { duration: 0.15, ease: 'easeIn' },
+    }),
   };
 
   return (
     <Modal
       isOpen={modalState.isOpen}
       onClose={() => closeModal('addEditCustomer')}
+      size="xl"
+      icon={<User className="w-5 h-5" />}
+      iconColor="orange"
       title={isEdit ? 'Edit Subscriber Account' : 'Add New Customer'}
       subtitle={
         isEdit
-          ? `Updating profile for ${existingCustomer?.fullName}`
-          : 'Step-by-step subscriber onboarding'
+          ? `Modifying subscriber account profile for ${existingCustomer?.fullName}`
+          : 'Step-by-step subscriber onboarding and optical provisioning'
       }
-      size="lg"
+      isDirty={isDirty}
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <div>
+            {step > 1 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={handlePrevStep}
+                className="h-10 px-4 gap-1.5"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => closeModal('addEditCustomer')}
+                className="h-10 px-4"
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {step < 3 ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={handleNextStep}
+                className="h-10 px-5 gap-1.5 font-semibold"
+              >
+                <span>Next Step</span>
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={handleSubmit(onSubmit)}
+                disabled={isSubmitting}
+                className="h-10 px-5 gap-1.5 font-semibold"
+              >
+                {isSuccess ? (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Provisioned!</span>
+                  </>
+                ) : isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Provisioning...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{isEdit ? 'Save Changes' : 'Confirm & Provision'}</span>
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      }
     >
       <div className="space-y-6">
         {/* Step Progress Bar */}
-        <div className="flex items-center justify-between relative px-2">
-          <div className="absolute top-1/2 left-6 right-6 -translate-y-1/2 h-0.5 bg-gray-200 dark:bg-gray-800 -z-0" />
+        <div className="flex items-center justify-between relative px-4 select-none">
+          <div className="absolute top-1/2 left-10 right-10 -translate-y-1/2 h-0.5 bg-gray-200 dark:bg-gray-800 -z-0" />
           {[
-            { num: 1, label: 'Personal Info', icon: User },
-            { num: 2, label: 'Plan & Network', icon: Wifi },
+            { num: 1, label: 'Personal Details', icon: User },
+            { num: 2, label: 'Plan & Provisioning', icon: Wifi },
             { num: 3, label: 'Review & Confirm', icon: FileCheck },
           ].map((s) => {
             const isCompleted = step > s.num;
@@ -249,19 +366,19 @@ export const AddEditCustomerModal: React.FC = () => {
             return (
               <div key={s.num} className="relative z-10 flex flex-col items-center gap-1.5">
                 <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
+                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-200 ${
                     isCompleted
-                      ? 'bg-emerald-500 text-white'
+                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-50 dark:ring-emerald-950/40'
                       : isCurrent
-                      ? 'bg-[#F26B3A] text-white shadow-xs'
-                      : 'bg-gray-200 dark:bg-gray-800 text-gray-400'
+                      ? 'bg-[#F26B3A] text-white ring-4 ring-[#FFF1EA] dark:ring-orange-950/40 shadow-xs'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
                   }`}
                 >
-                  {isCompleted ? <Check className="w-4 h-4 stroke-[2.5]" /> : <Icon className="w-4 h-4" />}
+                  {isCompleted ? <Check className="w-4 h-4 stroke-[3]" /> : <Icon className="w-4 h-4" />}
                 </div>
                 <span
-                  className={`text-[11px] font-semibold ${
-                    isCurrent ? 'text-[#F26B3A]' : 'text-gray-400'
+                  className={`text-xs font-medium ${
+                    isCurrent ? 'text-[#F26B3A] font-semibold' : isCompleted ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400'
                   }`}
                 >
                   {s.label}
@@ -272,89 +389,48 @@ export const AddEditCustomerModal: React.FC = () => {
         </div>
 
         {/* Multi-step Form Content */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <AnimatePresence mode="wait">
-            {/* STEP 1: PERSONAL INFO */}
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <AnimatePresence mode="wait" custom={direction}>
+            {/* STEP 1: PERSONAL DETAILS */}
             {step === 1 && (
               <motion.div
                 key="step1"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-3.5 text-xs"
+                custom={direction}
+                variants={stepVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="space-y-4"
               >
-                <div>
-                  <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                    Full Name *
-                  </label>
-                  <input
-                    {...register('fullName')}
-                    placeholder="e.g. Rachel Adams"
-                    className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
-                  />
-                  {errors.fullName && (
-                    <span className="text-red-500 text-[11px] mt-1 block">
-                      {errors.fullName.message}
-                    </span>
-                  )}
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Full name" required error={errors.fullName?.message}>
+                    <Input
+                      {...register('fullName')}
+                      placeholder="e.g. Rachel Adams"
+                      hasError={Boolean(errors.fullName)}
+                    />
+                  </Field>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Email Address *
-                    </label>
-                    <input
+                  <Field label="Email address" required error={errors.email?.message}>
+                    <Input
                       {...register('email')}
                       type="email"
                       placeholder="rachel@example.com"
-                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+                      hasError={Boolean(errors.email)}
                     />
-                    {errors.email && (
-                      <span className="text-red-500 text-[11px] mt-1 block">
-                        {errors.email.message}
-                      </span>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Phone Number *
-                    </label>
-                    <input
-                      {...register('phone')}
-                      placeholder="+1 (512) 555-0199"
-                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
-                    />
-                    {errors.phone && (
-                      <span className="text-red-500 text-[11px] mt-1 block">
-                        {errors.phone.message}
-                      </span>
-                    )}
-                  </div>
+                  </Field>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Street Address *
-                    </label>
-                    <input
-                      {...register('address')}
-                      placeholder="742 Evergreen Terrace"
-                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Phone number" required error={errors.phone?.message}>
+                    <Input
+                      {...register('phone')}
+                      placeholder="+1 (512) 555-0199"
+                      hasError={Boolean(errors.phone)}
                     />
-                    {errors.address && (
-                      <span className="text-red-500 text-[11px] mt-1 block">
-                        {errors.address.message}
-                      </span>
-                    )}
-                  </div>
+                  </Field>
 
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      City (Creatable) *
-                    </label>
+                  <Field label="City" required error={errors.city?.message}>
                     <Controller
                       name="city"
                       control={control}
@@ -365,28 +441,35 @@ export const AddEditCustomerModal: React.FC = () => {
                           onChange={field.onChange}
                           creatable={true}
                           placeholder="Select or type city..."
-                          size="lg"
+                          size="md"
                         />
                       )}
                     />
-                  </div>
+                  </Field>
                 </div>
+
+                <Field label="Service street address" required error={errors.address?.message}>
+                  <Input
+                    {...register('address')}
+                    placeholder="742 Evergreen Terrace, Apt 4B"
+                    hasError={Boolean(errors.address)}
+                  />
+                </Field>
               </motion.div>
             )}
 
-            {/* STEP 2: PLAN & NETWORK (Comboboxes with Grouping) */}
+            {/* STEP 2: PLAN & PROVISIONING */}
             {step === 2 && (
               <motion.div
                 key="step2"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-3.5 text-xs"
+                custom={direction}
+                variants={stepVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="space-y-4"
               >
-                <div>
-                  <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                    Select Internet Plan (Grouped by Type) *
-                  </label>
+                <Field label="Internet subscription plan" required error={errors.planId?.message}>
                   <Controller
                     name="planId"
                     control={control}
@@ -396,18 +479,15 @@ export const AddEditCustomerModal: React.FC = () => {
                         value={field.value}
                         onChange={field.onChange}
                         groupBy={true}
-                        placeholder="Choose plan..."
-                        size="lg"
+                        placeholder="Choose subscription plan..."
+                        size="md"
                       />
                     )}
                   />
-                </div>
+                </Field>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Connection Medium
-                    </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Connection medium">
                     <Controller
                       name="connectionType"
                       control={control}
@@ -418,16 +498,13 @@ export const AddEditCustomerModal: React.FC = () => {
                           onChange={field.onChange}
                           searchable={false}
                           clearable={false}
-                          size="lg"
+                          size="md"
                         />
                       )}
                     />
-                  </div>
+                  </Field>
 
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Initial Status
-                    </label>
+                  <Field label="Initial connection status">
                     <Controller
                       name="status"
                       control={control}
@@ -438,18 +515,95 @@ export const AddEditCustomerModal: React.FC = () => {
                           onChange={field.onChange}
                           searchable={false}
                           clearable={false}
-                          size="lg"
+                          size="md"
                         />
                       )}
                     />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="IP address assignment" required error={errors.ipAddress?.message}>
+                    <Input
+                      {...register('ipAddress')}
+                      placeholder="192.168.10.55"
+                      className="font-mono text-xs"
+                      hasError={Boolean(errors.ipAddress)}
+                    />
+                  </Field>
+
+                  <Field label="ONT / Router MAC address" required error={errors.macAddress?.message}>
+                    <Input
+                      {...register('macAddress')}
+                      placeholder="F4:5C:89:12:44:8B"
+                      className="font-mono text-xs uppercase"
+                      hasError={Boolean(errors.macAddress)}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Billing due date" required error={errors.dueDate?.message}>
+                  <Input
+                    {...register('dueDate')}
+                    type="date"
+                    hasError={Boolean(errors.dueDate)}
+                  />
+                </Field>
+              </motion.div>
+            )}
+
+            {/* STEP 3: REVIEW & CONFIRM */}
+            {step === 3 && (
+              <motion.div
+                key="step3"
+                custom={direction}
+                variants={stepVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="space-y-4"
+              >
+                {/* Summary Card */}
+                <div className="p-4 rounded-xl bg-orange-50/70 dark:bg-orange-950/20 border border-[#F26B3A]/30 space-y-3">
+                  <h4 className="text-xs font-bold text-[#F26B3A] uppercase tracking-wider">
+                    Provisioning Review
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Subscriber:</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        {watchedData.fullName || '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Plan:</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        {plans.find((p) => p.id === watchedData.planId)?.name || '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Assigned IP:</span>
+                      <span className="font-mono text-gray-900 dark:text-gray-100">
+                        {watchedData.ipAddress}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Status:</span>
+                      <span className="font-semibold text-emerald-600">
+                        {watchedData.status}
+                      </span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="text-gray-400 block text-[11px]">Service Address:</span>
+                      <span className="text-gray-800 dark:text-gray-200">
+                        {watchedData.address}, {watchedData.city}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Assigned Field Engineer
-                    </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Assigned technician">
                     <Controller
                       name="assignedTechnician"
                       control={control}
@@ -458,17 +612,14 @@ export const AddEditCustomerModal: React.FC = () => {
                           options={technicianOptions}
                           value={field.value || ''}
                           onChange={field.onChange}
-                          placeholder="Select technician..."
-                          size="lg"
+                          placeholder="Select field technician..."
+                          size="md"
                         />
                       )}
                     />
-                  </div>
+                  </Field>
 
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Tags & Classification (Multi)
-                    </label>
+                  <Field label="Account tags and classification">
                     <Controller
                       name="tags"
                       control={control}
@@ -479,141 +630,24 @@ export const AddEditCustomerModal: React.FC = () => {
                           onChange={field.onChange}
                           multiple={true}
                           creatable={true}
-                          placeholder="Tags..."
-                          size="lg"
+                          placeholder="Select tags..."
+                          size="md"
                         />
                       )}
                     />
-                  </div>
+                  </Field>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      IP Address Assignment *
-                    </label>
-                    <input
-                      {...register('ipAddress')}
-                      placeholder="192.168.10.55"
-                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      ONT / CPE MAC Address *
-                    </label>
-                    <input
-                      {...register('macAddress')}
-                      placeholder="F4:5C:89:12:44:8B"
-                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* STEP 3: REVIEW & CONFIRM */}
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-3.5 text-xs"
-              >
-                <div className="p-4 rounded-2xl bg-orange-50/60 dark:bg-orange-950/20 border border-[#F26B3A]/30 space-y-2.5">
-                  <h4 className="text-xs font-bold text-[#F26B3A] uppercase tracking-wider">
-                    Subscription Summary
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <span className="text-gray-400 block text-[11px]">Subscriber:</span>
-                      <span className="font-bold text-gray-900 dark:text-gray-100">
-                        {watchedData.fullName}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 block text-[11px]">Plan:</span>
-                      <span className="font-bold text-gray-900 dark:text-gray-100">
-                        {plans.find((p) => p.id === watchedData.planId)?.name}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 block text-[11px]">Assigned IP:</span>
-                      <span className="font-mono text-gray-800 dark:text-gray-200">
-                        {watchedData.ipAddress}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 block text-[11px]">Initial Status:</span>
-                      <span className="font-semibold text-emerald-600">{watchedData.status}</span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-400 block text-[11px]">Service Address:</span>
-                      <span className="text-gray-800 dark:text-gray-200">
-                        {watchedData.address}, {watchedData.city}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-gray-400 text-center">
-                  Clicking confirm will provision this subscriber in NetPulse and assign network routes.
-                </p>
+                <Field label="Internal notes">
+                  <Textarea
+                    {...register('notes')}
+                    maxLength={300}
+                    placeholder="Enter dispatch notes, access codes, or provisioning details..."
+                  />
+                </Field>
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Action buttons */}
-          <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
-            {step > 1 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setStep((s) => (s - 1) as any)}
-                className="h-9 px-3.5"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back</span>
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => closeModal('addEditCustomer')}
-                className="h-9 px-3.5"
-              >
-                Cancel
-              </Button>
-            )}
-
-            {step < 3 ? (
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={handleNextStep}
-                className="h-9 px-4 font-semibold"
-              >
-                <span>Next Step</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                isLoading={isSubmitting}
-                className="h-9 px-4 font-semibold"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{isEdit ? 'Save Changes' : 'Confirm & Provision'}</span>
-              </Button>
-            )}
-          </div>
         </form>
       </div>
     </Modal>

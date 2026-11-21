@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Mail, MessageSquare, Send } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Mail, MessageSquare, Send, Check } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { Modal } from '../../components/ui/Modal';
-import { Button } from '../../components/ui/Button';
+import { Modal, ModalFooter } from '../../components/ui/Modal';
+import { Field, Input, Textarea } from '../../components/ui/Field';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 
 export const SendMessageModal: React.FC = () => {
@@ -20,10 +20,11 @@ export const SendMessageModal: React.FC = () => {
     'Hi {Customer_Name}, your NetPulse monthly internet invoice is ready. Please review your balance to avoid service interruption.'
   );
   const [isSending, setIsSending] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const { customerId, isBulk } = modalState;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (modalState.isOpen) {
       if (isBulk && selectedCustomerIds.length > 0) {
         setRecipients(selectedCustomerIds);
@@ -32,6 +33,8 @@ export const SendMessageModal: React.FC = () => {
       } else if (customers.length > 0) {
         setRecipients([customers[0].id]);
       }
+      setIsSending(false);
+      setIsSuccess(false);
     }
   }, [modalState.isOpen, isBulk, customerId, selectedCustomerIds, customers]);
 
@@ -43,11 +46,12 @@ export const SendMessageModal: React.FC = () => {
     }));
   }, [customers]);
 
+  // Clean split of label vs description
   const templateOptions: ComboboxOption[] = [
-    { value: 'reminder', label: 'Payment / Overdue Reminder' },
-    { value: 'maintenance', label: 'Scheduled Maintenance Alert' },
-    { value: 'welcome', label: 'New Subscriber Welcome' },
-    { value: 'upgrade', label: 'Bandwidth Upgrade Promotion' },
+    { value: 'reminder', label: 'Payment Reminder', description: 'Overdue or upcoming balance notice' },
+    { value: 'maintenance', label: 'Maintenance Alert', description: 'Scheduled core network optimization window' },
+    { value: 'welcome', label: 'Welcome Onboarding', description: 'Broadband connection activated message' },
+    { value: 'upgrade', label: 'Speed Upgrade Offer', description: 'Promotional bandwidth tier upgrade' },
   ];
 
   const handleTemplateChange = (tpl: string) => {
@@ -75,150 +79,137 @@ export const SendMessageModal: React.FC = () => {
     }
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSend = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!recipients.length || !message.trim()) return;
+
     setIsSending(true);
     await new Promise((resolve) => setTimeout(resolve, 600));
     setIsSending(false);
-    addToast({
-      type: 'success',
-      title: `${channel === 'sms' ? 'SMS' : 'Email'} Dispatched`,
-      message: `Sent to ${recipients.length} recipient(s) via NetPulse Gateway.`,
-    });
-    closeModal('sendMessage');
+    setIsSuccess(true);
+
+    setTimeout(() => {
+      addToast({
+        type: 'success',
+        title: `${channel === 'sms' ? 'SMS Notification' : 'Email Broadcast'} Sent`,
+        message: `Successfully dispatched to ${recipients.length} subscriber(s).`,
+      });
+      closeModal('sendMessage');
+    }, 600);
   };
+
+  const isDirty = Boolean(message.length > 0 && template !== 'reminder');
 
   return (
     <Modal
       isOpen={modalState.isOpen}
       onClose={() => closeModal('sendMessage')}
-      title={
-        <div className="flex items-center gap-2">
-          {channel === 'sms' ? (
-            <MessageSquare className="w-5 h-5 text-[#F26B3A]" />
-          ) : (
-            <Mail className="w-5 h-5 text-[#F26B3A]" />
-          )}
-          <span>Send Subscriber Notification</span>
-        </div>
+      size="lg"
+      icon={channel === 'sms' ? <MessageSquare className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
+      iconColor="orange"
+      title="Send Subscriber Notification"
+      subtitle="Dispatch SMS or email broadcast to selected accounts"
+      isDirty={isDirty}
+      footer={
+        <ModalFooter
+          onCancel={() => closeModal('sendMessage')}
+          onSubmit={handleSend}
+          submitText={`Send ${channel === 'sms' ? 'SMS' : 'Email'} (${recipients.length})`}
+          submitIcon={<Send className="w-4 h-4" />}
+          isSubmitting={isSending}
+          isSuccess={isSuccess}
+          submitDisabled={recipients.length === 0 || !message.trim()}
+        />
       }
-      subtitle="Dispatch SMS or email broadcast"
-      size="md"
     >
-      <form onSubmit={handleSend} className="space-y-4 text-xs">
+      <form onSubmit={handleSend} className="space-y-4">
         {/* Channel selector */}
-        <div className="flex rounded-xl bg-gray-100 dark:bg-gray-800 p-1">
+        <div className="flex rounded-xl bg-gray-100 dark:bg-gray-800/80 p-1 select-none">
           <button
             type="button"
             onClick={() => setChannel('sms')}
-            className={`flex-1 py-1.5 rounded-lg font-semibold text-center transition-colors flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold text-center transition-all flex items-center justify-center gap-2 cursor-pointer ${
               channel === 'sms'
                 ? 'bg-white dark:bg-[#1E1E22] text-[#F26B3A] shadow-xs'
-                : 'text-gray-500'
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            <MessageSquare className="w-3.5 h-3.5" />
+            <MessageSquare className="w-4 h-4" />
             <span>SMS Message</span>
           </button>
           <button
             type="button"
             onClick={() => setChannel('email')}
-            className={`flex-1 py-1.5 rounded-lg font-semibold text-center transition-colors flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold text-center transition-all flex items-center justify-center gap-2 cursor-pointer ${
               channel === 'email'
                 ? 'bg-white dark:bg-[#1E1E22] text-[#F26B3A] shadow-xs'
-                : 'text-gray-500'
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            <Mail className="w-3.5 h-3.5" />
+            <Mail className="w-4 h-4" />
             <span>Email Broadcast</span>
           </button>
         </div>
 
-        {/* Recipients Combobox (Multi-select) */}
-        <div>
-          <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-            Recipients ({recipients.length} selected)
-          </label>
+        {/* Recipients Multi Combobox */}
+        <Field
+          label="Recipients"
+          required
+          helperText={`Selected ${recipients.length} subscriber account${recipients.length === 1 ? '' : 's'}`}
+        >
           <Combobox
             options={customerOptions}
             value={recipients}
             onChange={(val) => setRecipients(val as string[])}
             multiple={true}
             placeholder="Search and add subscribers..."
-            size="lg"
+            size="md"
           />
-        </div>
+        </Field>
 
         {/* Template Combobox */}
-        <div>
-          <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-            Message Template
-          </label>
+        <Field label="Message template">
           <Combobox
             options={templateOptions}
             value={template}
             onChange={(val) => handleTemplateChange(val as string)}
             searchable={false}
             clearable={false}
-            size="lg"
+            size="md"
           />
-        </div>
+        </Field>
 
+        {/* Subject input for email */}
         {channel === 'email' && (
-          <div>
-            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-              Email Subject Line
-            </label>
-            <input
-              type="text"
+          <Field label="Email subject line" required>
+            <Input
               required
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+              placeholder="Enter email subject..."
             />
-          </div>
+          </Field>
         )}
 
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="font-semibold text-gray-700 dark:text-gray-300">Message Content</label>
-            {channel === 'sms' && (
-              <span className="text-[11px] text-gray-400">
-                {message.length} / 160 chars ({Math.ceil(message.length / 160)} SMS)
-              </span>
-            )}
-          </div>
-          <textarea
+        {/* Message body textarea */}
+        <Field
+          label="Message content"
+          required
+          helperText={
+            channel === 'sms'
+              ? `${message.length} chars • ${Math.ceil(message.length / 160)} SMS segment(s)`
+              : undefined
+          }
+        >
+          <Textarea
             rows={4}
             required
+            maxLength={channel === 'sms' ? 320 : 1000}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full p-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+            placeholder="Compose message..."
           />
-        </div>
-
-        <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <Button
-            size="sm"
-            variant="outline"
-            type="button"
-            onClick={() => closeModal('sendMessage')}
-            className="h-9 px-3.5"
-          >
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            variant="primary"
-            type="submit"
-            isLoading={isSending}
-            className="h-9 px-4 font-semibold"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>Send Notification ({recipients.length})</span>
-          </Button>
-        </div>
+        </Field>
       </form>
     </Modal>
   );
