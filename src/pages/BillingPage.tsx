@@ -144,10 +144,10 @@ export const BillingPage: React.FC = () => {
           return (
             <span
               className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[10px] ${st === 'Paid'
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60'
-                  : st === 'Overdue'
-                    ? 'bg-red-100 text-red-700 dark:bg-red-950/60'
-                    : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60'
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60'
+                : st === 'Overdue'
+                  ? 'bg-red-100 text-red-700 dark:bg-red-950/60'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60'
                 }`}
             >
               {st}
@@ -233,8 +233,8 @@ export const BillingPage: React.FC = () => {
     <div
       onClick={() => openDrawer(inv.customerId, 'billing')}
       className={`p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border shadow-xs cursor-pointer transition-all flex flex-col justify-between ${isSelected
-          ? 'border-[#F26B3A] bg-[#FFF6F2] dark:bg-orange-950/20'
-          : 'border-gray-200/80 dark:border-gray-800 hover:border-gray-300'
+        ? 'border-[#F26B3A] bg-[#FFF6F2] dark:bg-orange-950/20'
+        : 'border-gray-200/80 dark:border-gray-800 hover:border-gray-300'
         }`}
     >
       <div>
@@ -244,10 +244,10 @@ export const BillingPage: React.FC = () => {
           </span>
           <span
             className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${inv.status === 'Paid'
-                ? 'bg-emerald-100 text-emerald-700'
-                : inv.status === 'Overdue'
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-amber-100 text-amber-700'
+              ? 'bg-emerald-100 text-emerald-700'
+              : inv.status === 'Overdue'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-amber-100 text-amber-700'
               }`}
           >
             {inv.status}
