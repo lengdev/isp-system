@@ -148,10 +148,11 @@ interface AppStore {
 }
 
 const DEFAULT_FILTERS: FilterState = {
-  status: 'All',
-  plan: 'All',
-  city: 'All',
-  connectionType: 'All',
+  status: [],
+  plan: [],
+  city: [],
+  connectionType: [],
+  technician: [],
   minBalance: undefined,
   maxBalance: undefined,
   dateRange: 'all',

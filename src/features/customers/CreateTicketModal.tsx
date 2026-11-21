@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LifeBuoy, Check } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
+import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 
 export const CreateTicketModal: React.FC = () => {
   const modalState = useStore((s) => s.modalState.createTicket);
@@ -16,6 +17,8 @@ export const CreateTicketModal: React.FC = () => {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
   const [assignedTechnician, setAssignedTechnician] = useState('');
+  const [category, setCategory] = useState('Optical Signal');
+  const [labels, setLabels] = useState<string[]>(['Home Visit']);
 
   React.useEffect(() => {
     if (modalState.isOpen) {
@@ -28,8 +31,46 @@ export const CreateTicketModal: React.FC = () => {
       setDescription('');
       setPriority('Medium');
       setAssignedTechnician(technicians[0]?.name || 'Carlos Ramos');
+      setCategory('Optical Signal');
+      setLabels(['Home Visit']);
     }
   }, [modalState.isOpen, modalState.customerId, customers, technicians]);
+
+  const customerOptions: ComboboxOption[] = useMemo(() => {
+    return customers.map((c) => ({
+      value: c.id,
+      label: `${c.fullName} (${c.code})`,
+      description: `${c.address} • ${c.planName}`,
+    }));
+  }, [customers]);
+
+  const priorityOptions: ComboboxOption[] = [
+    { value: 'Low', label: 'Low (Billing / Inquiry)' },
+    { value: 'Medium', label: 'Medium (Intermittent / Speed)' },
+    { value: 'High', label: 'High (Complete Outage)' },
+    { value: 'Critical', label: 'Critical (Severed Fiber Line)' },
+  ];
+
+  const categoryOptions: ComboboxOption[] = [
+    { value: 'Optical Signal', label: 'Optical Signal Degradation' },
+    { value: 'Hardware / ONT', label: 'ONT / Router Hardware Failure' },
+    { value: 'Billing', label: 'Billing / Invoice Dispute' },
+    { value: 'Provisioning', label: 'New Speed Provisioning' },
+    { value: 'Physical Cut', label: 'Physical Cable Severed' },
+  ];
+
+  const technicianOptions: ComboboxOption[] = technicians.map((tech) => ({
+    value: tech.name,
+    label: tech.name,
+    description: `${tech.zone} (${tech.status})`,
+  }));
+
+  const labelOptions: ComboboxOption[] = [
+    { value: 'Home Visit', label: 'Home Visit Required' },
+    { value: 'Urgent', label: 'Urgent SLA' },
+    { value: 'Splicing Crew', label: 'Splicing Crew' },
+    { value: 'Hardware Swap', label: 'Hardware Swap' },
+  ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +85,8 @@ export const CreateTicketModal: React.FC = () => {
       priority,
       status: 'Open',
       assignedTechnician,
+      category,
+      labels,
     });
 
     closeModal('createTicket');
@@ -65,19 +108,15 @@ export const CreateTicketModal: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         <div>
           <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-            Subscriber Account *
+            Subscriber Account (Searchable) *
           </label>
-          <select
+          <Combobox
+            options={customerOptions}
             value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-          >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.fullName} ({c.code}) — {c.address}
-              </option>
-            ))}
-          </select>
+            onChange={(val) => setCustomerId(val as string)}
+            placeholder="Search customer name..."
+            size="lg"
+          />
         </div>
 
         <div>
@@ -90,7 +129,7 @@ export const CreateTicketModal: React.FC = () => {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Red optical light on ONT, packet loss in evening"
-            className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+            className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
           />
         </div>
 
@@ -99,33 +138,57 @@ export const CreateTicketModal: React.FC = () => {
             <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
               Priority Level
             </label>
-            <select
+            <Combobox
+              options={priorityOptions}
               value={priority}
-              onChange={(e) => setPriority(e.target.value as any)}
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-            >
-              <option value="Low">Low (Billing inquiry / Minor)</option>
-              <option value="Medium">Medium (Speed test discrepancy)</option>
-              <option value="High">High (Total line drop)</option>
-              <option value="Critical">Critical (Severed optical drop)</option>
-            </select>
+              onChange={(val) => setPriority(val as any)}
+              searchable={false}
+              clearable={false}
+              size="lg"
+            />
           </div>
 
           <div>
             <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+              Issue Category
+            </label>
+            <Combobox
+              options={categoryOptions}
+              value={category}
+              onChange={(val) => setCategory(val as string)}
+              creatable={true}
+              size="lg"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
               Assign Field Technician
             </label>
-            <select
+            <Combobox
+              options={technicianOptions}
               value={assignedTechnician}
-              onChange={(e) => setAssignedTechnician(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-            >
-              {technicians.map((tech) => (
-                <option key={tech.id} value={tech.name}>
-                  {tech.name} ({tech.zone} — {tech.status})
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setAssignedTechnician(val as string)}
+              placeholder="Assign technician..."
+              size="lg"
+            />
+          </div>
+
+          <div>
+            <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+              Labels / Tags (Multi)
+            </label>
+            <Combobox
+              options={labelOptions}
+              value={labels}
+              onChange={(val) => setLabels(val as string[])}
+              multiple={true}
+              creatable={true}
+              placeholder="Labels..."
+              size="lg"
+            />
           </div>
         </div>
 
@@ -138,15 +201,21 @@ export const CreateTicketModal: React.FC = () => {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Include optical power reading (dBm), error codes, or customer availability for home visit..."
-            className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+            className="w-full p-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
           />
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <Button size="sm" variant="outline" type="button" onClick={() => closeModal('createTicket')}>
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={() => closeModal('createTicket')}
+            className="h-9 px-3.5"
+          >
             Cancel
           </Button>
-          <Button size="sm" variant="primary" type="submit">
+          <Button size="sm" variant="primary" type="submit" className="h-9 px-4 font-semibold">
             <Check className="w-3.5 h-3.5" />
             <span>Open Ticket</span>
           </Button>

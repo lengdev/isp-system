@@ -41,6 +41,8 @@ export interface Customer {
   notes?: string;
   onlineStatus: 'online' | 'offline';
   lastPingMs: number;
+  assignedTechnician?: string;
+  tags?: string[];
 }
 
 export interface Invoice {
@@ -68,6 +70,8 @@ export interface SupportTicket {
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
   status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
   assignedTechnician?: string;
+  category?: string;
+  labels?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -143,10 +147,11 @@ export interface ColumnSetting {
 }
 
 export interface FilterState {
-  status: 'All' | CustomerStatus;
-  plan: string;
-  city: string;
-  connectionType: 'All' | ConnectionType;
+  status: string[]; // multi: ['Active', 'Suspended'] etc. Empty = all
+  plan: string[]; // multi
+  city: string[]; // multi
+  connectionType: string[]; // multi
+  technician: string[]; // multi
   minBalance?: number;
   maxBalance?: number;
   dateRange: 'all' | 'this_month' | 'last_30_days' | 'this_year';

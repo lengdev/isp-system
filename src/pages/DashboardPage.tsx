@@ -4,12 +4,8 @@ import {
   DollarSign,
   Wifi,
   Activity,
-  ArrowUpRight,
-  ArrowDownRight,
   Radio,
-  CheckCircle2,
   AlertTriangle,
-  Zap,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -25,13 +21,10 @@ import {
 import { useStore } from '../store/useStore';
 import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { useNavigate } from 'react-router-dom';
 
 export const DashboardPage: React.FC = () => {
   const customers = useStore((s) => s.customers);
-  const plans = useStore((s) => s.plans);
-  const tickets = useStore((s) => s.tickets);
   const activities = useStore((s) => s.activities);
   const devices = useStore((s) => s.devices);
   const currency = useStore((s) => s.currency);
@@ -40,9 +33,12 @@ export const DashboardPage: React.FC = () => {
   const totalSubs = customers.length;
   const activeSubs = customers.filter((c) => c.status === 'Active').length;
   const overdueSubs = customers.filter((c) => c.status === 'Overdue').length;
-  const mrr = customers.reduce((acc, c) => acc + (c.status !== 'Disconnected' ? c.monthlyPrice : 0), 0);
+  const mrr = customers.reduce(
+    (acc, c) => acc + (c.status !== 'Disconnected' ? c.monthlyPrice : 0),
+    0
+  );
 
-  // Network Traffic Data (hourly Gbps)
+  // Core network hourly transit data
   const trafficData = [
     { time: '00:00', downloadGbps: 4.2, uploadGbps: 1.1 },
     { time: '03:00', downloadGbps: 2.1, uploadGbps: 0.8 },
@@ -66,33 +62,36 @@ export const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 pb-12 select-none">
+    <div className="space-y-6 pb-12 select-none w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+          <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
             Network Operations Dashboard
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             Real-time subscriber metrics, bandwidth saturation, and field service status
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="primary" size="sm" onClick={() => navigate('/customers')}>
-            <span>View All Subscribers</span>
-          </Button>
-        </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => navigate('/customers')}
+          className="text-xs font-semibold h-9 px-4"
+        >
+          <span>View All Subscribers</span>
+        </Button>
       </div>
 
-      {/* 4 Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 4 Stat Cards with items-stretch and strict gap-5 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
         <StatCard
           label="Total Subscribers"
           value={totalSubs}
-          changeValue="+14 subs"
+          changeValue="14 subs"
           isPositive={true}
           changeLabel="vs last month"
-          icon={<Users className="w-6 h-6 stroke-[2.2]" />}
+          icon={<Users className="w-5 h-5 stroke-[2]" />}
           iconBgColor="bg-[#FFF1EA] dark:bg-orange-950/40"
           iconTextColor="text-[#F26B3A]"
         />
@@ -101,10 +100,10 @@ export const DashboardPage: React.FC = () => {
           label="Monthly Recurring Revenue"
           value={Math.round(mrr)}
           prefix={currency}
-          changeValue="↑ 8.4%"
+          changeValue="8.4%"
           isPositive={true}
           changeLabel="vs last month"
-          icon={<DollarSign className="w-6 h-6 stroke-[2.2]" />}
+          icon={<DollarSign className="w-5 h-5 stroke-[2]" />}
           iconBgColor="bg-[#EEF4FF] dark:bg-blue-950/40"
           iconTextColor="text-[#3B82F6]"
         />
@@ -112,10 +111,10 @@ export const DashboardPage: React.FC = () => {
         <StatCard
           label="Active Connected Lines"
           value={activeSubs}
-          changeValue="95.8% up"
+          changeValue="95.8%"
           isPositive={true}
           changeLabel="active ratio"
-          icon={<Wifi className="w-6 h-6 stroke-[2.2]" />}
+          icon={<Wifi className="w-5 h-5 stroke-[2]" />}
           iconBgColor="bg-[#F5EEFF] dark:bg-purple-950/40"
           iconTextColor="text-[#8B5CF6]"
         />
@@ -124,10 +123,10 @@ export const DashboardPage: React.FC = () => {
           label="Past Due Balances"
           value={overdueSubs}
           suffix=" subs"
-          changeValue="4.2% churn"
+          changeValue="4.2%"
           isPositive={false}
           changeLabel="needs follow-up"
-          icon={<AlertTriangle className="w-6 h-6 stroke-[2.2]" />}
+          icon={<AlertTriangle className="w-5 h-5 stroke-[2]" />}
           iconBgColor="bg-[#FDEEEE] dark:bg-red-950/40"
           iconTextColor="text-[#DC2626]"
         />
@@ -136,7 +135,7 @@ export const DashboardPage: React.FC = () => {
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bandwidth Saturation Chart (2 Cols) */}
-        <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
+        <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
@@ -201,7 +200,7 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Revenue Growth Bar Chart */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
           <div>
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
               MRR Growth Trend
@@ -232,10 +231,9 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom Section: Network Hardware Status & Recent Activity */}
+      {/* Hardware & Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Device Status */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-3.5">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-3.5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Radio className="w-4 h-4 text-[#F26B3A]" />
@@ -272,8 +270,7 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Recent Audit Activities */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-3.5">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-3.5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Activity className="w-4 h-4 text-[#F26B3A]" />

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Mail, MessageSquare, Send, CheckCircle2 } from 'lucide-react';
+import { Mail, MessageSquare, Send } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Button } from '../components/ui/Button';
+import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 
 export const MessagesPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
@@ -10,6 +11,18 @@ export const MessagesPage: React.FC = () => {
   const [subject, setSubject] = useState('NetPulse Network Notice');
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+
+  const channelOptions: ComboboxOption[] = [
+    { value: 'SMS', label: 'SMS Gateway (Twilio)' },
+    { value: 'Email', label: 'Email (SendGrid / SMTP)' },
+  ];
+
+  const audienceOptions: ComboboxOption[] = [
+    { value: 'All Active Subscribers', label: 'All Active Subscribers' },
+    { value: 'Overdue Accounts Only', label: 'Overdue Accounts Only' },
+    { value: 'Fiber Subscribers', label: 'Fiber Subscribers Only' },
+    { value: 'Wireless Subscribers', label: 'Wireless Subscribers Only' },
+  ];
 
   const logs = [
     {
@@ -47,7 +60,7 @@ export const MessagesPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-12 select-none">
       <div>
-        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+        <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
           Subscriber Messaging & Broadcast
         </h2>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -57,7 +70,7 @@ export const MessagesPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Broadcast Composer */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Compose Broadcast</h3>
 
           <form onSubmit={handleSend} className="space-y-3.5 text-xs">
@@ -66,30 +79,28 @@ export const MessagesPage: React.FC = () => {
                 <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
                   Channel
                 </label>
-                <select
+                <Combobox
+                  options={channelOptions}
                   value={channel}
-                  onChange={(e) => setChannel(e.target.value as any)}
-                  className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
-                >
-                  <option value="SMS">SMS Gateway (Twilio)</option>
-                  <option value="Email">Email (SendGrid / SMTP)</option>
-                </select>
+                  onChange={(val) => setChannel(val as any)}
+                  searchable={false}
+                  clearable={false}
+                  size="lg"
+                />
               </div>
 
               <div>
                 <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
                   Target Audience
                 </label>
-                <select
+                <Combobox
+                  options={audienceOptions}
                   value={recipientGroup}
-                  onChange={(e) => setRecipientGroup(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
-                >
-                  <option value="All Active Subscribers">All Active Subscribers</option>
-                  <option value="Overdue Accounts Only">Overdue Accounts Only</option>
-                  <option value="Fiber Subscribers">Fiber Subscribers Only</option>
-                  <option value="Wireless Subscribers">Wireless Subscribers Only</option>
-                </select>
+                  onChange={(val) => setRecipientGroup(val as string)}
+                  searchable={false}
+                  clearable={false}
+                  size="lg"
+                />
               </div>
             </div>
 
@@ -103,7 +114,7 @@ export const MessagesPage: React.FC = () => {
                   required
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
+                  className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                 />
               </div>
             )}
@@ -118,11 +129,17 @@ export const MessagesPage: React.FC = () => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type notification text..."
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
+                className="w-full p-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
 
-            <Button size="md" variant="primary" type="submit" isLoading={isSending} className="w-full">
+            <Button
+              size="md"
+              variant="primary"
+              type="submit"
+              isLoading={isSending}
+              className="w-full h-10 font-semibold"
+            >
               <Send className="w-4 h-4" />
               <span>Broadcast Now</span>
             </Button>
@@ -130,7 +147,7 @@ export const MessagesPage: React.FC = () => {
         </div>
 
         {/* Message Logs */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Recent Outgoing Logs</h3>
           <div className="divide-y divide-gray-100 dark:divide-gray-800/80 text-xs">
             {logs.map((log) => (

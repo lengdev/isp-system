@@ -3,6 +3,7 @@ import { Power, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
+import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 
 export const StatusConfirmationModal: React.FC = () => {
   const modalState = useStore((s) => s.modalState.statusConfirmation);
@@ -16,7 +17,16 @@ export const StatusConfirmationModal: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isSuspend = targetStatus === 'Suspended';
-  const targetCustomer = customerIds.length === 1 ? customers.find((c) => c.id === customerIds[0]) : null;
+  const targetCustomer =
+    customerIds.length === 1 ? customers.find((c) => c.id === customerIds[0]) : null;
+
+  const reasonOptions: ComboboxOption[] = [
+    { value: 'Non-payment / Past Due', label: 'Non-payment / Past Due balance' },
+    { value: 'Customer Seasonal Hold', label: 'Customer Seasonal Hold / Vacation' },
+    { value: 'Violation of Acceptable Use Policy', label: 'Terms of Service / AUP Violation' },
+    { value: 'Equipment Failure / Optical Line Cut', label: 'Hardware Failure / Optical Line Cut' },
+    { value: 'Administrative Maintenance', label: 'Administrative Maintenance Hold' },
+  ];
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
@@ -40,9 +50,7 @@ export const StatusConfirmationModal: React.FC = () => {
           ) : (
             <CheckCircle2 className="w-5 h-5 text-emerald-500" />
           )}
-          <span>
-            {isSuspend ? 'Suspend Connection' : 'Activate Connection'}
-          </span>
+          <span>{isSuspend ? 'Suspend Connection' : 'Activate Connection'}</span>
         </div>
       }
       size="sm"
@@ -65,31 +73,33 @@ export const StatusConfirmationModal: React.FC = () => {
         {isSuspend && (
           <div>
             <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-              Suspension Reason
+              Suspension Reason (Creatable)
             </label>
-            <select
+            <Combobox
+              options={reasonOptions}
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-            >
-              <option value="Non-payment / Past Due">Non-payment / Past Due balance</option>
-              <option value="Customer Seasonal Hold">Customer Seasonal Hold / Vacation</option>
-              <option value="Violation of Acceptable Use Policy">Terms of Service / AUP Violation</option>
-              <option value="Equipment Failure / Optical Line Cut">Hardware Failure / Optical Line Cut</option>
-              <option value="Administrative Maintenance">Administrative Hold</option>
-            </select>
+              onChange={(val) => setReason(val as string)}
+              creatable={true}
+              size="lg"
+            />
           </div>
         )}
 
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
-          <Button size="sm" variant="outline" onClick={() => closeModal('statusConfirmation')}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => closeModal('statusConfirmation')}
+            className="h-9 px-3.5"
+          >
             Cancel
           </Button>
           <Button
             size="sm"
-            variant={isSuspend ? 'primary' : 'primary'}
+            variant="primary"
             isLoading={isSubmitting}
             onClick={handleConfirm}
+            className="h-9 px-4 font-semibold"
           >
             <span>Confirm {targetStatus}</span>
           </Button>

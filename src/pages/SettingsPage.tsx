@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, RotateCcw, Moon, Sun, Save, Check } from 'lucide-react';
+import { RotateCcw, Moon, Sun, Save } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Button } from '../components/ui/Button';
+import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 
 export const SettingsPage: React.FC = () => {
   const darkMode = useStore((s) => s.darkMode);
@@ -15,6 +16,13 @@ export const SettingsPage: React.FC = () => {
   const [supportPhone, setSupportPhone] = useState('+1 (800) 555-PULSE');
   const [supportEmail, setSupportEmail] = useState('support@netpulse.net');
 
+  const currencyOptions: ComboboxOption[] = [
+    { value: '$', label: '$ (USD — US Dollar)' },
+    { value: '€', label: '€ (EUR — Euro)' },
+    { value: '£', label: '£ (GBP — British Pound)' },
+    { value: '₹', label: '₹ (INR — Indian Rupee)' },
+  ];
+
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     addToast({
@@ -27,7 +35,7 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-12 select-none max-w-3xl">
       <div>
-        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+        <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
           System & ISP Settings
         </h2>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -37,7 +45,7 @@ export const SettingsPage: React.FC = () => {
 
       <form onSubmit={handleSaveSettings} className="space-y-6 text-xs">
         {/* Organization Info */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">ISP Business Profile</h3>
 
           <div>
@@ -48,7 +56,7 @@ export const SettingsPage: React.FC = () => {
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
+              className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
             />
           </div>
 
@@ -61,7 +69,7 @@ export const SettingsPage: React.FC = () => {
                 type="text"
                 value={supportPhone}
                 onChange={(e) => setSupportPhone(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
+                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
             <div>
@@ -72,14 +80,14 @@ export const SettingsPage: React.FC = () => {
                 type="email"
                 value={supportEmail}
                 onChange={(e) => setSupportEmail(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
+                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
           </div>
         </div>
 
         {/* Currency & Appearance */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
             Regional & Preferences
           </h3>
@@ -89,16 +97,14 @@ export const SettingsPage: React.FC = () => {
               <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
                 Billing Currency Symbol
               </label>
-              <select
+              <Combobox
+                options={currencyOptions}
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
-              >
-                <option value="$">$ (USD)</option>
-                <option value="€">€ (EUR)</option>
-                <option value="£">£ (GBP)</option>
-                <option value="₹">₹ (INR - matching screenshot)</option>
-              </select>
+                onChange={(val) => setCurrency(val as string)}
+                searchable={false}
+                clearable={false}
+                size="lg"
+              />
             </div>
 
             <div>
@@ -108,7 +114,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={toggleDarkMode}
-                className="flex items-center justify-between w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
+                className="flex items-center justify-between w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200"
               >
                 <span>{darkMode ? 'Dark Theme' : 'Light Theme (Warm)'}</span>
                 {darkMode ? <Moon className="w-4 h-4 text-amber-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
@@ -117,7 +123,7 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           <div className="pt-2">
-            <Button size="sm" variant="primary" type="submit">
+            <Button size="sm" variant="primary" type="submit" className="h-9 px-4 font-semibold">
               <Save className="w-3.5 h-3.5" />
               <span>Save Preferences</span>
             </Button>
@@ -140,6 +146,7 @@ export const SettingsPage: React.FC = () => {
                 resetDemoData();
               }
             }}
+            className="h-9 px-4 font-semibold"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Demo Data (200+ Subscribers)</span>

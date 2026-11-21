@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { CreditCard, Check, DollarSign } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { CreditCard, Check } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
+import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 
 export const RecordPaymentModal: React.FC = () => {
   const modalState = useStore((s) => s.modalState.recordPayment);
@@ -32,6 +33,22 @@ export const RecordPaymentModal: React.FC = () => {
       setReference(`TXN-${Math.floor(100000 + Math.random() * 900000)}`);
     }
   }, [modalState.isOpen, modalState.customerId, customers]);
+
+  const customerOptions: ComboboxOption[] = useMemo(() => {
+    return customers.map((c) => ({
+      value: c.id,
+      label: `${c.fullName} (${c.code})`,
+      description: `Balance: ${currency}${c.balanceDue.toFixed(2)} • ${c.planName}`,
+    }));
+  }, [customers, currency]);
+
+  const methodOptions: ComboboxOption[] = [
+    { value: 'Credit Card', label: 'Credit Card (Stripe Gateway)' },
+    { value: 'Bank Transfer (ACH)', label: 'Bank Transfer (ACH / Wire)' },
+    { value: 'Cash / In-Person', label: 'Cash at Counter' },
+    { value: 'Check', label: 'Check / Money Order' },
+    { value: 'Digital Wallet', label: 'Apple Pay / Google Pay' },
+  ];
 
   const handleCustomerChange = (id: string) => {
     setSelectedCustomerId(id);
@@ -66,19 +83,15 @@ export const RecordPaymentModal: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         <div>
           <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-            Subscriber Account *
+            Subscriber Account (Searchable) *
           </label>
-          <select
+          <Combobox
+            options={customerOptions}
             value={selectedCustomerId}
-            onChange={(e) => handleCustomerChange(e.target.value)}
-            className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-          >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.fullName} ({c.code}) — Balance Due: {currency}{c.balanceDue.toFixed(2)}
-              </option>
-            ))}
-          </select>
+            onChange={handleCustomerChange}
+            placeholder="Search customer name or code..."
+            size="lg"
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -97,7 +110,7 @@ export const RecordPaymentModal: React.FC = () => {
                 required
                 value={amount}
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-                className="w-full pl-8 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                className="w-full h-10 pl-8 pr-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
           </div>
@@ -106,17 +119,14 @@ export const RecordPaymentModal: React.FC = () => {
             <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
               Payment Method
             </label>
-            <select
+            <Combobox
+              options={methodOptions}
               value={method}
-              onChange={(e) => setMethod(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-            >
-              <option value="Credit Card">Credit Card (Stripe Gateway)</option>
-              <option value="Bank Transfer (ACH)">Bank Transfer (ACH / Wire)</option>
-              <option value="Cash / In-Person">Cash at Counter</option>
-              <option value="Check">Check / Money Order</option>
-              <option value="Digital Wallet">Apple Pay / Google Pay</option>
-            </select>
+              onChange={(val) => setMethod(val as string)}
+              searchable={false}
+              clearable={false}
+              size="lg"
+            />
           </div>
         </div>
 
@@ -128,15 +138,27 @@ export const RecordPaymentModal: React.FC = () => {
             type="text"
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+            className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
           />
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <Button size="sm" variant="outline" type="button" onClick={() => closeModal('recordPayment')}>
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={() => closeModal('recordPayment')}
+            className="h-9 px-3.5"
+          >
             Cancel
           </Button>
-          <Button size="sm" variant="primary" type="submit" isLoading={isSubmitting}>
+          <Button
+            size="sm"
+            variant="primary"
+            type="submit"
+            isLoading={isSubmitting}
+            className="h-9 px-4 font-semibold"
+          >
             <Check className="w-3.5 h-3.5" />
             <span>Process Payment</span>
           </Button>

@@ -7,7 +7,8 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Dropdown } from '../../components/ui/Dropdown';
 import { StatusChangePopover } from './StatusChangePopover';
 import { Skeleton } from '../../components/ui/Skeleton';
-import { cn } from '../../lib/utils';
+import { Tooltip } from '../../components/ui/Tooltip';
+import { formatNumber, cn } from '../../lib/utils';
 
 interface CustomerGridProps {
   customers: Customer[];
@@ -23,14 +24,14 @@ export const CustomerGrid: React.FC<CustomerGridProps> = ({ customers }) => {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="p-4 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 space-y-3"
+            className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 space-y-3"
           >
             <div className="flex items-center gap-3">
-              <Skeleton className="w-10 h-10 rounded-full" />
+              <Skeleton className="w-9 h-9 rounded-full shrink-0" />
               <div className="space-y-1.5 flex-1">
                 <Skeleton className="w-28 h-4 rounded" />
                 <Skeleton className="w-40 h-3 rounded" />
@@ -44,7 +45,7 @@ export const CustomerGrid: React.FC<CustomerGridProps> = ({ customers }) => {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
       {customers.map((c) => {
         const isSelected = selectedIds.includes(c.id);
         const usagePercent = c.dataCapGB
@@ -57,135 +58,154 @@ export const CustomerGrid: React.FC<CustomerGridProps> = ({ customers }) => {
             whileHover={{ y: -2 }}
             onClick={() => openDrawer(c.id)}
             className={cn(
-              'relative p-4 rounded-2xl bg-white dark:bg-[#1C1C1F] border shadow-soft cursor-pointer transition-all',
+              'relative p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border shadow-xs cursor-pointer transition-all flex flex-col justify-between select-none',
               isSelected
                 ? 'border-[#F26B3A] bg-[#FFF6F2] dark:bg-orange-950/20 shadow-soft-hover'
                 : 'border-gray-200/80 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
             )}
           >
             {/* Top row */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
+            <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectCustomer(c.id)}
+                      className="rounded border-gray-300 dark:border-gray-700 text-[#F26B3A] focus:ring-[#F26B3A]/30 w-4 h-4 cursor-pointer accent-[#F26B3A] mr-1"
+                    />
+                  </div>
+                  <Avatar name={c.fullName} size="md" online={c.onlineStatus === 'online'} />
+                  <div className="min-w-0">
+                    <Tooltip content={c.fullName}>
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate hover:text-[#F26B3A] transition-colors">
+                        {c.fullName}
+                      </h4>
+                    </Tooltip>
+                    <Tooltip content={c.email}>
+                      <p className="text-[11px] text-gray-400 truncate">{c.email}</p>
+                    </Tooltip>
+                  </div>
+                </div>
+
                 <div onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleSelectCustomer(c.id)}
-                    className="rounded border-gray-300 dark:border-gray-700 text-[#F26B3A] focus:ring-[#F26B3A]/40 w-4 h-4 cursor-pointer accent-[#F26B3A] mr-1"
+                  <Dropdown
+                    align="right"
+                    trigger={
+                      <button
+                        type="button"
+                        className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                    }
+                    items={[
+                      {
+                        label: 'View Full Details',
+                        icon: <Eye className="w-3.5 h-3.5" />,
+                        onClick: () => openDrawer(c.id),
+                      },
+                      {
+                        label: 'Edit Profile',
+                        icon: <Edit2 className="w-3.5 h-3.5" />,
+                        onClick: () => openModal('addEditCustomer', { customerId: c.id }),
+                      },
+                      {
+                        label:
+                          c.status === 'Suspended'
+                            ? 'Activate Connection'
+                            : 'Suspend Connection',
+                        icon: <Power className="w-3.5 h-3.5" />,
+                        onClick: () =>
+                          openModal('statusConfirmation', {
+                            customerIds: [c.id],
+                            targetStatus: c.status === 'Suspended' ? 'Active' : 'Suspended',
+                          }),
+                      },
+                      {
+                        label: 'Record Payment',
+                        icon: <CreditCard className="w-3.5 h-3.5" />,
+                        onClick: () => openModal('recordPayment', { customerId: c.id }),
+                      },
+                      {
+                        label: 'Send SMS / Email',
+                        icon: <Mail className="w-3.5 h-3.5" />,
+                        onClick: () =>
+                          openModal('sendMessage', { customerId: c.id, isBulk: false }),
+                      },
+                      {
+                        label: 'Run Speed Test',
+                        icon: <Zap className="w-3.5 h-3.5" />,
+                        onClick: () => openModal('speedTest', { customerId: c.id }),
+                      },
+                      { divider: true, label: '' },
+                      {
+                        label: 'Delete Subscriber',
+                        icon: <Trash2 className="w-3.5 h-3.5" />,
+                        danger: true,
+                        onClick: () =>
+                          openModal('deleteConfirmation', {
+                            customerIds: [c.id],
+                            isBulk: false,
+                          }),
+                      },
+                    ]}
                   />
                 </div>
-                <Avatar name={c.fullName} size="md" online={c.onlineStatus === 'online'} />
-                <div className="min-w-0">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate hover:text-[#F26B3A]">
-                    {c.fullName}
-                  </h4>
-                  <p className="text-[11px] text-gray-400 truncate">{c.email}</p>
-                </div>
               </div>
 
-              <div onClick={(e) => e.stopPropagation()}>
-                <Dropdown
-                  align="right"
-                  trigger={
-                    <button className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                  }
-                  items={[
-                    {
-                      label: 'View Full Details',
-                      icon: <Eye className="w-3.5 h-3.5" />,
-                      onClick: () => openDrawer(c.id),
-                    },
-                    {
-                      label: 'Edit Profile',
-                      icon: <Edit2 className="w-3.5 h-3.5" />,
-                      onClick: () => openModal('addEditCustomer', { customerId: c.id }),
-                    },
-                    {
-                      label: c.status === 'Suspended' ? 'Activate Connection' : 'Suspend Connection',
-                      icon: <Power className="w-3.5 h-3.5" />,
-                      onClick: () =>
-                        openModal('statusConfirmation', {
-                          customerIds: [c.id],
-                          targetStatus: c.status === 'Suspended' ? 'Active' : 'Suspended',
-                        }),
-                    },
-                    {
-                      label: 'Record Payment',
-                      icon: <CreditCard className="w-3.5 h-3.5" />,
-                      onClick: () => openModal('recordPayment', { customerId: c.id }),
-                    },
-                    {
-                      label: 'Send SMS / Email',
-                      icon: <Mail className="w-3.5 h-3.5" />,
-                      onClick: () => openModal('sendMessage', { customerId: c.id, isBulk: false }),
-                    },
-                    {
-                      label: 'Run Speed Test (Mock)',
-                      icon: <Zap className="w-3.5 h-3.5" />,
-                      onClick: () => openModal('speedTest', { customerId: c.id }),
-                    },
-                    {
-                      divider: true,
-                      label: '',
-                    },
-                    {
-                      label: 'Delete Subscriber',
-                      icon: <Trash2 className="w-3.5 h-3.5" />,
-                      danger: true,
-                      onClick: () =>
-                        openModal('deleteConfirmation', { customerIds: [c.id], isBulk: false }),
-                    },
-                  ]}
-                />
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="mt-3.5 pt-3 border-t border-gray-100 dark:border-gray-800/80 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Plan:</span>
-                <span className="font-semibold text-gray-800 dark:text-gray-200">
-                  {c.planName}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Monthly Price:</span>
-                <span className="font-bold text-gray-900 dark:text-gray-100">
-                  {currency}{c.monthlyPrice.toFixed(2)}/mo
-                </span>
-              </div>
-
-              {/* Bandwidth Usage Progress */}
-              <div className="pt-1">
-                <div className="flex items-center justify-between text-[11px] mb-1">
-                  <span className="text-gray-400">Data Usage</span>
-                  <span className="font-medium text-gray-700 dark:text-gray-300">
-                    {c.dataUsageGB} GB {c.dataCapGB ? `/ ${c.dataCapGB} GB` : ''}
+              {/* Plan & Pricing */}
+              <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800/80 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Plan:</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {c.planName}
                   </span>
                 </div>
-                <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      'h-full rounded-full',
-                      usagePercent > 90 ? 'bg-red-500' : 'bg-[#F26B3A]'
-                    )}
-                    style={{ width: `${usagePercent}%` }}
-                  />
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Monthly Price:</span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100 tabular-nums">
+                    {currency}{c.monthlyPrice.toFixed(2)}/mo
+                  </span>
+                </div>
+
+                {/* Progress bar (Fixed 96px width or full width with threshold color) */}
+                <div className="pt-1">
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-gray-400">Data usage</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300 tabular-nums">
+                      {formatNumber(c.dataUsageGB)} GB {c.dataCapGB ? `/ ${formatNumber(c.dataCapGB)} GB` : ''}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all duration-300',
+                        usagePercent > 90
+                          ? 'bg-red-500'
+                          : usagePercent > 70
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+                      )}
+                      style={{ width: `${usagePercent}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Footer row: Status + Rating + IP */}
-            <div className="mt-3.5 pt-3 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between">
+            {/* Footer row: Status + Rating */}
+            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between">
               <div onClick={(e) => e.stopPropagation()}>
                 <StatusChangePopover currentStatus={c.status} customerId={c.id} />
               </div>
 
-              <div className="flex items-center gap-1 font-semibold text-amber-500 text-xs">
+              <div className="flex items-center gap-1 font-medium text-amber-500 text-xs">
                 <Star className="w-3.5 h-3.5 fill-amber-400 stroke-amber-400" />
-                <span className="text-gray-800 dark:text-gray-200">{c.rating.toFixed(1)}</span>
+                <span className="text-gray-800 dark:text-gray-200 tabular-nums font-semibold">
+                  {c.rating.toFixed(1)}
+                </span>
               </div>
             </div>
           </motion.div>

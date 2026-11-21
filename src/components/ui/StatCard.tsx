@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MoreHorizontal, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
 import { Dropdown } from './Dropdown';
@@ -44,8 +44,8 @@ export const StatCard: React.FC<StatCardProps> = ({
     if (typeof value === 'number') {
       let start = 0;
       const end = value;
-      const duration = 600; // ms
-      const steps = 25;
+      const duration = 500;
+      const steps = 20;
       const stepTime = duration / steps;
       const increment = (end - start) / steps;
 
@@ -72,84 +72,76 @@ export const StatCard: React.FC<StatCardProps> = ({
     return prefix + displayValue + suffix;
   };
 
+  // Strip any existing arrow symbols from changeValue to ensure exactly ONE trend icon
+  const cleanChangeValue = changeValue.replace(/[↑↓↗↘▲▼+]/g, '').trim();
+
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.15 }}
       className={cn(
-        'relative flex flex-col justify-between p-4.5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800/80 shadow-soft hover:shadow-soft-hover transition-all duration-200',
+        'p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs hover:shadow-soft-hover transition-all flex flex-col justify-between h-full select-none',
         className
       )}
     >
-      {/* Top row */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3.5">
-          {/* Icon tile */}
+      {/* 1. Header Row: Icon Tile + Label + "..." Menu */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div
             className={cn(
-              'flex items-center justify-center w-12 h-12 rounded-xl shrink-0 transition-transform duration-200',
+              'flex items-center justify-center w-10 h-10 rounded-xl shrink-0 transition-transform',
               iconBgColor,
               iconTextColor
             )}
           >
             {icon}
           </div>
-
-          <div>
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 block tracking-tight">
-              {label}
-            </span>
-            <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight mt-0.5">
-              {formattedDisplay()}
-            </div>
-          </div>
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 tracking-tight truncate">
+            {label}
+          </span>
         </div>
 
-        {/* ... Card Menu */}
         <Dropdown
           align="right"
           trigger={
-            <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <button
+              type="button"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
               <MoreHorizontal className="w-4 h-4" />
             </button>
           }
           items={[
-            {
-              label: 'View Detailed Report',
-              onClick: onViewReport,
-            },
-            {
-              label: 'Refresh Metric',
-              onClick: onRefresh,
-            },
-            {
-              divider: true,
-              label: '',
-            },
-            {
-              label: 'Card Settings',
-            },
+            { label: 'View Detailed Report', onClick: onViewReport },
+            { label: 'Refresh Metric', onClick: onRefresh },
           ]}
         />
       </div>
 
-      {/* Bottom row: vs last month + pill */}
-      <div className="mt-3.5 pt-3 border-t border-gray-100 dark:border-gray-800/60 flex items-center justify-between text-xs">
-        <span className="text-gray-400 dark:text-gray-500 text-[11px]">{changeLabel}</span>
+      {/* 2. Value Row: Big Number (28px, Semibold, Tabular-nums) */}
+      <div className="my-3">
+        <div className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tabular-nums tracking-tight">
+          {formattedDisplay()}
+        </div>
+      </div>
+
+      {/* 3. Footer Row: Inside Padding with 1px Top Divider + ONE Trend Icon */}
+      <div className="pt-3 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between text-xs mt-auto">
+        <span className="text-gray-400 dark:text-gray-500 text-xs">{changeLabel}</span>
         <div
           className={cn(
-            'inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full font-semibold text-[11px]',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold',
             isPositive
-              ? 'bg-[#EBFBF2] text-[#1E8E4D] dark:bg-[#0E3A20]/50 dark:text-[#34D399]'
-              : 'bg-[#FDEEEE] text-[#DC2626] dark:bg-[#451010]/50 dark:text-[#F87171]'
+              ? 'bg-[#EBFBF2] text-[#1E8E4D] dark:bg-[#0E3A20]/40 dark:text-[#34D399]'
+              : 'bg-[#FDEEEE] text-[#DC2626] dark:bg-[#451010]/40 dark:text-[#F87171]'
           )}
         >
           {isPositive ? (
-            <ArrowUpRight className="w-3 h-3 stroke-[2.5]" />
+            <TrendingUp className="w-3.5 h-3.5 stroke-[2]" />
           ) : (
-            <ArrowDownRight className="w-3 h-3 stroke-[2.5]" />
+            <TrendingDown className="w-3.5 h-3.5 stroke-[2]" />
           )}
-          <span>{changeValue}</span>
+          <span>{isPositive ? `+${cleanChangeValue}` : cleanChangeValue}</span>
         </div>
       </div>
     </motion.div>

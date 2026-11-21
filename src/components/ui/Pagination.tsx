@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { Combobox, ComboboxOption } from './Combobox';
 
 interface PaginationProps {
   currentPage: number;
@@ -41,49 +42,55 @@ export const Pagination: React.FC<PaginationProps> = ({
     return pages;
   };
 
+  const pageSizeOptions: ComboboxOption[] = [
+    { value: '10', label: '10' },
+    { value: '25', label: '25' },
+    { value: '50', label: '50' },
+  ];
+
   return (
     <div
       className={cn(
-        'flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-2 text-xs text-gray-500 dark:text-gray-400 select-none',
+        'flex flex-col sm:flex-row items-center justify-between gap-4 py-3 px-2 text-xs text-gray-500 dark:text-gray-400 select-none',
         className
       )}
     >
-      {/* Left side: Showing X-Y of Z + Page Size Selector */}
+      {/* Left side: Showing X-Y of Z + Combobox Page Size Selector */}
       <div className="flex items-center gap-3">
         <span>
-          Showing <span className="font-semibold text-gray-800 dark:text-gray-200">{startItem}</span>-
-          <span className="font-semibold text-gray-800 dark:text-gray-200">{endItem}</span> of{' '}
-          <span className="font-semibold text-gray-800 dark:text-gray-200">{totalItems}</span>
+          Showing <span className="font-semibold text-gray-800 dark:text-gray-200 tabular-nums">{startItem}</span>-
+          <span className="font-semibold text-gray-800 dark:text-gray-200 tabular-nums">{endItem}</span> of{' '}
+          <span className="font-semibold text-gray-800 dark:text-gray-200 tabular-nums">{totalItems}</span>
         </span>
 
         {onPageSizeChange && (
-          <div className="flex items-center gap-1.5 pl-2 border-l border-gray-200 dark:border-gray-800">
+          <div className="flex items-center gap-1.5 pl-3 border-l border-gray-200 dark:border-gray-800">
             <span>Per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="bg-white dark:bg-[#1E1E22] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[#F26B3A]"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
+            <div className="w-18">
+              <Combobox
+                options={pageSizeOptions}
+                value={String(pageSize)}
+                onChange={(val) => onPageSizeChange(Number(val))}
+                searchable={false}
+                clearable={false}
+                size="sm"
+              />
+            </div>
           </div>
         )}
       </div>
 
-      {/* Right side: Page navigation buttons matching screenshot */}
+      {/* Right side: Page navigation buttons */}
       <div className="flex items-center gap-1">
-        {/* Prev button */}
         <button
+          type="button"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1E1E22] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-[10px] border border-gray-200/90 dark:border-gray-800 bg-white dark:bg-[#1E1E22] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:pointer-events-none transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {/* Page buttons */}
         {getPageNumbers().map((page, index) => {
           if (page === '...') {
             return (
@@ -97,12 +104,13 @@ export const Pagination: React.FC<PaginationProps> = ({
           return (
             <button
               key={`page-${page}`}
+              type="button"
               onClick={() => onPageChange(Number(page))}
               className={cn(
-                'flex items-center justify-center min-w-8 h-8 px-2 rounded-lg font-medium text-xs transition-colors',
+                'flex items-center justify-center min-w-8 h-8 px-2 rounded-[10px] text-xs transition-colors tabular-nums',
                 isCurrent
                   ? 'bg-[#F26B3A] text-white shadow-xs font-bold'
-                  : 'bg-white dark:bg-[#1E1E22] border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  : 'bg-white dark:bg-[#1E1E22] border border-gray-200/90 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium'
               )}
             >
               {page}
@@ -110,11 +118,11 @@ export const Pagination: React.FC<PaginationProps> = ({
           );
         })}
 
-        {/* Next button */}
         <button
+          type="button"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1E1E22] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-[10px] border border-gray-200/90 dark:border-gray-800 bg-white dark:bg-[#1E1E22] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:pointer-events-none transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
         </button>

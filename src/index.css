@@ -5,65 +5,55 @@
 @layer base {
   :root {
     --brand-primary: #F26B3A;
+    --brand-hover: #E05220;
+    --brand-active: #C94314;
     --brand-tint: #FFF1EA;
+    --brand-selected: #FFF6F2;
     --bg-warm: #FAF7F5;
+    --surface-card: #FFFFFF;
+    --border-color: #E5E7EB;
+  }
+
+  .dark {
+    --brand-tint: rgba(242, 107, 58, 0.15);
+    --brand-selected: rgba(242, 107, 58, 0.12);
+    --bg-warm: #121214;
+    --surface-card: #1C1C1F;
+    --border-color: #2E2E33;
+  }
+
+  html {
+    scroll-padding: 24px;
+    scrollbar-gutter: stable;
   }
 
   body {
     font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.01em;
   }
 }
 
-/* Custom scrollbars */
+/* Custom thin scrollbars that auto-hide cleanly */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.4);
+  background: rgba(156, 163, 175, 0.3);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(156, 163, 175, 0.6);
 }
 
-/* Animation utilities */
-@keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
-
-.animate-shimmer {
-  position: relative;
-  overflow: hidden;
-}
-.animate-shimmer::after {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  transform: translateX(-100%);
-  background-image: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0.3) 20%,
-    rgba(255, 255, 255, 0.5) 60%,
-    rgba(255, 255, 255, 0)
-  );
-  animation: shimmer 1.8s infinite;
-  content: '';
-}
-.dark .animate-shimmer::after {
-  background-image: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0.05) 20%,
-    rgba(255, 255, 255, 0.1) 60%,
-    rgba(255, 255, 255, 0)
-  );
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

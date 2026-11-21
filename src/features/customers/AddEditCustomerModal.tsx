@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Check, ArrowRight, ArrowLeft, User, Wifi, FileCheck } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
+import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { ConnectionType, CustomerStatus } from '../../types';
 
 const customerSchema = z.object({
@@ -21,6 +22,8 @@ const customerSchema = z.object({
   macAddress: z.string().min(10, 'Valid MAC address required'),
   dueDate: z.string().min(1, 'Due date is required'),
   status: z.enum(['Active', 'Suspended', 'Pending', 'Disconnected', 'Overdue']),
+  assignedTechnician: z.string().optional(),
+  tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
 });
 
@@ -31,6 +34,7 @@ export const AddEditCustomerModal: React.FC = () => {
   const closeModal = useStore((s) => s.closeModal);
   const customers = useStore((s) => s.customers);
   const plans = useStore((s) => s.plans);
+  const technicians = useStore((s) => s.technicians);
   const addCustomer = useStore((s) => s.addCustomer);
   const updateCustomer = useStore((s) => s.updateCustomer);
 
@@ -43,7 +47,7 @@ export const AddEditCustomerModal: React.FC = () => {
   const {
     register,
     handleSubmit,
-    setValue,
+    control,
     watch,
     reset,
     trigger,
@@ -62,14 +66,14 @@ export const AddEditCustomerModal: React.FC = () => {
       macAddress: `F4:5C:89:${Math.floor(Math.random() * 89 + 10)}:${Math.floor(Math.random() * 89 + 10)}:9A`,
       dueDate: '2025-10-15',
       status: 'Active',
+      assignedTechnician: technicians[0]?.name || 'Carlos Ramos',
+      tags: ['Residential'],
       notes: '',
     },
   });
 
-  const selectedPlanId = watch('planId');
   const watchedData = watch();
 
-  // Reset or pre-fill form when modal opens
   useEffect(() => {
     if (modalState.isOpen) {
       setStep(1);
@@ -86,6 +90,8 @@ export const AddEditCustomerModal: React.FC = () => {
           macAddress: existingCustomer.macAddress,
           dueDate: existingCustomer.dueDate,
           status: existingCustomer.status,
+          assignedTechnician: existingCustomer.assignedTechnician || technicians[0]?.name,
+          tags: existingCustomer.tags || ['Residential'],
           notes: existingCustomer.notes || '',
         });
       } else {
@@ -101,18 +107,71 @@ export const AddEditCustomerModal: React.FC = () => {
           macAddress: `F4:5C:89:${Math.floor(Math.random() * 89 + 10)}:${Math.floor(Math.random() * 89 + 10)}:9A`,
           dueDate: '2025-10-15',
           status: 'Active',
+          assignedTechnician: technicians[0]?.name || 'Carlos Ramos',
+          tags: ['Residential'],
           notes: '',
         });
       }
     }
-  }, [modalState.isOpen, isEdit, existingCustomer, plans, reset]);
+  }, [modalState.isOpen, isEdit, existingCustomer, plans, technicians, reset]);
+
+  // Combobox Options
+  const planOptions: ComboboxOption[] = plans.map((p) => ({
+    value: p.id,
+    label: `${p.name} — $${p.monthlyPrice}/mo`,
+    description: `${p.speedMbps} Mbps Down / ${p.uploadMbps} Mbps Up`,
+    group: p.type,
+  }));
+
+  const connectionTypeOptions: ComboboxOption[] = [
+    { value: 'Fiber', label: 'Fiber Optic (GPON/XGS-PON)' },
+    { value: 'Wireless', label: 'Fixed Wireless (PtMP)' },
+    { value: 'DSL', label: 'DSL Copper' },
+  ];
+
+  const statusOptions: ComboboxOption[] = [
+    { value: 'Active', label: 'Active (Provisioned & Connected)' },
+    { value: 'Pending', label: 'Pending Installation' },
+    { value: 'Suspended', label: 'Suspended (Hold)' },
+    { value: 'Overdue', label: 'Overdue' },
+    { value: 'Disconnected', label: 'Disconnected' },
+  ];
+
+  const cityOptions: ComboboxOption[] = [
+    { value: 'Austin, TX', label: 'Austin, TX' },
+    { value: 'Seattle, WA', label: 'Seattle, WA' },
+    { value: 'Denver, CO', label: 'Denver, CO' },
+    { value: 'Portland, OR', label: 'Portland, OR' },
+    { value: 'San Jose, CA', label: 'San Jose, CA' },
+    { value: 'Phoenix, AZ', label: 'Phoenix, AZ' },
+  ];
+
+  const technicianOptions: ComboboxOption[] = technicians.map((t) => ({
+    value: t.name,
+    label: t.name,
+    description: `${t.zone} (${t.status})`,
+  }));
+
+  const tagOptions: ComboboxOption[] = [
+    { value: 'Residential', label: 'Residential' },
+    { value: 'Business', label: 'Business / Enterprise' },
+    { value: 'VIP', label: 'VIP Priority' },
+    { value: 'Static IP', label: 'Static IP Requested' },
+  ];
 
   const handleNextStep = async () => {
     if (step === 1) {
       const valid = await trigger(['fullName', 'email', 'phone', 'address', 'city']);
       if (valid) setStep(2);
     } else if (step === 2) {
-      const valid = await trigger(['planId', 'connectionType', 'ipAddress', 'macAddress', 'dueDate', 'status']);
+      const valid = await trigger([
+        'planId',
+        'connectionType',
+        'ipAddress',
+        'macAddress',
+        'dueDate',
+        'status',
+      ]);
       if (valid) setStep(3);
     }
   };
@@ -140,6 +199,8 @@ export const AddEditCustomerModal: React.FC = () => {
       balanceDue: isEdit && existingCustomer ? existingCustomer.balanceDue : 0,
       status: data.status,
       rating: isEdit && existingCustomer ? existingCustomer.rating : 5.0,
+      assignedTechnician: data.assignedTechnician,
+      tags: data.tags,
       notes: data.notes,
       onlineStatus: 'online' as const,
       lastPingMs: 14,
@@ -165,8 +226,12 @@ export const AddEditCustomerModal: React.FC = () => {
     <Modal
       isOpen={modalState.isOpen}
       onClose={() => closeModal('addEditCustomer')}
-      title={isEdit ? 'Edit Subscriber Account' : 'Provision New Subscriber'}
-      subtitle={isEdit ? `Updating profile for ${existingCustomer?.fullName}` : 'Step-by-step subscriber onboarding'}
+      title={isEdit ? 'Edit Subscriber Account' : 'Add New Customer'}
+      subtitle={
+        isEdit
+          ? `Updating profile for ${existingCustomer?.fullName}`
+          : 'Step-by-step subscriber onboarding'
+      }
       size="lg"
     >
       <div className="space-y-6">
@@ -188,7 +253,7 @@ export const AddEditCustomerModal: React.FC = () => {
                     isCompleted
                       ? 'bg-emerald-500 text-white'
                       : isCurrent
-                      ? 'bg-[#F26B3A] text-white shadow-md shadow-[#F26B3A]/30'
+                      ? 'bg-[#F26B3A] text-white shadow-xs'
                       : 'bg-gray-200 dark:bg-gray-800 text-gray-400'
                   }`}
                 >
@@ -225,7 +290,7 @@ export const AddEditCustomerModal: React.FC = () => {
                   <input
                     {...register('fullName')}
                     placeholder="e.g. Rachel Adams"
-                    className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                    className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                   />
                   {errors.fullName && (
                     <span className="text-red-500 text-[11px] mt-1 block">
@@ -243,7 +308,7 @@ export const AddEditCustomerModal: React.FC = () => {
                       {...register('email')}
                       type="email"
                       placeholder="rachel@example.com"
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                     />
                     {errors.email && (
                       <span className="text-red-500 text-[11px] mt-1 block">
@@ -259,7 +324,7 @@ export const AddEditCustomerModal: React.FC = () => {
                     <input
                       {...register('phone')}
                       placeholder="+1 (512) 555-0199"
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                     />
                     {errors.phone && (
                       <span className="text-red-500 text-[11px] mt-1 block">
@@ -277,7 +342,7 @@ export const AddEditCustomerModal: React.FC = () => {
                     <input
                       {...register('address')}
                       placeholder="742 Evergreen Terrace"
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                     />
                     {errors.address && (
                       <span className="text-red-500 text-[11px] mt-1 block">
@@ -288,19 +353,28 @@ export const AddEditCustomerModal: React.FC = () => {
 
                   <div>
                     <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      City *
+                      City (Creatable) *
                     </label>
-                    <input
-                      {...register('city')}
-                      placeholder="Austin, TX"
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                    <Controller
+                      name="city"
+                      control={control}
+                      render={({ field }) => (
+                        <Combobox
+                          options={cityOptions}
+                          value={field.value}
+                          onChange={field.onChange}
+                          creatable={true}
+                          placeholder="Select or type city..."
+                          size="lg"
+                        />
+                      )}
                     />
                   </div>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 2: PLAN & NETWORK */}
+            {/* STEP 2: PLAN & NETWORK (Comboboxes with Grouping) */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -311,47 +385,105 @@ export const AddEditCustomerModal: React.FC = () => {
               >
                 <div>
                   <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                    Select Internet Plan *
+                    Select Internet Plan (Grouped by Type) *
                   </label>
-                  <select
-                    {...register('planId')}
-                    className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-                  >
-                    {plans.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} — {p.speedMbps} Mbps Down / {p.uploadMbps} Mbps Up (${p.monthlyPrice}/mo)
-                      </option>
-                    ))}
-                  </select>
+                  <Controller
+                    name="planId"
+                    control={control}
+                    render={({ field }) => (
+                      <Combobox
+                        options={planOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        groupBy={true}
+                        placeholder="Choose plan..."
+                        size="lg"
+                      />
+                    )}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                      Connection Type
+                      Connection Medium
                     </label>
-                    <select
-                      {...register('connectionType')}
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-                    >
-                      <option value="Fiber">Fiber Optic (GPON/XGS)</option>
-                      <option value="Wireless">Fixed Wireless (PtMP)</option>
-                      <option value="DSL">DSL Copper</option>
-                    </select>
+                    <Controller
+                      name="connectionType"
+                      control={control}
+                      render={({ field }) => (
+                        <Combobox
+                          options={connectionTypeOptions}
+                          value={field.value}
+                          onChange={field.onChange}
+                          searchable={false}
+                          clearable={false}
+                          size="lg"
+                        />
+                      )}
+                    />
                   </div>
 
                   <div>
                     <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
                       Initial Status
                     </label>
-                    <select
-                      {...register('status')}
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-                    >
-                      <option value="Active">Active (Live)</option>
-                      <option value="Pending">Pending Installation</option>
-                      <option value="Suspended">Suspended</option>
-                    </select>
+                    <Controller
+                      name="status"
+                      control={control}
+                      render={({ field }) => (
+                        <Combobox
+                          options={statusOptions}
+                          value={field.value}
+                          onChange={field.onChange}
+                          searchable={false}
+                          clearable={false}
+                          size="lg"
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                      Assigned Field Engineer
+                    </label>
+                    <Controller
+                      name="assignedTechnician"
+                      control={control}
+                      render={({ field }) => (
+                        <Combobox
+                          options={technicianOptions}
+                          value={field.value || ''}
+                          onChange={field.onChange}
+                          placeholder="Select technician..."
+                          size="lg"
+                        />
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                      Tags & Classification (Multi)
+                    </label>
+                    <Controller
+                      name="tags"
+                      control={control}
+                      render={({ field }) => (
+                        <Combobox
+                          options={tagOptions}
+                          value={field.value || []}
+                          onChange={field.onChange}
+                          multiple={true}
+                          creatable={true}
+                          placeholder="Tags..."
+                          size="lg"
+                        />
+                      )}
+                    />
                   </div>
                 </div>
 
@@ -363,7 +495,7 @@ export const AddEditCustomerModal: React.FC = () => {
                     <input
                       {...register('ipAddress')}
                       placeholder="192.168.10.55"
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                     />
                   </div>
 
@@ -374,21 +506,9 @@ export const AddEditCustomerModal: React.FC = () => {
                     <input
                       {...register('macAddress')}
                       placeholder="F4:5C:89:12:44:8B"
-                      className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                      className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                    Installation & Handover Notes (Optional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    {...register('notes')}
-                    placeholder="e.g. ONT installed in master bedroom closet, fiber drop aerial."
-                    className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-                  />
                 </div>
               </motion.div>
             )}
@@ -453,6 +573,7 @@ export const AddEditCustomerModal: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => setStep((s) => (s - 1) as any)}
+                className="h-9 px-3.5"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
@@ -463,18 +584,31 @@ export const AddEditCustomerModal: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => closeModal('addEditCustomer')}
+                className="h-9 px-3.5"
               >
                 Cancel
               </Button>
             )}
 
             {step < 3 ? (
-              <Button type="button" variant="primary" size="sm" onClick={handleNextStep}>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleNextStep}
+                className="h-9 px-4 font-semibold"
+              >
                 <span>Next Step</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Button>
             ) : (
-              <Button type="submit" variant="primary" size="sm" isLoading={isSubmitting}>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                isLoading={isSubmitting}
+                className="h-9 px-4 font-semibold"
+              >
                 <Check className="w-3.5 h-3.5" />
                 <span>{isEdit ? 'Save Changes' : 'Confirm & Provision'}</span>
               </Button>

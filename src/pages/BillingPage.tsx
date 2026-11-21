@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Receipt, Plus, Download, Check, Clock, AlertTriangle } from 'lucide-react';
+import { Receipt, Plus, Download, Check } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { formatDate } from '../lib/utils';
 import { RecordPaymentModal } from '../features/customers/RecordPaymentModal';
+import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 
 export const BillingPage: React.FC = () => {
   const invoices = useStore((s) => s.invoices);
@@ -14,7 +14,14 @@ export const BillingPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
   const currency = useStore((s) => s.currency);
 
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Paid' | 'Pending' | 'Overdue'>('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  const statusOptions: ComboboxOption[] = [
+    { value: 'All', label: 'All Invoices' },
+    { value: 'Paid', label: 'Paid Invoices' },
+    { value: 'Pending', label: 'Pending Invoices' },
+    { value: 'Overdue', label: 'Overdue Invoices' },
+  ];
 
   const filteredInvoices = invoices.filter((inv) => {
     if (statusFilter !== 'All' && inv.status !== statusFilter) return false;
@@ -38,7 +45,7 @@ export const BillingPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+          <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
             Billing & Invoices
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -49,87 +56,102 @@ export const BillingPage: React.FC = () => {
           variant="primary"
           size="md"
           onClick={() => openModal('recordPayment')}
-          className="text-xs font-bold"
+          className="text-xs font-semibold h-9 px-4 gap-1.5"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Record Payment</span>
+          <span>Record Payment</span>
         </Button>
       </div>
 
       {/* 3 Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4.5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs">
           <span className="text-xs text-gray-400 block font-medium">Total Invoiced (MTD)</span>
-          <div className="text-2xl font-black text-gray-900 dark:text-gray-100 mt-1">
+          <div className="text-[28px] font-bold text-gray-900 dark:text-gray-100 mt-1 tabular-nums">
             {currency}{totalBilled.toFixed(2)}
           </div>
         </div>
-        <div className="p-4.5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs">
           <span className="text-xs text-gray-400 block font-medium">Total Collected</span>
-          <div className="text-2xl font-black text-emerald-600 mt-1">
+          <div className="text-[28px] font-bold text-emerald-600 mt-1 tabular-nums">
             {currency}{totalPaid.toFixed(2)}
           </div>
         </div>
-        <div className="p-4.5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs">
           <span className="text-xs text-gray-400 block font-medium">Overdue / Outstanding</span>
-          <div className="text-2xl font-black text-red-600 mt-1">
+          <div className="text-[28px] font-bold text-red-600 mt-1 tabular-nums">
             {currency}{totalOverdue.toFixed(2)}
           </div>
         </div>
       </div>
 
-      {/* Filter Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {(['All', 'Paid', 'Pending', 'Overdue'] as const).map((st) => (
-          <button
-            key={st}
-            onClick={() => setStatusFilter(st)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-              statusFilter === st
-                ? 'bg-[#FFF1EA] dark:bg-[#F26B3A]/20 text-[#F26B3A] border border-[#F26B3A]'
-                : 'bg-white dark:bg-[#1C1C1F] text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800'
-            }`}
-          >
-            {st} Invoices
-          </button>
-        ))}
+      {/* Filter Combobox & Status Tabs */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {['All', 'Paid', 'Pending', 'Overdue'].map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setStatusFilter(st)}
+              className={`h-8 px-3 rounded-full text-xs font-semibold transition-colors ${
+                statusFilter === st
+                  ? 'bg-[#FFF1EA] dark:bg-orange-950/40 text-[#F26B3A] border border-[#F26B3A]'
+                  : 'bg-white dark:bg-[#1C1C1F] text-gray-600 dark:text-gray-400 border border-gray-200/90 dark:border-gray-800'
+              }`}
+            >
+              {st} Invoices
+            </button>
+          ))}
+        </div>
+
+        <div className="w-44">
+          <Combobox
+            options={statusOptions}
+            value={statusFilter}
+            onChange={(val) => setStatusFilter(val as string)}
+            searchable={false}
+            clearable={false}
+            size="sm"
+          />
+        </div>
       </div>
 
       {/* Invoices Table */}
-      <div className="w-full overflow-x-auto rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft">
+      <div className="w-full overflow-hidden rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs">
         <table className="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 text-gray-500 font-semibold">
-              <th className="py-3.5 px-4">Invoice #</th>
-              <th className="py-3.5 px-4">Subscriber</th>
-              <th className="py-3.5 px-4">Issue Date</th>
-              <th className="py-3.5 px-4">Due Date</th>
-              <th className="py-3.5 px-4">Amount</th>
-              <th className="py-3.5 px-4">Status</th>
-              <th className="py-3.5 px-4 text-right">Actions</th>
+          <thead className="bg-[#FAFAFA] dark:bg-[#1A1A1D] border-b border-gray-200/80 dark:border-gray-800">
+            <tr className="h-11 text-gray-500 font-semibold">
+              <th className="px-4">Invoice #</th>
+              <th className="px-4">Subscriber</th>
+              <th className="px-4">Issue date</th>
+              <th className="px-4">Due date</th>
+              <th className="px-4 text-right">Amount</th>
+              <th className="px-4">Status</th>
+              <th className="px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-800/80">
             {filteredInvoices.map((inv) => (
-              <tr key={inv.id} className="hover:bg-gray-50/70 dark:hover:bg-gray-800/40">
-                <td className="py-3.5 px-4 font-mono font-bold text-gray-900 dark:text-gray-100">
+              <tr key={inv.id} className="h-14 hover:bg-gray-50/70 dark:hover:bg-gray-800/40 transition-colors">
+                <td className="px-4 font-mono font-bold text-gray-900 dark:text-gray-100">
                   {inv.invoiceNumber}
                 </td>
-                <td className="py-3.5 px-4">
+                <td className="px-4">
                   <button
+                    type="button"
                     onClick={() => openDrawer(inv.customerId, 'billing')}
-                    className="font-bold text-gray-800 dark:text-gray-200 hover:text-[#F26B3A] text-left"
+                    className="font-semibold text-gray-800 dark:text-gray-200 hover:text-[#F26B3A] text-left"
                   >
                     {inv.customerName}
                   </button>
                   <div className="text-[11px] text-gray-400">{inv.customerEmail}</div>
                 </td>
-                <td className="py-3.5 px-4 text-gray-500">{formatDate(inv.date)}</td>
-                <td className="py-3.5 px-4 text-gray-500">{formatDate(inv.dueDate)}</td>
-                <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-gray-100">
+                <td className="px-4 text-gray-500 tabular-nums">{formatDate(inv.date)}</td>
+                <td className="px-4 text-gray-500 tabular-nums">{formatDate(inv.dueDate)}</td>
+                <td className="px-4 font-bold text-gray-900 dark:text-gray-100 text-right tabular-nums">
                   {currency}{inv.amount.toFixed(2)}
                 </td>
-                <td className="py-3.5 px-4">
+                <td className="px-4">
                   <span
                     className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
                       inv.status === 'Paid'
@@ -142,10 +164,11 @@ export const BillingPage: React.FC = () => {
                     {inv.status}
                   </span>
                 </td>
-                <td className="py-3.5 px-4 text-right">
+                <td className="px-4 text-right">
                   <div className="flex items-center justify-end gap-1.5">
                     {inv.status !== 'Paid' && (
                       <button
+                        type="button"
                         onClick={() => markInvoicePaid(inv.id)}
                         className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                         title="Mark as Paid"
@@ -154,6 +177,7 @@ export const BillingPage: React.FC = () => {
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={() => handleDownloadPDF(inv.invoiceNumber)}
                       className="p-1.5 rounded-lg text-gray-400 hover:text-[#F26B3A] hover:bg-gray-100 dark:hover:bg-gray-800"
                       title="Download PDF"

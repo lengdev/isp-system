@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Wifi, Plus, Edit2, Trash2, Check, Zap, ArrowDown, ArrowUp } from 'lucide-react';
+import { Wifi, Plus, Edit2, Trash2, Check, ArrowDown, ArrowUp } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Plan, ConnectionType } from '../types';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 
 export const PlansPage: React.FC = () => {
   const plans = useStore((s) => s.plans);
@@ -22,6 +23,12 @@ export const PlansPage: React.FC = () => {
   const [dataCapGB, setDataCapGB] = useState<number | ''>('');
   const [type, setType] = useState<ConnectionType>('Fiber');
   const [description, setDescription] = useState('');
+
+  const connectionTypeOptions: ComboboxOption[] = [
+    { value: 'Fiber', label: 'Fiber Optic' },
+    { value: 'Wireless', label: 'Fixed Wireless' },
+    { value: 'DSL', label: 'DSL Copper' },
+  ];
 
   const handleOpenAdd = () => {
     setEditingPlanId(null);
@@ -72,25 +79,30 @@ export const PlansPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+          <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
             Internet Plans Catalog
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             Configure speed tiers, bandwidth limits, and subscription pricing
           </p>
         </div>
-        <Button variant="primary" size="md" onClick={handleOpenAdd} className="text-xs font-bold">
+        <Button
+          variant="primary"
+          size="md"
+          onClick={handleOpenAdd}
+          className="text-xs font-semibold h-9 px-4 gap-1.5"
+        >
           <Plus className="w-4 h-4" />
-          <span>+ Add New Plan</span>
+          <span>Add New Plan</span>
         </Button>
       </div>
 
       {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {plans.map((p) => (
           <div
             key={p.id}
-            className="flex flex-col justify-between p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft hover:shadow-soft-hover transition-all"
+            className="flex flex-col justify-between p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs hover:shadow-soft-hover transition-all"
           >
             <div>
               <div className="flex items-start justify-between gap-2">
@@ -99,12 +111,14 @@ export const PlansPage: React.FC = () => {
                 </span>
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => handleOpenEdit(p)}
                     className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => deletePlan(p.id)}
                     className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
                   >
@@ -120,7 +134,7 @@ export const PlansPage: React.FC = () => {
 
               {/* Price */}
               <div className="mt-4 flex items-baseline gap-1">
-                <span className="text-3xl font-black text-gray-900 dark:text-gray-100">
+                <span className="text-[28px] font-bold text-gray-900 dark:text-gray-100 tabular-nums">
                   {currency}{p.monthlyPrice.toFixed(2)}
                 </span>
                 <span className="text-xs text-gray-400">/month</span>
@@ -132,7 +146,7 @@ export const PlansPage: React.FC = () => {
                   <span className="flex items-center gap-1 text-gray-500">
                     <ArrowDown className="w-3.5 h-3.5 text-[#F26B3A]" /> Download:
                   </span>
-                  <span className="font-bold text-gray-800 dark:text-gray-200">
+                  <span className="font-semibold text-gray-800 dark:text-gray-200 tabular-nums">
                     {p.speedMbps} Mbps
                   </span>
                 </div>
@@ -140,13 +154,13 @@ export const PlansPage: React.FC = () => {
                   <span className="flex items-center gap-1 text-gray-500">
                     <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> Upload:
                   </span>
-                  <span className="font-bold text-gray-800 dark:text-gray-200">
+                  <span className="font-semibold text-gray-800 dark:text-gray-200 tabular-nums">
                     {p.uploadMbps} Mbps
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-gray-200/60 dark:border-gray-700">
                   <span className="text-gray-500">Monthly Cap:</span>
-                  <span className="font-bold text-[#F26B3A]">
+                  <span className="font-semibold text-[#F26B3A]">
                     {p.dataCapGB ? `${p.dataCapGB} GB` : 'Unlimited'}
                   </span>
                 </div>
@@ -155,7 +169,7 @@ export const PlansPage: React.FC = () => {
 
             <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-400">
               <span>Subscribers</span>
-              <span className="font-bold text-gray-700 dark:text-gray-300">
+              <span className="font-bold text-gray-700 dark:text-gray-300 tabular-nums">
                 {p.subscribersCount || 0} active
               </span>
             </div>
@@ -182,7 +196,7 @@ export const PlansPage: React.FC = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Fiber Ultra 500M"
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+              className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
             />
           </div>
 
@@ -196,7 +210,7 @@ export const PlansPage: React.FC = () => {
                 required
                 value={speedMbps}
                 onChange={(e) => setSpeedMbps(Number(e.target.value))}
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
             <div>
@@ -208,7 +222,7 @@ export const PlansPage: React.FC = () => {
                 required
                 value={uploadMbps}
                 onChange={(e) => setUploadMbps(Number(e.target.value))}
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
           </div>
@@ -224,22 +238,21 @@ export const PlansPage: React.FC = () => {
                 required
                 value={monthlyPrice}
                 onChange={(e) => setMonthlyPrice(Number(e.target.value))}
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+                className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
             <div>
               <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
                 Connection Type
               </label>
-              <select
+              <Combobox
+                options={connectionTypeOptions}
                 value={type}
-                onChange={(e) => setType(e.target.value as ConnectionType)}
-                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
-              >
-                <option value="Fiber">Fiber Optic</option>
-                <option value="Wireless">Fixed Wireless</option>
-                <option value="DSL">DSL Copper</option>
-              </select>
+                onChange={(val) => setType(val as ConnectionType)}
+                searchable={false}
+                clearable={false}
+                size="lg"
+              />
             </div>
           </div>
 
@@ -252,7 +265,7 @@ export const PlansPage: React.FC = () => {
               value={dataCapGB}
               onChange={(e) => setDataCapGB(e.target.value === '' ? '' : Number(e.target.value))}
               placeholder="Leave blank for Unlimited"
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+              className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
             />
           </div>
 
@@ -265,15 +278,21 @@ export const PlansPage: React.FC = () => {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Highlights e.g. Ideal for multi-gigabit smart homes..."
-              className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]"
+              className="w-full p-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
             />
           </div>
 
           <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
-            <Button size="sm" variant="outline" type="button" onClick={() => setIsModalOpen(false)}>
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="h-9 px-3.5"
+            >
               Cancel
             </Button>
-            <Button size="sm" variant="primary" type="submit">
+            <Button size="sm" variant="primary" type="submit" className="h-9 px-4 font-semibold">
               <Check className="w-3.5 h-3.5" />
               <span>{editingPlanId ? 'Save Changes' : 'Create Plan'}</span>
             </Button>

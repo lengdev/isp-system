@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
-  TrendingUp,
+  DollarSign,
   Wifi,
   HardDrive,
   SlidersHorizontal,
@@ -14,7 +15,7 @@ import {
 import { useStore } from '../../store/useStore';
 import { StatCard } from '../../components/ui/StatCard';
 import { Button } from '../../components/ui/Button';
-import { Dropdown } from '../../components/ui/Dropdown';
+import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { FilterToolbar } from './FilterToolbar';
 import { CustomerTable } from './CustomerTable';
 import { CustomerGrid } from './CustomerGrid';
@@ -32,8 +33,11 @@ import { CreateTicketModal } from './CreateTicketModal';
 import { downloadCSV, formatCurrency } from '../../lib/utils';
 
 export const CustomersPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const customers = useStore((s) => s.customers);
   const filters = useStore((s) => s.filters);
+  const setFilters = useStore((s) => s.setFilters);
   const sort = useStore((s) => s.sort);
   const pagination = useStore((s) => s.pagination);
   const setPage = useStore((s) => s.setPage);
@@ -44,34 +48,89 @@ export const CustomersPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
   const currency = useStore((s) => s.currency);
 
-  // Live recalculate stats from customer data
+  // Sync URL search params to Store filters on initial mount
+  useEffect(() => {
+    const urlStatus = searchParams.get('status');
+    const urlPlan = searchParams.get('plan');
+    const urlCity = searchParams.get('city');
+    const urlType = searchParams.get('type');
+    const urlQ = searchParams.get('q');
+
+    const updates: Partial<typeof filters> = {};
+    if (urlStatus) updates.status = urlStatus.split(',').filter(Boolean);
+    if (urlPlan) updates.plan = urlPlan.split(',').filter(Boolean);
+    if (urlCity) updates.city = urlCity.split(',').filter(Boolean);
+    if (urlType) updates.connectionType = urlType.split(',').filter(Boolean);
+    if (urlQ) updates.searchQuery = urlQ;
+
+    if (Object.keys(updates).length > 0) {
+      setFilters(updates);
+    }
+  }, []);
+
+  // Sync Store filters to URL search params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.status.length > 0) params.set('status', filters.status.join(','));
+    if (filters.plan.length > 0) params.set('plan', filters.plan.join(','));
+    if (filters.city.length > 0) params.set('city', filters.city.join(','));
+    if (filters.connectionType.length > 0) params.set('type', filters.connectionType.join(','));
+    if (filters.searchQuery.trim()) params.set('q', filters.searchQuery.trim());
+
+    setSearchParams(params, { replace: true });
+  }, [filters, setSearchParams]);
+
+  // Live recalculate stats
   const totalCustomers = customers.length;
-  const totalMRR = customers.reduce((sum, c) => sum + (c.status !== 'Disconnected' ? c.monthlyPrice : 0), 0);
+  const totalMRR = customers.reduce(
+    (sum, c) => sum + (c.status !== 'Disconnected' ? c.monthlyPrice : 0),
+    0
+  );
   const activeCount = customers.filter((c) => c.status === 'Active').length;
   const avgUsage = Math.round(
     customers.reduce((sum, c) => sum + c.dataUsageGB, 0) / (customers.length || 1)
   );
 
-  // Filter pipeline
+  // Multi-select Filter logic: OR within field, AND across fields
   const filteredCustomers = useMemo(() => {
     return customers.filter((c) => {
-      // Status pill filter
-      if (filters.status !== 'All' && c.status !== filters.status) return false;
+      // Status filter (OR within field)
+      if (filters.status.length > 0 && !filters.status.includes(c.status)) {
+        return false;
+      }
 
-      // Plan filter
-      if (filters.plan !== 'All' && c.planName !== filters.plan) return false;
+      // Plan filter (OR within field)
+      if (filters.plan.length > 0 && !filters.plan.includes(c.planName)) {
+        return false;
+      }
 
-      // City filter
-      if (filters.city !== 'All' && c.city !== filters.city) return false;
+      // City filter (OR within field)
+      if (filters.city.length > 0 && !filters.city.includes(c.city)) {
+        return false;
+      }
 
-      // Connection type filter
-      if (filters.connectionType !== 'All' && c.connectionType !== filters.connectionType) return false;
+      // Connection type filter (OR within field)
+      if (
+        filters.connectionType.length > 0 &&
+        !filters.connectionType.includes(c.connectionType)
+      ) {
+        return false;
+      }
+
+      // Technician filter (OR within field)
+      if (
+        filters.technician.length > 0 &&
+        c.assignedTechnician &&
+        !filters.technician.includes(c.assignedTechnician)
+      ) {
+        return false;
+      }
 
       // Balance filter
       if (filters.minBalance !== undefined && c.balanceDue < filters.minBalance) return false;
       if (filters.maxBalance !== undefined && c.balanceDue > filters.maxBalance) return false;
 
-      // Search query (name, email, IP, MAC, phone, code)
+      // Search query across name, email, IP, MAC, phone, code
       if (filters.searchQuery.trim()) {
         const q = filters.searchQuery.toLowerCase();
         const matchesName = c.fullName.toLowerCase().includes(q);
@@ -95,19 +154,19 @@ export const CustomersPage: React.FC = () => {
     const { column, direction } = sort;
 
     list.sort((a, b) => {
-      let aVal = a[column as keyof typeof a];
-      let bVal = b[column as keyof typeof b];
+      const aVal = a[column as keyof typeof a];
+      const bVal = b[column as keyof typeof b];
 
       if (typeof aVal === 'string') {
         return direction === 'asc'
-          ? (aVal as string).localeCompare(bVal as string)
-          : (bVal as string).localeCompare(aVal as string);
+          ? aVal.localeCompare(bVal as string)
+          : (bVal as string).localeCompare(aVal);
       }
 
       if (typeof aVal === 'number') {
         return direction === 'asc'
-          ? (aVal as number) - (bVal as number)
-          : (bVal as number) - (aVal as number);
+          ? aVal - (bVal as number)
+          : (bVal as number) - aVal;
       }
 
       return 0;
@@ -191,129 +250,122 @@ export const CustomersPage: React.FC = () => {
     });
   };
 
+  const exportOptions: ComboboxOption[] = [
+    { value: 'csv', label: 'Export as CSV (Download)', icon: <Download className="w-3.5 h-3.5 text-[#F26B3A]" /> },
+    { value: 'xlsx', label: 'Export Excel (.xlsx)', icon: <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> },
+    { value: 'pdf', label: 'Export PDF Summary', icon: <FileText className="w-3.5 h-3.5 text-rose-500" /> },
+  ];
+
+  const handleExportSelect = (val: string) => {
+    if (val === 'csv') handleExportCSV();
+    if (val === 'xlsx') handleExportExcel();
+    if (val === 'pdf') handleExportPDF();
+  };
+
   return (
-    <div className="space-y-5 pb-16">
-      {/* Page Header (Matching screenshot: Product / Title, Subtitle, Customize View, Export, + Add New Customer) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="w-full pb-16">
+      {/* 1. Page Header (Strict vertical rhythm: 24px mb-6) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+          <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
             Customers
           </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Manage your subscribers, track bandwidth usage, and monitor connection health
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           {/* Customize View */}
           <Button
             variant="secondary"
             size="md"
             onClick={() => openModal('customizeView')}
-            className="text-xs"
+            className="text-xs h-9 px-3.5"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <SlidersHorizontal className="w-4 h-4" />
             <span>Customize View</span>
           </Button>
 
-          {/* Export Dropdown */}
-          <Dropdown
-            align="right"
-            trigger={
-              <Button variant="secondary" size="md" className="text-xs">
-                <Download className="w-3.5 h-3.5" />
-                <span>Export</span>
-              </Button>
-            }
-            items={[
-              {
-                label: 'Export as CSV (Download)',
-                icon: <Download className="w-3.5 h-3.5 text-[#F26B3A]" />,
-                onClick: handleExportCSV,
-              },
-              {
-                label: 'Export Excel (.xlsx)',
-                icon: <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />,
-                onClick: handleExportExcel,
-              },
-              {
-                label: 'Export PDF Summary',
-                icon: <FileText className="w-3.5 h-3.5 text-rose-500" />,
-                onClick: handleExportPDF,
-              },
-            ]}
-          />
+          {/* Export Combobox Dropdown */}
+          <div className="w-32">
+            <Combobox
+              options={exportOptions}
+              value=""
+              onChange={handleExportSelect}
+              placeholder="Export"
+              searchable={false}
+              clearable={false}
+              size="md"
+            />
+          </div>
 
-          {/* + Add New Customer */}
+          {/* Fixed "+ Add New Customer" (One plus icon and text without double plus) */}
           <Button
             variant="primary"
             size="md"
             onClick={() => openModal('addEditCustomer')}
-            className="text-xs font-bold"
+            className="text-xs font-semibold h-9 px-4 gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Add New Customer</span>
+            <span>Add New Customer</span>
           </Button>
         </div>
       </div>
 
-      {/* 4 Stat Cards (Collapsible with Animated Height) */}
+      {/* 2. 4 Stat Cards (Items-stretch, strict gap-5, same height, 24px mb-6) */}
       <AnimatePresence>
         {showStatistics && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden"
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden mb-6"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-              {/* Card 1: Total Customers */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
               <StatCard
                 label="Total Subscribers"
                 value={totalCustomers}
-                changeValue="+12 subs"
+                changeValue="12 subs"
                 isPositive={true}
                 changeLabel="vs last month"
-                icon={<Users className="w-6 h-6 stroke-[2.2]" />}
+                icon={<Users className="w-5 h-5 stroke-[2]" />}
                 iconBgColor="bg-[#FFF1EA] dark:bg-orange-950/40"
                 iconTextColor="text-[#F26B3A]"
               />
 
-              {/* Card 2: Monthly Recurring Revenue */}
               <StatCard
                 label="Monthly Revenue (MRR)"
                 value={Math.round(totalMRR)}
                 prefix={currency}
-                changeValue="↑ 9.4%"
+                changeValue="9.4%"
                 isPositive={true}
                 changeLabel="vs last month"
-                icon={<TrendingUp className="w-6 h-6 stroke-[2.2]" />}
+                icon={<DollarSign className="w-5 h-5 stroke-[2]" />}
                 iconBgColor="bg-[#EEF4FF] dark:bg-blue-950/40"
                 iconTextColor="text-[#3B82F6]"
               />
 
-              {/* Card 3: Active Connections */}
               <StatCard
                 label="Active Connections"
                 value={activeCount}
-                changeValue="↑ 95.2%"
+                changeValue="95.2%"
                 isPositive={true}
                 changeLabel="vs last month"
-                icon={<Wifi className="w-6 h-6 stroke-[2.2]" />}
+                icon={<Wifi className="w-5 h-5 stroke-[2]" />}
                 iconBgColor="bg-[#F5EEFF] dark:bg-purple-950/40"
                 iconTextColor="text-[#8B5CF6]"
               />
 
-              {/* Card 4: Avg. Bandwidth Usage */}
               <StatCard
                 label="Avg. Monthly Usage"
                 value={avgUsage}
                 suffix=" GB"
-                changeValue="↑ 6.1%"
+                changeValue="6.1%"
                 isPositive={true}
                 changeLabel="vs last month"
-                icon={<HardDrive className="w-6 h-6 stroke-[2.2]" />}
+                icon={<HardDrive className="w-5 h-5 stroke-[2]" />}
                 iconBgColor="bg-[#FFF8E6] dark:bg-amber-950/40"
                 iconTextColor="text-[#D97706]"
               />
@@ -322,10 +374,12 @@ export const CustomersPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Filter Pills with Counts & Toolbar Controls */}
-      <FilterToolbar />
+      {/* 3. Filter Tabs Row (Strict vertical rhythm: 16px mb-4) */}
+      <div className="mb-4">
+        <FilterToolbar />
+      </div>
 
-      {/* Main Table or Card Grid View */}
+      {/* 4. Main Data Table or Card Grid View */}
       {viewMode === 'cards' ? (
         <CustomerGrid customers={paginatedCustomers} />
       ) : (
@@ -335,15 +389,17 @@ export const CustomersPage: React.FC = () => {
         />
       )}
 
-      {/* Numbered Pagination with solid orange active pill */}
-      <Pagination
-        currentPage={pagination.page}
-        totalPages={totalPages}
-        totalItems={sortedCustomers.length}
-        pageSize={pagination.pageSize}
-        onPageChange={(p) => setPage(p)}
-        onPageSizeChange={(size) => setPageSize(size)}
-      />
+      {/* 5. Numbered Pagination with Combobox Page-Size Selector */}
+      <div className="mt-4">
+        <Pagination
+          currentPage={pagination.page}
+          totalPages={totalPages}
+          totalItems={sortedCustomers.length}
+          pageSize={pagination.pageSize}
+          onPageChange={(p) => setPage(p)}
+          onPageSizeChange={(size) => setPageSize(size)}
+        />
+      </div>
 
       {/* Floating Bulk Action Bar */}
       <BulkActionBar />
@@ -351,7 +407,7 @@ export const CustomersPage: React.FC = () => {
       {/* Right Detail Slide Drawer */}
       <CustomerDetailDrawer />
 
-      {/* All Modal Dialogs */}
+      {/* Reusable Modals */}
       <AddEditCustomerModal />
       <CustomizeViewModal />
       <DeleteCustomerModal />

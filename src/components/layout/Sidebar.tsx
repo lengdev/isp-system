@@ -58,13 +58,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#FAF7F5] dark:bg-[#141416] border-r border-gray-200/80 dark:border-gray-800/80 px-4 py-5 select-none w-60">
       {/* Brand Header */}
-      <div className="flex items-center justify-between px-2 mb-5">
+      <div className="flex items-center justify-between px-2 mb-4 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#F26B3A] text-white shadow-md shadow-[#F26B3A]/25">
-            <Activity className="w-6 h-6 stroke-[2.2]" />
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#F26B3A] text-white shadow-xs">
+            <Activity className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
-            <h1 className="text-base font-extrabold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-1">
+            <h1 className="text-base font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
               NetPulse
             </h1>
             <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
@@ -75,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
 
         {onMobileClose && (
           <button
+            type="button"
             onClick={onMobileClose}
             className="md:hidden p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
@@ -85,8 +86,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
 
       {/* Search Menu Trigger Button */}
       <button
+        type="button"
         onClick={() => setCommandPaletteOpen(true)}
-        className="flex items-center justify-between w-full px-3 py-2 mb-4 text-xs text-gray-400 bg-white dark:bg-[#1E1E22] border border-gray-200/80 dark:border-gray-800 rounded-xl shadow-2xs hover:border-[#F26B3A]/40 transition-colors group"
+        className="flex items-center justify-between w-full px-3 py-2 mb-3 text-xs text-gray-400 bg-white dark:bg-[#1E1E22] border border-gray-200/80 dark:border-gray-800 rounded-xl shadow-xs hover:border-[#F26B3A]/40 transition-colors group shrink-0"
       >
         <div className="flex items-center gap-2">
           <Search className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#F26B3A] transition-colors" />
@@ -97,8 +99,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
         </kbd>
       </button>
 
-      {/* Nav List */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1 -mr-1">
+      {/* Navigation List (thin auto-hiding scrollbar) */}
+      <div className="flex-1 overflow-y-auto space-y-4 pr-1 -mr-1 scrollbar-none">
         {/* Main Section */}
         <div className="space-y-1">
           {mainNav.map((item) => {
@@ -113,9 +115,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                 to={item.path}
                 onClick={onMobileClose}
                 className={cn(
-                  'relative flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 group',
+                  'relative flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 group',
                   isActive
-                    ? 'text-[#F26B3A] font-bold bg-[#FFF1EA] dark:bg-[#F26B3A]/15 shadow-2xs'
+                    ? 'text-[#F26B3A] font-bold bg-[#FFF1EA] dark:bg-[#F26B3A]/15'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/40'
                 )}
               >
@@ -129,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                 <div className="relative z-10 flex items-center gap-3">
                   <Icon
                     className={cn(
-                      'w-4 h-4 transition-colors',
+                      'w-[18px] h-[18px] transition-colors',
                       isActive ? 'text-[#F26B3A]' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'
                     )}
                   />
@@ -169,7 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                   to={item.path}
                   onClick={onMobileClose}
                   className={cn(
-                    'relative flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 group',
+                    'relative flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 group',
                     isActive
                       ? 'text-[#F26B3A] font-bold bg-[#FFF1EA] dark:bg-[#F26B3A]/15'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/40'
@@ -185,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                   <div className="relative z-10 flex items-center gap-3">
                     <Icon
                       className={cn(
-                        'w-4 h-4 transition-colors',
+                        'w-[18px] h-[18px] transition-colors',
                         isActive ? 'text-[#F26B3A]' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'
                       )}
                     />
@@ -198,48 +200,52 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
         </div>
       </div>
 
-      {/* Upgrade to Pro Card */}
-      <div className="mt-3 mb-3 p-3.5 rounded-2xl bg-gradient-to-br from-[#FFF5F0] via-[#FFEADB] to-[#FEDBC9] dark:from-[#2A1810] dark:via-[#25140D] dark:to-[#1E110A] border border-[#F26B3A]/25 shadow-soft relative overflow-hidden">
-        <div className="relative z-10">
-          <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100">Upgrade to Pro</h4>
-          <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1 leading-snug">
-            Get advanced traffic graphs and multi-gig support.
-          </p>
-          <button
-            onClick={() => {
-              addToast({
-                type: 'success',
-                title: 'Pro Feature Requested',
-                message: 'Your enterprise plan inquiry has been submitted.',
-              });
-            }}
-            className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F26B3A] text-white text-[11px] font-bold hover:bg-[#E05220] transition-colors shadow-xs"
-          >
-            <span>Upgrade Now</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-
-      {/* Help center */}
-      <NavLink
-        to="/settings"
-        onClick={onMobileClose}
-        className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/40 rounded-xl transition-colors mb-2"
-      >
-        <HelpCircle className="w-4 h-4 text-gray-400" />
-        <span>Help center</span>
-      </NavLink>
-
-      {/* User block */}
-      <div className="pt-2 border-t border-gray-200/80 dark:border-gray-800/80 flex items-center gap-3 px-1">
-        <Avatar name="Hariharan B" size="md" online={true} />
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">
-            Hariharan B
+      {/* Pinned Bottom Area */}
+      <div className="mt-auto shrink-0 space-y-3 pt-3">
+        {/* Upgrade to Pro Card */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#FFF5F0] via-[#FFEADB] to-[#FEDBC9] dark:from-[#2A1810] dark:via-[#25140D] dark:to-[#1E110A] border border-[#F26B3A]/25 shadow-xs relative overflow-hidden">
+          <div className="relative z-10">
+            <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100">Upgrade to Pro</h4>
+            <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-0.5 leading-snug">
+              Multi-gigabit capacity & automated traffic shaping.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                addToast({
+                  type: 'success',
+                  title: 'Pro Upgrade Requested',
+                  message: 'An enterprise sales specialist has been notified.',
+                });
+              }}
+              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F26B3A] text-white text-[11px] font-bold hover:bg-[#E05220] transition-colors shadow-xs"
+            >
+              <span>Upgrade Now</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-          <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
-            Admin
+        </div>
+
+        {/* Help Center */}
+        <NavLink
+          to="/settings"
+          onClick={onMobileClose}
+          className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/40 rounded-xl transition-colors"
+        >
+          <HelpCircle className="w-4 h-4 text-gray-400" />
+          <span>Help center</span>
+        </NavLink>
+
+        {/* User Profile Block */}
+        <div className="pt-2.5 border-t border-gray-200/80 dark:border-gray-800/80 flex items-center gap-3 px-1">
+          <Avatar name="Hariharan B" size="md" online={true} />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">
+              Hariharan B
+            </div>
+            <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
+              Network Admin
+            </div>
           </div>
         </div>
       </div>
@@ -248,8 +254,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex shrink-0 h-screen sticky top-0 z-30">
+      {/* Desktop Sidebar (Sticky, full height, no outer scroll) */}
+      <aside className="hidden md:flex shrink-0 h-screen sticky top-0 z-30 overflow-hidden">
         {sidebarContent}
       </aside>
 
