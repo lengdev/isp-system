@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../../store/useStore';
 import { CustomerStatus } from '../../types';
@@ -14,6 +14,28 @@ export const StatusTabs: React.FC = () => {
   const toggleStatistics = useStore((s) => s.toggleStatistics);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const hasOverflow = el.scrollWidth > el.clientWidth + 1;
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(hasOverflow && el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', checkScroll, { passive: true });
+    window.addEventListener('resize', checkScroll);
+    return () => {
+      el.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('resize', checkScroll);
+    };
+  }, [checkScroll]);
 
   // Dynamic counts for each status
   const counts = useMemo(
@@ -37,8 +59,33 @@ export const StatusTabs: React.FC = () => {
     { label: 'Disconnected', value: 'Disconnected', count: counts.Disconnected },
   ];
 
-  const currentStatus =
-    filters.status.length === 1 ? (filters.status[0] as CustomerStatus) : 'All';
+  const maskStyle = useMemo(() => {
+    if (canScrollLeft && canScrollRight) {
+      return {
+        WebkitMaskImage:
+          'linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent 100%)',
+        maskImage:
+          'linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent 100%)',
+      };
+    }
+    if (canScrollRight) {
+      return {
+        WebkitMaskImage:
+          'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+        maskImage:
+          'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+      };
+    }
+    if (canScrollLeft) {
+      return {
+        WebkitMaskImage:
+          'linear-gradient(to left, black calc(100% - 24px), transparent 100%)',
+        maskImage:
+          'linear-gradient(to left, black calc(100% - 24px), transparent 100%)',
+      };
+    }
+    return undefined;
+  }, [canScrollLeft, canScrollRight]);
 
   const handlePillClick = (val: 'All' | CustomerStatus) => {
     if (val === 'All') {
@@ -50,16 +97,11 @@ export const StatusTabs: React.FC = () => {
 
   return (
     <div className="flex items-center justify-between gap-4 w-full select-none">
-      {/* Pills container with edge fade */}
+      {/* Pills container with responsive edge fade */}
       <div
         ref={scrollRef}
-        className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 min-w-0 flex-1"
-        style={{
-          WebkitMaskImage:
-            'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
-          maskImage:
-            'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
-        }}
+        className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 pr-4 min-w-0 flex-1"
+        style={maskStyle}
       >
         {statusPills.map((pill) => {
           const isSelected =
@@ -75,7 +117,7 @@ export const StatusTabs: React.FC = () => {
               className={cn(
                 'relative h-7 px-3 rounded-full text-[12px] font-medium transition-colors shrink-0 flex items-center gap-1.5',
                 isSelected
-                  ? 'text-[var(--selected-text)] font-semibold'
+                  ? 'text-[var(--text)] font-semibold'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)]'
               )}
             >
