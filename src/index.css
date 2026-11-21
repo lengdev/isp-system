@@ -243,6 +243,11 @@
   transform: none !important;
 }
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 /* Shared .t-base transition class on all interactive elements */
 .t-base {
   transition-property: background-color, border-color, color, box-shadow, opacity, transform;
