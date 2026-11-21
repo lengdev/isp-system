@@ -161,7 +161,7 @@ export const CreateTicketModal: React.FC = () => {
             options={customerOptions}
             value={customerId}
             onChange={(val) => setCustomerId(val as string)}
-            placeholder="Search by name, account code, or address..."
+            placeholder="Search subscriber name or code..."
             size="md"
           />
         </Field>
@@ -172,7 +172,7 @@ export const CreateTicketModal: React.FC = () => {
             required
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Red optical LOS light on ONT, intermittent evening packet loss"
+            placeholder="e.g. Red LOS light on ONT, intermittent packet loss"
           />
         </Field>
 
@@ -232,7 +232,7 @@ export const CreateTicketModal: React.FC = () => {
             onChange={(e) => setDescription(e.target.value)}
             maxLength={500}
             rows={3}
-            placeholder="Document optical signal reading, troubleshooting already performed, or schedule preferences..."
+            placeholder="Document signal reading, steps taken, or dispatch notes..."
           />
         </Field>
       </form>

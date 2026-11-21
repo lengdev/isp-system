@@ -48,6 +48,7 @@ const AnimatedRouteWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
 };
 
 export const AppContent: React.FC = () => {
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const darkMode = useStore((s) => s.darkMode);
   const themeMode = useStore((s) => s.themeMode);
@@ -90,7 +91,7 @@ export const AppContent: React.FC = () => {
 
         <main className="flex-1 max-w-[1480px] mx-auto px-4 sm:px-6 w-full pt-5 pb-10">
           <AnimatePresence mode="wait">
-            <Routes>
+            <Routes location={location} key={location.pathname}>
               <Route path="/" element={<Navigate to="/customers" replace />} />
               <Route
                 path="/customers"

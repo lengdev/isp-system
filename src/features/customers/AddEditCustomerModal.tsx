@@ -7,7 +7,7 @@ import { Check, ArrowRight, ArrowLeft, User, Wifi, FileCheck, Loader2 } from 'lu
 import { useStore } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
-import { Field, Input, Textarea } from '../../components/ui/Field';
+import { Field, Input, Textarea, FormSectionTitle } from '../../components/ui/Field';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { ConnectionType, CustomerStatus } from '../../types';
 
@@ -351,41 +351,62 @@ export const AddEditCustomerModal: React.FC = () => {
         </div>
       }
     >
-      <div className="space-y-6">
-        {/* Step Progress Bar */}
-        <div className="flex items-center justify-between relative px-4 select-none">
-          <div className="absolute top-1/2 left-10 right-10 -translate-y-1/2 h-0.5 bg-gray-200 dark:bg-gray-800 -z-0" />
-          {[
-            { num: 1, label: 'Personal Details', icon: User },
-            { num: 2, label: 'Plan & Provisioning', icon: Wifi },
-            { num: 3, label: 'Review & Confirm', icon: FileCheck },
-          ].map((s) => {
-            const isCompleted = step > s.num;
-            const isCurrent = step === s.num;
-            const Icon = s.icon;
-            return (
-              <div key={s.num} className="relative z-10 flex flex-col items-center gap-1.5">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-200 ${
-                    isCompleted
-                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-50 dark:ring-emerald-950/40'
-                      : isCurrent
-                      ? 'bg-[#F26B3A] text-white ring-4 ring-[#FFF1EA] dark:ring-orange-950/40 shadow-xs'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
-                  }`}
-                >
-                  {isCompleted ? <Check className="w-4 h-4 stroke-[3]" /> : <Icon className="w-4 h-4" />}
+      <div>
+        {/* Step Progress Bar (Centered, 32px circles, animated 2px connector, mb-6) */}
+        <div className="relative mb-6 select-none max-w-xl mx-auto px-4 sm:px-6">
+          {/* Connector Line Background */}
+          <div className="absolute top-4 left-8 right-8 sm:left-12 sm:right-12 -translate-y-1/2 h-[2px] bg-gray-200 dark:bg-gray-800 -z-0" />
+          {/* Connector Line Animated Orange Progress Fill */}
+          <motion.div
+            className="absolute top-4 left-8 sm:left-12 -translate-y-1/2 h-[2px] bg-[#F26B3A] -z-0"
+            initial={false}
+            animate={{
+              width:
+                step === 1
+                  ? '0%'
+                  : step === 2
+                  ? '50%'
+                  : 'calc(100% - 64px)',
+            }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+          />
+
+          <div className="flex items-center justify-between relative z-10">
+            {[
+              { num: 1, label: 'Personal Details' },
+              { num: 2, label: 'Plan & Provisioning' },
+              { num: 3, label: 'Review & Confirm' },
+            ].map((s) => {
+              const isCompleted = step > s.num;
+              const isCurrent = step === s.num;
+              return (
+                <div key={s.num} className="flex flex-col items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] transition-all duration-200 shrink-0 ${
+                      isCompleted
+                        ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                        : isCurrent
+                        ? 'bg-[#F26B3A] text-white ring-4 ring-[#F26B3A]/20 shadow-xs font-semibold'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 font-medium'
+                    }`}
+                  >
+                    {isCompleted ? <Check className="w-4 h-4 stroke-[2.5]" /> : s.num}
+                  </div>
+                  <span
+                    className={`mt-2 text-center text-[13px] leading-tight select-none ${
+                      isCurrent
+                        ? 'text-[#F26B3A] font-semibold'
+                        : isCompleted
+                        ? 'text-gray-700 dark:text-gray-300 font-medium'
+                        : 'text-gray-400 dark:text-gray-500 font-normal'
+                    }`}
+                  >
+                    {s.label}
+                  </span>
                 </div>
-                <span
-                  className={`text-xs font-medium ${
-                    isCurrent ? 'text-[#F26B3A] font-semibold' : isCompleted ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400'
-                  }`}
-                >
-                  {s.label}
-                </span>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         {/* Multi-step Form Content */}
@@ -402,7 +423,8 @@ export const AddEditCustomerModal: React.FC = () => {
                 exit="exit"
                 className="space-y-4"
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Full name & Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="Full name" required error={errors.fullName?.message}>
                     <Input
                       {...register('fullName')}
@@ -415,17 +437,20 @@ export const AddEditCustomerModal: React.FC = () => {
                     <Input
                       {...register('email')}
                       type="email"
-                      placeholder="rachel@example.com"
+                      placeholder="name@example.com"
                       hasError={Boolean(errors.email)}
                     />
                   </Field>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Section: Contact */}
+                <FormSectionTitle>Contact</FormSectionTitle>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="Phone number" required error={errors.phone?.message}>
                     <Input
                       {...register('phone')}
-                      placeholder="+1 (512) 555-0199"
+                      placeholder="+1 512 555 0199"
                       hasError={Boolean(errors.phone)}
                     />
                   </Field>
@@ -440,13 +465,16 @@ export const AddEditCustomerModal: React.FC = () => {
                           value={field.value}
                           onChange={field.onChange}
                           creatable={true}
-                          placeholder="Select or type city..."
+                          placeholder="Select city..."
                           size="md"
                         />
                       )}
                     />
                   </Field>
                 </div>
+
+                {/* Section: Service Address */}
+                <FormSectionTitle>Service Address</FormSectionTitle>
 
                 <Field label="Service street address" required error={errors.address?.message}>
                   <Input
@@ -486,7 +514,7 @@ export const AddEditCustomerModal: React.FC = () => {
                   />
                 </Field>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="Connection medium">
                     <Controller
                       name="connectionType"
@@ -522,12 +550,15 @@ export const AddEditCustomerModal: React.FC = () => {
                   </Field>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Section: Network Configuration */}
+                <FormSectionTitle>Network Configuration</FormSectionTitle>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="IP address assignment" required error={errors.ipAddress?.message}>
                     <Input
                       {...register('ipAddress')}
                       placeholder="192.168.10.55"
-                      className="font-mono text-xs"
+                      className="font-mono"
                       hasError={Boolean(errors.ipAddress)}
                     />
                   </Field>
@@ -536,7 +567,7 @@ export const AddEditCustomerModal: React.FC = () => {
                     <Input
                       {...register('macAddress')}
                       placeholder="F4:5C:89:12:44:8B"
-                      className="font-mono text-xs uppercase"
+                      className="font-mono uppercase"
                       hasError={Boolean(errors.macAddress)}
                     />
                   </Field>
@@ -602,7 +633,10 @@ export const AddEditCustomerModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Section: Operational Assignment */}
+                <FormSectionTitle>Operational Assignment</FormSectionTitle>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="Assigned technician">
                     <Controller
                       name="assignedTechnician"

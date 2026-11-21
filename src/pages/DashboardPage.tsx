@@ -62,38 +62,38 @@ export const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 pb-12 select-none w-full">
+    <div className="space-y-4 pb-12 select-none w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+          <h2 className="text-[24px] leading-tight font-semibold text-[var(--text)] tracking-tight">
             Network Operations Dashboard
           </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
             Real-time subscriber metrics, bandwidth saturation, and field service status
           </p>
         </div>
         <Button
           variant="primary"
-          size="md"
+          size="sm"
           onClick={() => navigate('/customers')}
-          className="text-xs font-semibold h-9 px-4"
+          className="text-[12px] font-semibold h-8 px-3"
         >
           <span>View All Subscribers</span>
         </Button>
       </div>
 
-      {/* 4 Stat Cards with items-stretch and strict gap-5 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
+      {/* 4 Stat Cards with items-stretch and strict gap-4 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
         <StatCard
           label="Total Subscribers"
           value={totalSubs}
           changeValue="14 subs"
           isPositive={true}
           changeLabel="vs last month"
-          icon={<Users className="w-5 h-5 stroke-[2]" />}
-          iconBgColor="bg-[#FFF1EA] dark:bg-orange-950/40"
-          iconTextColor="text-[#F26B3A]"
+          icon={<Users className="w-4 h-4 stroke-[2]" />}
+          iconBgColor="bg-[var(--brand-soft)]"
+          iconTextColor="text-[var(--brand)]"
         />
 
         <StatCard
@@ -103,7 +103,7 @@ export const DashboardPage: React.FC = () => {
           changeValue="8.4%"
           isPositive={true}
           changeLabel="vs last month"
-          icon={<DollarSign className="w-5 h-5 stroke-[2]" />}
+          icon={<DollarSign className="w-4 h-4 stroke-[2]" />}
           iconBgColor="bg-[#EEF4FF] dark:bg-blue-950/40"
           iconTextColor="text-[#3B82F6]"
         />
@@ -114,7 +114,7 @@ export const DashboardPage: React.FC = () => {
           changeValue="95.8%"
           isPositive={true}
           changeLabel="active ratio"
-          icon={<Wifi className="w-5 h-5 stroke-[2]" />}
+          icon={<Wifi className="w-4 h-4 stroke-[2]" />}
           iconBgColor="bg-[#F5EEFF] dark:bg-purple-950/40"
           iconTextColor="text-[#8B5CF6]"
         />
@@ -126,29 +126,29 @@ export const DashboardPage: React.FC = () => {
           changeValue="4.2%"
           isPositive={false}
           changeLabel="needs follow-up"
-          icon={<AlertTriangle className="w-5 h-5 stroke-[2]" />}
+          icon={<AlertTriangle className="w-4 h-4 stroke-[2]" />}
           iconBgColor="bg-[#FDEEEE] dark:bg-red-950/40"
           iconTextColor="text-[#DC2626]"
         />
       </div>
 
       {/* Main Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Bandwidth Saturation Chart (2 Cols) */}
-        <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
+        <div className="lg:col-span-2 p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+              <h3 className="text-sm font-bold text-[var(--text)]">
                 Core Backbone Traffic (Gbps)
               </h3>
-              <p className="text-xs text-gray-400">Aggregated transit utilization across OLT clusters</p>
+              <p className="text-xs text-[var(--text-muted)]">Aggregated transit utilization across OLT clusters</p>
             </div>
             <div className="flex items-center gap-3 text-xs">
-              <span className="flex items-center gap-1.5 text-[#F26B3A] font-semibold">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#F26B3A]" /> Download
+              <span className="flex items-center gap-1.5 text-[var(--brand)] font-semibold">
+                <span className="w-2.5 h-2.5 rounded-full bg-[var(--brand)]" /> Download
               </span>
-              <span className="flex items-center gap-1.5 text-blue-500 font-semibold">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Upload
+              <span className="flex items-center gap-1.5 text-[#2F5BD9] dark:text-[#60A5FA] font-semibold">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#2F5BD9] dark:bg-[#60A5FA]" /> Upload
               </span>
             </div>
           </div>
@@ -158,38 +158,38 @@ export const DashboardPage: React.FC = () => {
               <AreaChart data={trafficData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="downGbps" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F26B3A" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#F26B3A" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#EA6A3C" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#EA6A3C" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="upGbps" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#2F5BD9" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#2F5BD9" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} unit="G" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" strokeWidth={1} />
+                <XAxis dataKey="time" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} unit="G" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1E1E22',
-                    borderColor: '#333',
+                    backgroundColor: 'var(--surface-raised)',
+                    borderColor: 'var(--border)',
                     borderRadius: '12px',
-                    color: '#fff',
+                    color: 'var(--text)',
                     fontSize: '12px',
                   }}
                 />
                 <Area
                   type="monotone"
                   dataKey="downloadGbps"
-                  stroke="#F26B3A"
-                  strokeWidth={2.5}
+                  stroke="#EA6A3C"
+                  strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#downGbps)"
                 />
                 <Area
                   type="monotone"
                   dataKey="uploadGbps"
-                  stroke="#3B82F6"
+                  stroke="#2F5BD9"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#upGbps)"
@@ -200,31 +200,31 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Revenue Growth Bar Chart */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
+        <div className="p-5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-4">
           <div>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+            <h3 className="text-sm font-bold text-[var(--text)]">
               MRR Growth Trend
             </h3>
-            <p className="text-xs text-gray-400">Monthly Recurring Revenue trajectory</p>
+            <p className="text-xs text-[var(--text-muted)]">Monthly Recurring Revenue trajectory</p>
           </div>
 
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" strokeWidth={1} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1E1E22',
-                    borderColor: '#333',
+                    backgroundColor: 'var(--surface-raised)',
+                    borderColor: 'var(--border)',
                     borderRadius: '12px',
-                    color: '#fff',
+                    color: 'var(--text)',
                     fontSize: '12px',
                   }}
                   formatter={(val: number) => [`${currency}${val}`, 'Revenue']}
                 />
-                <Bar dataKey="revenue" fill="#F26B3A" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="revenue" fill="#EA6A3C" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -233,7 +233,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Hardware & Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-3.5">
+        <div className="p-5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3.5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Radio className="w-4 h-4 text-[#F26B3A]" />
@@ -255,11 +255,10 @@ export const DashboardPage: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <span
-                    className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      dev.status === 'Online'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}
+                    className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${dev.status === 'Online'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                      }`}
                   >
                     {dev.status} ({dev.lastPingMs}ms)
                   </span>

@@ -37,66 +37,66 @@ export const ReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12 select-none">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 pb-12 select-none">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+          <h2 className="text-[24px] leading-tight font-semibold text-[var(--text)] tracking-tight">
             Analytics & Reports
           </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
             Subscriber acquisition, churn analytics, and plan saturation metrics
           </p>
         </div>
-        <Button variant="primary" size="md" onClick={handleExportReport} className="text-xs font-bold">
-          <Download className="w-4 h-4" />
+        <Button variant="primary" size="sm" onClick={handleExportReport} className="h-8 px-3 text-[12px]">
+          <Download className="w-3.5 h-3.5" />
           <span>Export Summary Report</span>
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Plan Saturation */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+        <div className="p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3">
+          <h3 className="text-sm font-bold text-[var(--text)]">
             Subscribers by Internet Tier
           </h3>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={planDistribution} margin={{ top: 10, right: 10, left: -20, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                <XAxis dataKey="name" angle={-25} textAnchor="end" tick={{ fontSize: 9 }} interval={0} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" strokeWidth={1} />
+                <XAxis dataKey="name" angle={-25} textAnchor="end" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} interval={0} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1E1E22',
-                    borderColor: '#333',
+                    backgroundColor: 'var(--surface-raised)',
+                    borderColor: 'var(--border)',
                     borderRadius: '12px',
-                    color: '#fff',
+                    color: 'var(--text)',
                     fontSize: '12px',
                   }}
                 />
-                <Bar dataKey="count" fill="#F26B3A" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" fill="#EA6A3C" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Churn & Retention breakdown */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+        <div className="p-5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-4">
+          <h3 className="text-sm font-bold text-[var(--text)]">
             Subscriber Health & Churn Risk
           </h3>
           <div className="space-y-3 text-xs pt-4">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30">
-              <span className="font-semibold text-emerald-800 dark:text-emerald-300">Active Loyal Base (6+ mos)</span>
-              <span className="font-bold text-emerald-600">88.4%</span>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[#E8F5EE]/70 dark:bg-[rgba(22,121,76,0.12)] border border-[#16794C]/20">
+              <span className="font-semibold text-[#16794C] dark:text-[#4ADE80]">Active Loyal Base (6+ mos)</span>
+              <span className="font-bold text-[#16794C] dark:text-[#4ADE80]">88.4%</span>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30">
-              <span className="font-semibold text-amber-800 dark:text-amber-300">Overdue Risk (15+ days)</span>
-              <span className="font-bold text-amber-600">5.8%</span>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[#FDF3DC]/70 dark:bg-[rgba(154,98,0,0.12)] border border-[#9A6200]/20">
+              <span className="font-semibold text-[#9A6200] dark:text-[#FBBF24]">Overdue Risk (15+ days)</span>
+              <span className="font-bold text-[#9A6200] dark:text-[#FBBF24]">5.8%</span>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-red-50 dark:bg-red-950/30">
-              <span className="font-semibold text-red-800 dark:text-red-300">Suspended / Churn Imminent</span>
-              <span className="font-bold text-red-600">4.2%</span>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[#FDECEA]/70 dark:bg-[rgba(180,35,24,0.12)] border border-[#B42318]/20">
+              <span className="font-semibold text-[#B42318] dark:text-[#F87171]">Suspended / Churn Imminent</span>
+              <span className="font-bold text-[#B42318] dark:text-[#F87171]">4.2%</span>
             </div>
           </div>
         </div>

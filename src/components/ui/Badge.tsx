@@ -42,29 +42,29 @@ export const Badge: React.FC<BadgeProps> = ({
   // Soft backgrounds without heavy borders, exactly 24px height
   const styles = {
     active:
-      'bg-[#EBFBF2] text-[#1E8E4D] dark:bg-[#0E3A20]/40 dark:text-[#34D399]',
+      'bg-[#E8F5EE] text-[#16794C] dark:bg-[rgba(22,121,76,0.14)] dark:text-[#4ADE80]',
     suspended:
-      'bg-[#FFF7E8] text-[#C07600] dark:bg-[#3D2C0D]/40 dark:text-[#FBBF24]',
+      'bg-[#FDF3DC] text-[#9A6200] dark:bg-[rgba(154,98,0,0.14)] dark:text-[#FBBF24]',
     overdue:
-      'bg-[#FDEEEE] text-[#DC2626] dark:bg-[#451010]/40 dark:text-[#F87171]',
+      'bg-[#FDECEA] text-[#B42318] dark:bg-[rgba(180,35,24,0.14)] dark:text-[#F87171]',
     pending:
-      'bg-[#EEF4FF] text-[#3B82F6] dark:bg-[#1E2E4E]/40 dark:text-[#60A5FA]',
+      'bg-[#EAF0FE] text-[#2F5BD9] dark:bg-[rgba(47,91,217,0.14)] dark:text-[#60A5FA]',
     disconnected:
-      'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+      'bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border-subtle)]',
     orange:
-      'bg-[#FFF1EA] text-[#F26B3A] dark:bg-orange-950/40 dark:text-[#F88560]',
+      'bg-[var(--brand-soft)] text-[var(--brand)]',
     gray:
-      'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+      'bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border-subtle)]',
   };
 
   const dotColors = {
-    active: 'bg-[#1E8E4D]',
-    suspended: 'bg-[#C07600]',
-    overdue: 'bg-[#DC2626]',
-    pending: 'bg-[#3B82F6]',
-    disconnected: 'bg-gray-400',
-    orange: 'bg-[#F26B3A]',
-    gray: 'bg-gray-400',
+    active: 'bg-[#16794C] dark:bg-[#4ADE80]',
+    suspended: 'bg-[#9A6200] dark:bg-[#FBBF24]',
+    overdue: 'bg-[#B42318] dark:bg-[#F87171]',
+    pending: 'bg-[#2F5BD9] dark:bg-[#60A5FA]',
+    disconnected: 'bg-[var(--text-subtle)]',
+    orange: 'bg-[var(--brand)]',
+    gray: 'bg-[var(--text-subtle)]',
   };
 
   return (

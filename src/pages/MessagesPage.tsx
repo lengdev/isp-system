@@ -58,19 +58,19 @@ export const MessagesPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12 select-none">
+    <div className="space-y-4 pb-12 select-none">
       <div>
-        <h2 className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+        <h2 className="text-[24px] leading-tight font-semibold text-[var(--text)] tracking-tight">
           Subscriber Messaging & Broadcast
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+        <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
           Send SMS reminders, maintenance notifications, and billing alert emails
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Broadcast Composer */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs space-y-4">
+        <div className="p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3">
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Compose Broadcast</h3>
 
           <form onSubmit={handleSend} className="space-y-3.5 text-xs">
@@ -85,7 +85,7 @@ export const MessagesPage: React.FC = () => {
                   onChange={(val) => setChannel(val as any)}
                   searchable={false}
                   clearable={false}
-                  size="lg"
+                  size="md"
                 />
               </div>
 
@@ -99,7 +99,7 @@ export const MessagesPage: React.FC = () => {
                   onChange={(val) => setRecipientGroup(val as string)}
                   searchable={false}
                   clearable={false}
-                  size="lg"
+                  size="md"
                 />
               </div>
             </div>

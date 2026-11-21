@@ -73,6 +73,8 @@ export const Modal: React.FC<ModalProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         if (showDiscardConfirm) {
           setShowDiscardConfirm(false);
         } else {
@@ -181,6 +183,7 @@ export const Modal: React.FC<ModalProps> = ({
                   <button
                     type="button"
                     onClick={handleAttemptClose}
+                    data-testid="modal-close-btn"
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] transition-colors shrink-0 -mr-1 mt-0.5"
                     aria-label="Close dialog"
                   >

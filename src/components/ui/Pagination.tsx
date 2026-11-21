@@ -64,9 +64,9 @@ export const Pagination: React.FC<PaginationProps> = ({
         </span>
 
         {onPageSizeChange && (
-          <div className="flex items-center gap-1.5 pl-3 border-l border-gray-200 dark:border-gray-800">
-            <span>Per page:</span>
-            <div className="w-18">
+          <div className="flex items-center gap-2 pl-3 border-l border-gray-200 dark:border-gray-800">
+            <span className="text-[13px]">Per page:</span>
+            <div className="w-20">
               <Combobox
                 options={pageSizeOptions}
                 value={String(pageSize)}

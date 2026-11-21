@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface DropdownItem {
@@ -10,6 +11,7 @@ export interface DropdownItem {
   danger?: boolean;
   divider?: boolean;
   disabled?: boolean;
+  selected?: boolean;
 }
 
 interface DropdownProps {
@@ -56,7 +58,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.12 }}
             className={cn(
-              'absolute z-40 mt-1.5 w-48 rounded-xl bg-white dark:bg-[#1E1E22] border border-gray-200/90 dark:border-gray-800 shadow-xl py-1.5 focus:outline-none overflow-hidden',
+              'absolute z-40 mt-1.5 w-48 rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] p-1.5 flex flex-col gap-[2px] focus:outline-none overflow-hidden select-none',
               align === 'right' ? 'right-0' : 'left-0',
               menuClassName
             )}
@@ -66,7 +68,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
                 return (
                   <div
                     key={`div-${index}`}
-                    className="my-1 border-t border-gray-100 dark:border-gray-800/80"
+                    className="my-1 border-t border-[var(--border-subtle)]"
                   />
                 );
               }
@@ -81,15 +83,22 @@ export const Dropdown: React.FC<DropdownProps> = ({
                     setIsOpen(false);
                   }}
                   className={cn(
-                    'flex w-full items-center gap-2.5 px-3 py-2 text-xs font-medium transition-colors text-left select-none',
+                    'flex w-full items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-[8px] transition-colors duration-[120ms] text-left select-none border',
+                    item.disabled && 'opacity-50 pointer-events-none border-transparent',
                     item.danger
-                      ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30'
-                      : 'text-gray-700 dark:text-gray-200 hover:bg-[#FFF1EA] dark:hover:bg-[#F26B3A]/15 hover:text-[#F26B3A] dark:hover:text-[#F88560]',
-                    item.disabled && 'opacity-40 pointer-events-none'
+                      ? 'text-[#B42318] hover:bg-[#FDECEA] dark:hover:bg-[rgba(180,35,24,0.14)] border-transparent'
+                      : item.selected
+                      ? 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] border-[var(--option-selected-border)] hover:bg-[var(--option-selected-hover-bg)]'
+                      : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)]'
                   )}
                 >
                   {item.icon && <span className="shrink-0 text-current">{item.icon}</span>}
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate flex-1">{item.label}</span>
+                  {item.selected && (
+                    <div className="w-4 h-4 ml-auto shrink-0 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-[var(--option-selected-icon)] stroke-[2]" />
+                    </div>
+                  )}
                 </button>
               );
             })}

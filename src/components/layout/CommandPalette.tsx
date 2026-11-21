@@ -19,6 +19,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { cn } from '../../lib/utils';
 
 export const CommandPalette: React.FC = () => {
   const isOpen = useStore((s) => s.isCommandPaletteOpen);
@@ -64,6 +65,11 @@ export const CommandPalette: React.FC = () => {
     { title: 'Billing & Invoices', subtitle: 'Subscriber invoicing and payments', icon: Receipt, path: '/billing' },
     { title: 'Support Tickets', subtitle: 'Customer issues & field dispatch', icon: LifeBuoy, path: '/tickets' },
     { title: 'Network Infrastructure', subtitle: 'OLT, ONT and router monitoring', icon: Radio, path: '/network' },
+    { title: 'Field Technicians', subtitle: 'Staff assignments & daily install schedules', icon: Users, path: '/technicians' },
+    { title: 'Reports & Analytics', subtitle: 'Plan saturation & churn metrics', icon: LayoutDashboard, path: '/reports' },
+    { title: 'Messages & Broadcast', subtitle: 'SMS and email notifications to subscribers', icon: Users, path: '/messages' },
+    { title: 'Automation & Cron', subtitle: 'Automated suspension, backups and alert triggers', icon: Settings, path: '/automation' },
+    { title: 'System Integrations', subtitle: 'Mikrotik, Ubiquiti, Stripe & Twilio APIs', icon: Settings, path: '/integrations' },
     { title: 'Settings', subtitle: 'System preferences & configurations', icon: Settings, path: '/settings' },
   ];
 
@@ -140,11 +146,14 @@ export const CommandPalette: React.FC = () => {
 
           {/* Palette Dialog */}
           <motion.div
+            role="dialog"
+            aria-label="Command Palette"
+            aria-modal="true"
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{ duration: 0.15 }}
-            className="relative w-full max-w-xl rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-2xl overflow-hidden z-10 flex flex-col"
+            className="relative w-full max-w-xl rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-2xl overflow-hidden z-10 flex flex-col"
           >
             {/* Search Input Box */}
             <div className="flex items-center px-4 py-3.5 border-b border-gray-100 dark:border-gray-800">
@@ -168,58 +177,69 @@ export const CommandPalette: React.FC = () => {
             </div>
 
             {/* Content List */}
-            <div className="max-h-96 overflow-y-auto p-2 divide-y divide-gray-100 dark:divide-gray-800/60">
+            <div className="max-h-96 overflow-y-auto p-2 flex flex-col gap-1">
               {/* Matching Customers */}
               {filteredCustomers.length > 0 && (
-                <div className="py-2">
-                  <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-[#F26B3A] mb-1.5">
+                <div className="py-1">
+                  <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                     Customers Found ({filteredCustomers.length})
                   </div>
-                  <div className="space-y-1">
-                    {filteredCustomers.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => {
-                          openDrawer(c.id);
-                          setIsOpen(false);
-                        }}
-                        className="flex items-center justify-between w-full px-3 py-2 rounded-xl text-left hover:bg-[#FFF1EA] dark:hover:bg-[#F26B3A]/15 group transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-orange-100 dark:bg-orange-950/60 text-[#F26B3A] text-xs font-bold">
-                            {c.initials}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-gray-900 dark:text-gray-100 group-hover:text-[#F26B3A]">
-                              {c.fullName}{' '}
-                              <span className="text-[11px] font-normal text-gray-400">({c.code})</span>
+                  <div className="flex flex-col gap-[2px]">
+                    {filteredCustomers.map((c, cIdx) => {
+                      const isActive = selectedIndex === cIdx;
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            openDrawer(c.id);
+                            setIsOpen(false);
+                          }}
+                          onMouseEnter={() => setSelectedIndex(cIdx)}
+                          className={cn(
+                            'flex items-center justify-between w-full px-3 py-2 rounded-[8px] text-left transition-colors duration-[120ms] border',
+                            isActive
+                              ? 'bg-[var(--option-hover-bg)] ring-2 ring-inset ring-[var(--option-selected-icon)] border-transparent'
+                              : 'border-transparent hover:bg-[var(--option-hover-bg)]'
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--option-selected-bg)] text-[var(--option-selected-icon)] text-xs font-medium">
+                              {c.initials}
                             </div>
-                            <div className="text-[11px] text-gray-400">
-                              {c.ipAddress} • {c.planName}
+                            <div>
+                              <div className="text-xs font-medium text-[var(--text)]">
+                                {c.fullName}{' '}
+                                <span className="text-[11px] font-normal text-gray-400">({c.code})</span>
+                              </div>
+                              <div className="text-[11px] text-gray-400">
+                                {c.ipAddress} • {c.planName}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            ${c.monthlyPrice}/mo
-                          </span>
-                          <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#F26B3A]" />
-                        </div>
-                      </button>
-                    ))}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                              ${c.monthlyPrice}/mo
+                            </span>
+                            <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               {/* Navigation */}
               {filteredNav.length > 0 && (
-                <div className="py-2">
-                  <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">
+                <div className="py-1">
+                  <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                     Navigation
                   </div>
-                  <div className="space-y-1">
-                    {filteredNav.map((item) => {
+                  <div className="flex flex-col gap-[2px]">
+                    {filteredNav.map((item, i) => {
                       const Icon = item.icon;
+                      const navIdx = filteredCustomers.length + i;
+                      const isNavActive = selectedIndex === navIdx;
                       return (
                         <button
                           key={item.path}
@@ -227,13 +247,19 @@ export const CommandPalette: React.FC = () => {
                             navigate(item.path);
                             setIsOpen(false);
                           }}
-                          className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-left hover:bg-gray-100/80 dark:hover:bg-gray-800/60 group transition-colors"
+                          onMouseEnter={() => setSelectedIndex(navIdx)}
+                          className={cn(
+                            'flex items-center gap-3 w-full px-3 py-2 rounded-[8px] text-left transition-colors duration-[120ms] border',
+                            isNavActive
+                              ? 'bg-[var(--option-hover-bg)] ring-2 ring-inset ring-[var(--option-selected-icon)] border-transparent'
+                              : 'border-transparent hover:bg-[var(--option-hover-bg)]'
+                          )}
                         >
-                          <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 group-hover:text-[#F26B3A] group-hover:bg-[#FFF1EA] dark:group-hover:bg-[#F26B3A]/20 transition-colors">
+                          <div className="p-1.5 rounded-lg bg-[var(--surface-subtle)] text-[var(--text-muted)] transition-colors">
                             <Icon className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 group-hover:text-[#F26B3A]">
+                            <div className="text-xs font-medium text-[var(--text)]">
                               {item.title}
                             </div>
                             <div className="text-[10px] text-gray-400">{item.subtitle}</div>
@@ -247,13 +273,15 @@ export const CommandPalette: React.FC = () => {
 
               {/* Quick Actions */}
               {filteredActions.length > 0 && (
-                <div className="py-2">
-                  <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">
+                <div className="py-1">
+                  <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                     Quick Actions
                   </div>
-                  <div className="space-y-1">
+                  <div className="flex flex-col gap-[2px]">
                     {filteredActions.map((action, i) => {
                       const Icon = action.icon;
+                      const actIdx = filteredCustomers.length + filteredNav.length + i;
+                      const isActActive = selectedIndex === actIdx;
                       return (
                         <button
                           key={i}
@@ -261,13 +289,19 @@ export const CommandPalette: React.FC = () => {
                             action.action();
                             setIsOpen(false);
                           }}
-                          className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-left hover:bg-gray-100/80 dark:hover:bg-gray-800/60 group transition-colors"
+                          onMouseEnter={() => setSelectedIndex(actIdx)}
+                          className={cn(
+                            'flex items-center gap-3 w-full px-3 py-2 rounded-[8px] text-left transition-colors duration-[120ms] border',
+                            isActActive
+                              ? 'bg-[var(--option-hover-bg)] ring-2 ring-inset ring-[var(--option-selected-icon)] border-transparent'
+                              : 'border-transparent hover:bg-[var(--option-hover-bg)]'
+                          )}
                         >
-                          <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 group-hover:text-[#F26B3A] group-hover:bg-[#FFF1EA] dark:group-hover:bg-[#F26B3A]/20 transition-colors">
+                          <div className="p-1.5 rounded-lg bg-[var(--surface-subtle)] text-[var(--text-muted)] transition-colors">
                             <Icon className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 group-hover:text-[#F26B3A]">
+                            <div className="text-xs font-medium text-[var(--text)]">
                               {action.title}
                             </div>
                             <div className="text-[10px] text-gray-400">{action.subtitle}</div>

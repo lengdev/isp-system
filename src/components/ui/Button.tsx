@@ -11,28 +11,28 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'secondary', size = 'md', isLoading, disabled, children, ...props }, ref) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium rounded-[10px] transition-colors focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A] disabled:opacity-50 disabled:pointer-events-none select-none';
+      'inline-flex items-center justify-center font-medium rounded-[8px] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] focus:border-[var(--brand)] disabled:opacity-50 disabled:pointer-events-none select-none';
 
     const variants = {
       primary:
-        'bg-[#F26B3A] text-white hover:bg-[#E05220] active:bg-[#C94314] shadow-xs',
+        'bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] active:bg-[var(--brand-hover)] shadow-[0_1px_2px_rgba(234,106,60,0.25)] border-0',
       secondary:
-        'bg-white dark:bg-[#1E1E22] text-gray-700 dark:text-gray-200 border border-gray-200/90 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 shadow-xs',
+        'bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] hover:bg-[var(--surface-subtle)] hover:border-[var(--border-strong)] shadow-xs',
       outline:
-        'bg-transparent border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-gray-800/50',
+        'bg-transparent border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]',
       ghost:
-        'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60',
+        'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]',
       danger:
-        'bg-red-500 text-white hover:bg-red-600 shadow-xs active:bg-red-700',
+        'bg-[#B42318] text-white hover:bg-[#9B1E14] shadow-xs active:bg-[#831810]',
       softOrange:
-        'bg-[#FFF1EA] dark:bg-orange-950/40 text-[#F26B3A] hover:bg-[#FFE5D8] dark:hover:bg-orange-950/60 border border-[#F26B3A]/20',
+        'bg-[var(--brand-soft)] text-[var(--brand)] hover:bg-[var(--brand-soft)]/80 border border-[var(--brand)]/20',
     };
 
     const sizes = {
-      sm: 'text-xs px-2.5 h-8 gap-1.5',
-      md: 'text-xs px-3.5 h-9 gap-2',
-      lg: 'text-sm px-4 h-10 gap-2',
-      icon: 'h-9 w-9 p-0',
+      sm: 'text-[12px] font-medium px-3 h-[36px] gap-2 rounded-[10px] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]',
+      md: 'text-[12px] font-medium px-3.5 h-[40px] gap-2 rounded-[10px] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]',
+      lg: 'text-[12px] font-medium px-4 h-[44px] gap-2 rounded-[10px] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]',
+      icon: 'h-[36px] w-[36px] p-0 rounded-[10px] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]',
     };
 
     return (

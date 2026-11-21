@@ -82,7 +82,7 @@ export const Popover: React.FC<PopoverProps> = ({
             transition={{ duration: 0.15, ease: 'easeOut' }}
             style={{ width: width || undefined }}
             className={cn(
-              'absolute z-40 mt-1.5 rounded-2xl bg-white dark:bg-[#1E1E22] border border-gray-200/90 dark:border-gray-800 shadow-[0_16px_36px_-6px_rgba(16,24,40,0.18)] focus:outline-none overflow-hidden max-w-[calc(100vw-32px)]',
+              'absolute z-40 mt-1.5 rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] focus:outline-none overflow-hidden max-w-[calc(100vw-32px)]',
               aligns[align],
               popoverClassName
             )}

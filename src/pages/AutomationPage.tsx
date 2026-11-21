@@ -57,21 +57,21 @@ export const AutomationPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12 select-none">
+    <div className="space-y-4 pb-12 select-none">
       <div>
-        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+        <h2 className="text-[24px] leading-tight font-semibold text-[var(--text)] tracking-tight">
           ISP Automation & Cron Tasks
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+        <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
           Configure unattended operational triggers, billing automations, and self-healing rules
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {rules.map((rule) => (
           <div
             key={rule.id}
-            className="p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-soft flex items-center justify-between gap-4"
+            className="p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] flex items-center justify-between gap-4"
           >
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">{rule.title}</h4>

@@ -7,6 +7,7 @@ interface TooltipProps {
   children: React.ReactNode;
   delay?: number;
   position?: 'top' | 'bottom' | 'left' | 'right';
+  side?: 'top' | 'bottom' | 'left' | 'right';
   className?: string;
 }
 
@@ -15,8 +16,10 @@ export const Tooltip: React.FC<TooltipProps> = ({
   children,
   delay = 300,
   position = 'top',
+  side,
   className,
 }) => {
+  const effectivePosition = side || position;
   const [isVisible, setIsVisible] = useState(false);
   const timeoutRef = useRef<number | null>(null);
 
@@ -61,7 +64,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
             role="tooltip"
             className={cn(
               'absolute z-50 pointer-events-none px-2 py-1 text-[11px] font-medium rounded-md shadow-md bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 whitespace-nowrap select-none',
-              positionClasses[position]
+              positionClasses[effectivePosition]
             )}
           >
             {content}

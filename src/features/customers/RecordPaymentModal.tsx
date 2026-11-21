@@ -21,6 +21,7 @@ export const RecordPaymentModal: React.FC = () => {
   const [reference, setReference] = useState(`TXN-${Math.floor(100000 + Math.random() * 900000)}`);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === selectedCustomerId),
@@ -42,6 +43,7 @@ export const RecordPaymentModal: React.FC = () => {
       setReference(`TXN-${Math.floor(100000 + Math.random() * 900000)}`);
       setIsSubmitting(false);
       setIsSuccess(false);
+      setIsDirty(false);
     }
   }, [modalState.isOpen, modalState.customerId, customers]);
 
@@ -77,7 +79,6 @@ export const RecordPaymentModal: React.FC = () => {
   };
 
   const numAmount = typeof amount === 'string' ? parseFloat(amount) || 0 : amount;
-  const isDirty = Boolean(numAmount !== 54.99);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -169,7 +170,7 @@ export const RecordPaymentModal: React.FC = () => {
             options={customerOptions}
             value={selectedCustomerId}
             onChange={(val) => handleCustomerChange(val as string)}
-            placeholder="Search by name, account ID, or address..."
+            placeholder="Search subscriber name or code..."
             size="md"
           />
         </Field>
@@ -207,8 +208,8 @@ export const RecordPaymentModal: React.FC = () => {
           <Input
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            className="font-mono text-xs uppercase"
-            placeholder="TXN-XXXXXX"
+            className="font-mono uppercase"
+            placeholder="TXN-123456"
           />
         </Field>
       </form>
