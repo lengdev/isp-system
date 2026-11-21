@@ -287,7 +287,7 @@ export const DataTable = <T extends Record<string, any>>({
       size: 40,
       enableResizing: false,
       header: ({ table }) => (
-        <div className="w-[40px] px-2 text-center flex items-center justify-center">
+        <div className="w-[40px] h-full flex items-center justify-center select-none">
           <DataTableCheckbox
             checked={table.getIsAllPageRowsSelected()}
             indeterminate={table.getIsSomePageRowsSelected()}
@@ -299,7 +299,7 @@ export const DataTable = <T extends Record<string, any>>({
       cell: ({ row }) => (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="w-[40px] px-2 text-center flex items-center justify-center"
+          className="w-[40px] h-full flex items-center justify-center select-none"
         >
           <DataTableCheckbox
             checked={row.getIsSelected()}
@@ -1058,13 +1058,13 @@ export const DataTable = <T extends Record<string, any>>({
                           <div className="font-semibold text-xs text-[var(--text)] truncate">
                             {String(
                               row.original.fullName ||
-                                row.original.name ||
-                                row.original.title ||
-                                row.original.invoiceNumber ||
-                                row.original.ticketNumber ||
-                                row.original.deviceName ||
-                                row.original.id ||
-                                'Record'
+                              row.original.name ||
+                              row.original.title ||
+                              row.original.invoiceNumber ||
+                              row.original.ticketNumber ||
+                              row.original.deviceName ||
+                              row.original.id ||
+                              'Record'
                             )}
                           </div>
                         </div>
@@ -1091,8 +1091,8 @@ export const DataTable = <T extends Record<string, any>>({
                             const val = col.accessorFn
                               ? col.accessorFn(row.original)
                               : col.accessorKey
-                              ? row.original[col.accessorKey as string]
-                              : undefined;
+                                ? row.original[col.accessorKey as string]
+                                : undefined;
                             if (val === undefined || val === null) return null;
                             return (
                               <div
@@ -1158,15 +1158,15 @@ export const DataTable = <T extends Record<string, any>>({
 
                       const headerStickyStyle: React.CSSProperties = isPinnedL
                         ? {
-                            width: `${header.getSize()}px`,
-                            minWidth: `${header.getSize()}px`,
-                            maxWidth: `${header.getSize()}px`,
-                            position: 'sticky',
-                            left: `${columnPinningInfo.leftOffsets[header.id]}px`,
-                            zIndex: 30,
-                          }
+                          width: `${header.getSize()}px`,
+                          minWidth: `${header.getSize()}px`,
+                          maxWidth: `${header.getSize()}px`,
+                          position: 'sticky',
+                          left: `${columnPinningInfo.leftOffsets[header.id]}px`,
+                          zIndex: 30,
+                        }
                         : isPinnedR
-                        ? {
+                          ? {
                             width: `${header.getSize()}px`,
                             minWidth: `${header.getSize()}px`,
                             maxWidth: `${header.getSize()}px`,
@@ -1174,7 +1174,7 @@ export const DataTable = <T extends Record<string, any>>({
                             right: `${columnPinningInfo.rightOffsets[header.id]}px`,
                             zIndex: 30,
                           }
-                        : {
+                          : {
                             width: `${header.getSize()}px`,
                             minWidth: `${header.getSize()}px`,
                             maxWidth: `${header.getSize()}px`,
@@ -1185,7 +1185,8 @@ export const DataTable = <T extends Record<string, any>>({
                           key={header.id}
                           style={headerStickyStyle}
                           className={cn(
-                            'px-3 relative group align-middle transition-colors whitespace-nowrap overflow-hidden',
+                            header.id === 'select' ? 'px-0' : 'px-3',
+                            'relative group align-middle transition-colors whitespace-nowrap overflow-visible',
                             (isPinnedL || isPinnedR) && 'bg-[var(--surface-subtle)]',
                             isLastLeftPinned && 'border-r border-[var(--border-subtle)] shadow-[1px_0_0_0_rgba(0,0,0,0.03)]',
                             isFirstRightPinned && 'border-l border-[var(--border-subtle)] shadow-[-1px_0_0_0_rgba(0,0,0,0.03)]',
@@ -1196,19 +1197,18 @@ export const DataTable = <T extends Record<string, any>>({
                           <div
                             onClick={header.column.getToggleSortingHandler()}
                             className={cn(
-                              'flex items-center gap-1.5 w-full min-w-0 select-none',
-                              colDef?.align === 'right' && 'justify-end',
-                              colDef?.align === 'center' && 'justify-center',
+                              'flex items-center gap-1 w-full min-w-0 select-none',
+                              colDef?.align === 'right' ? 'justify-end' : colDef?.align === 'center' ? 'justify-center' : 'justify-start',
                               isSortable && 'cursor-pointer hover:text-[var(--text)]'
                             )}
                           >
-                            <span className="whitespace-nowrap font-semibold shrink-0">
+                            <span className="whitespace-nowrap font-medium text-[12px] text-[var(--text)] shrink-0">
                               {header.isPlaceholder
                                 ? null
                                 : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                  )}
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
                             </span>
 
                             {/* Sort Arrow */}
@@ -1226,7 +1226,10 @@ export const DataTable = <T extends Record<string, any>>({
 
                             {/* Column Filter Icon */}
                             {colDef?.filter && (
-                              <span className="shrink-0 opacity-0 group-hover:opacity-100 has-[.active-filter]:opacity-100 transition-opacity">
+                              <span
+                                onClick={(e) => e.stopPropagation()}
+                                className="shrink-0 opacity-0 group-hover:opacity-100 has-[.active-filter]:opacity-100 transition-opacity"
+                              >
                                 <DataTableColumnFilter
                                   columnId={header.id}
                                   columnTitle={
@@ -1243,7 +1246,10 @@ export const DataTable = <T extends Record<string, any>>({
 
                             {/* Column Menu */}
                             {header.id !== 'select' && header.id !== 'expander' && (
-                              <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span
+                                onClick={(e) => e.stopPropagation()}
+                                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
                                 <DataTableColumnMenu
                                   columnId={header.id}
                                   columnTitle={
@@ -1400,15 +1406,15 @@ export const DataTable = <T extends Record<string, any>>({
 
                             const cellStickyStyle: React.CSSProperties = isPinnedL
                               ? {
-                                  width: `${cell.column.getSize()}px`,
-                                  minWidth: `${cell.column.getSize()}px`,
-                                  maxWidth: `${cell.column.getSize()}px`,
-                                  position: 'sticky',
-                                  left: `${columnPinningInfo.leftOffsets[cell.column.id]}px`,
-                                  zIndex: 10,
-                                }
+                                width: `${cell.column.getSize()}px`,
+                                minWidth: `${cell.column.getSize()}px`,
+                                maxWidth: `${cell.column.getSize()}px`,
+                                position: 'sticky',
+                                left: `${columnPinningInfo.leftOffsets[cell.column.id]}px`,
+                                zIndex: 10,
+                              }
                               : isPinnedR
-                              ? {
+                                ? {
                                   width: `${cell.column.getSize()}px`,
                                   minWidth: `${cell.column.getSize()}px`,
                                   maxWidth: `${cell.column.getSize()}px`,
@@ -1416,7 +1422,7 @@ export const DataTable = <T extends Record<string, any>>({
                                   right: `${columnPinningInfo.rightOffsets[cell.column.id]}px`,
                                   zIndex: 10,
                                 }
-                              : {
+                                : {
                                   width: `${cell.column.getSize()}px`,
                                   minWidth: `${cell.column.getSize()}px`,
                                   maxWidth: `${cell.column.getSize()}px`,
@@ -1427,7 +1433,8 @@ export const DataTable = <T extends Record<string, any>>({
                                 key={cell.id}
                                 style={cellStickyStyle}
                                 className={cn(
-                                  'h-full px-3 text-[12px] text-[var(--text)] align-middle transition-colors',
+                                  cell.column.id === 'select' ? 'px-0' : 'px-3',
+                                  'h-full text-[12px] text-[var(--text)] align-middle transition-colors',
                                   isPinnedL || isPinnedR
                                     ? isSelected
                                       ? 'bg-[#FDEFE8] dark:bg-[#2A1D1A] group-hover:bg-[#FCE7DC] dark:group-hover:bg-[#34221D]'
@@ -1490,15 +1497,15 @@ export const DataTable = <T extends Record<string, any>>({
 
                       const footStickyStyle: React.CSSProperties = isPinnedL
                         ? {
-                            width: `${col.getSize()}px`,
-                            minWidth: `${col.getSize()}px`,
-                            maxWidth: `${col.getSize()}px`,
-                            position: 'sticky',
-                            left: `${columnPinningInfo.leftOffsets[col.id]}px`,
-                            zIndex: 20,
-                          }
+                          width: `${col.getSize()}px`,
+                          minWidth: `${col.getSize()}px`,
+                          maxWidth: `${col.getSize()}px`,
+                          position: 'sticky',
+                          left: `${columnPinningInfo.leftOffsets[col.id]}px`,
+                          zIndex: 20,
+                        }
                         : isPinnedR
-                        ? {
+                          ? {
                             width: `${col.getSize()}px`,
                             minWidth: `${col.getSize()}px`,
                             maxWidth: `${col.getSize()}px`,
@@ -1506,7 +1513,7 @@ export const DataTable = <T extends Record<string, any>>({
                             right: `${columnPinningInfo.rightOffsets[col.id]}px`,
                             zIndex: 20,
                           }
-                        : {
+                          : {
                             width: `${col.getSize()}px`,
                             minWidth: `${col.getSize()}px`,
                             maxWidth: `${col.getSize()}px`,
@@ -1662,7 +1669,7 @@ export const DataTable = <T extends Record<string, any>>({
           <div
             style={{ top: contextMenu.y, left: contextMenu.x }}
             onClick={(e) => e.stopPropagation()}
-            className="fixed w-[220px] rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] py-1.5 text-xs select-none max-h-[320px] overflow-y-auto"
+            className="fixed w-[220px] rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[0_10px_30px_-5px_rgba(0,0,0,0.12),0_4px_10px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_-5px_rgba(0,0,0,0.5)] py-1.5 text-xs select-none max-h-[320px] overflow-y-auto"
           >
             {rowActions(contextMenu.row).map((act, i) => {
               if (act.divider) {
@@ -1677,10 +1684,10 @@ export const DataTable = <T extends Record<string, any>>({
                     setContextMenu(null);
                   }}
                   className={cn(
-                    'w-full h-8 flex items-center gap-2.5 px-3 text-left transition-colors text-[12px] font-medium',
+                    'w-[calc(100%-8px)] mx-1 h-8 flex items-center gap-2.5 px-2.5 text-left transition-colors text-[12px] font-medium rounded-lg',
                     act.danger
-                      ? 'text-red-600 hover:bg-[#FDECEA] dark:hover:bg-red-950/30'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]'
+                      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30'
+                      : 'text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-[var(--text)]'
                   )}
                 >
                   {act.icon}

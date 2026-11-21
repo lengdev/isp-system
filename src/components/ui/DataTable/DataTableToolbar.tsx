@@ -191,7 +191,7 @@ export const DataTableToolbar = <T extends Record<string, any>>({
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             placeholder="Search customers…"
-            className="w-full h-8 pl-8 pr-12 text-[12px] bg-[var(--surface)] border border-[var(--border)] rounded-[8px] text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] focus:border-[var(--brand)] transition-all shadow-xs"
+            className="w-full h-8 pl-8 pr-12 text-[12px] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-[8px] text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-950/10 dark:focus:ring-white/10 transition-[border-color,box-shadow] duration-120 ease-out shadow-xs"
           />
           {localSearch && (
             <button

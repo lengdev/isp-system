@@ -157,7 +157,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <div
         className={cn(
           'relative flex items-center w-full h-[40px] max-sm:h-[44px] rounded-[10px] border bg-[var(--surface)] transition-colors',
-          'focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]',
+          'focus-within:border-neutral-900 dark:focus-within:border-neutral-100 focus-within:ring-1 focus-within:ring-neutral-950/10 dark:focus-within:ring-white/10',
           hasError
             ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
             : 'border-[var(--border)] hover:border-[var(--border-strong)]',
@@ -221,7 +221,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       <div
         className={cn(
           'relative w-full rounded-[10px] border bg-[var(--surface)] transition-colors overflow-hidden',
-          'focus-within:border-[var(--brand)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]',
+          'focus-within:border-neutral-900 dark:focus-within:border-neutral-100 focus-within:ring-1 focus-within:ring-neutral-950/10 dark:focus-within:ring-white/10',
           hasError
             ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
             : 'border-[var(--border)] hover:border-[var(--border-strong)]',

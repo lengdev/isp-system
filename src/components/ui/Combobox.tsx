@@ -427,7 +427,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
           'w-full flex items-center justify-between border bg-[var(--surface)] text-[var(--text)] transition-colors select-none focus:outline-none overflow-hidden relative',
           multiple ? 'pr-16' : 'pr-9',
           isOpen
-            ? 'border-[var(--brand)] ring-2 ring-[var(--brand-ring)]'
+            ? 'border-neutral-900 dark:border-neutral-100 ring-1 ring-neutral-950/10 dark:ring-white/10'
             : error
               ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
               : 'border-[var(--border)] hover:border-[var(--border-strong)]',
@@ -542,7 +542,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   maxHeight: `${coords.maxHeight}px`,
                   zIndex: 9999,
                 }}
-                className="rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] flex flex-col overflow-hidden select-none"
+                className="rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[0_10px_30px_-5px_rgba(0,0,0,0.12),0_4px_10px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_-5px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden select-none"
               >
                 {/* Search Input Box (Spec 4.1: borderless input, 36px, bottom hairline, 14px icon, 13px text, transparent bg, NO orange border/ring) */}
                 {searchable && (
@@ -608,8 +608,8 @@ export const Combobox: React.FC<ComboboxProps> = ({
                     </div>
                   ) : groupBy && groupedOptions ? (
                     Object.entries(groupedOptions).map(([groupName, groupOpts]) => (
-                      <div key={groupName} className="py-1">
-                        <div className="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] sticky top-0 bg-[var(--surface-raised)]/95 backdrop-blur-xs">
+                      <div key={groupName} className="flex flex-col gap-[2px] pt-1.5 first:pt-0">
+                        <div className="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] select-none">
                           {groupName}
                         </div>
                         {groupOpts.map((opt) => renderOptionRow(opt))}
@@ -684,15 +684,15 @@ export const Combobox: React.FC<ComboboxProps> = ({
             ? 'opacity-50 cursor-not-allowed pointer-events-none'
             : isSelected
               ? isKeyboardActive
-                ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)] ring-2 ring-inset ring-[var(--option-selected-icon)] transition-colors duration-100'
+                ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] ring-1 ring-inset ring-neutral-400 dark:ring-neutral-600 transition-colors duration-100'
                 : isHovered
-                  ? 'bg-[var(--option-selected-hover-bg)] text-[var(--option-selected-text)] transition-colors duration-100'
-                  : 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] transition-colors duration-100'
+                  ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] transition-colors duration-100'
+                  : 'bg-neutral-100/90 dark:bg-neutral-800/90 text-[var(--text)] transition-colors duration-100'
               : isKeyboardActive
-                ? 'bg-[var(--option-hover-bg)] text-[var(--text)] ring-2 ring-inset ring-[var(--option-selected-icon)] transition-colors duration-100'
+                ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] ring-1 ring-inset ring-neutral-300 dark:ring-neutral-700 transition-colors duration-100'
                 : isHovered
-                  ? 'bg-[var(--option-hover-bg)] text-[var(--text)] transition-colors duration-100'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)] transition-colors duration-100'
+                  ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] transition-colors duration-100'
+                  : 'text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-[var(--text)] transition-colors duration-100'
         )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">

@@ -55,16 +55,15 @@ export const DataTableColumnFilter: React.FC<DataTableColumnFilterProps> = ({
       trigger={
         <button
           type="button"
-          onClick={(e) => e.stopPropagation()}
           className={cn(
             'p-1 rounded-md transition-colors',
             isActive
-              ? 'text-[#F26B3A] bg-[#FFF1EA] dark:bg-orange-950/40'
-              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800'
+              ? 'text-[var(--brand)] bg-[var(--brand-soft)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)]'
           )}
           title={`Filter by ${columnTitle}`}
         >
-          <Filter className={cn('w-3.5 h-3.5 stroke-[1.75]', isActive && 'fill-[#F26B3A]')} />
+          <Filter className={cn('w-3.5 h-3.5 stroke-[1.75]', isActive && 'fill-[var(--brand)]')} />
         </button>
       }
       content={

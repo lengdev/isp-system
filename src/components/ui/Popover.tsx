@@ -68,7 +68,13 @@ export const Popover: React.FC<PopoverProps> = ({
 
   return (
     <div ref={containerRef} className={cn('relative inline-block', className)}>
-      <div onClick={toggle} className="cursor-pointer">
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle();
+        }}
+        className="cursor-pointer"
+      >
         {trigger}
       </div>
 
@@ -82,7 +88,7 @@ export const Popover: React.FC<PopoverProps> = ({
             transition={{ duration: 0.15, ease: 'easeOut' }}
             style={{ width: width || undefined }}
             className={cn(
-              'absolute z-40 mt-1.5 rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] focus:outline-none overflow-hidden max-w-[calc(100vw-32px)]',
+              'absolute z-40 mt-1.5 rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[0_10px_30px_-5px_rgba(0,0,0,0.12),0_4px_10px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_-5px_rgba(0,0,0,0.5)] focus:outline-none overflow-hidden max-w-[calc(100vw-32px)]',
               aligns[align],
               popoverClassName
             )}

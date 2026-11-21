@@ -107,7 +107,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onMobileMenuOpen }) => {
               value={filters.searchQuery}
               onChange={(e) => setFilters({ searchQuery: e.target.value })}
               placeholder="Search customers, IP, MAC, phone, plan..."
-              className="w-full h-9 pl-9 pr-12 text-[13px] bg-[var(--surface)] dark:bg-[rgba(255,255,255,0.04)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-[10px] text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(234,106,60,0.14)] transition-[border-color,box-shadow] duration-120 ease-out shadow-xs"
+              className="w-full h-9 pl-9 pr-12 text-[13px] bg-[var(--surface)] dark:bg-[rgba(255,255,255,0.04)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-[10px] text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-950/10 dark:focus:ring-white/10 transition-[border-color,box-shadow] duration-120 ease-out shadow-xs"
             />
             <button
               type="button"

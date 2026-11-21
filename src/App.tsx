@@ -86,7 +86,7 @@ export const AppContent: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
         <TopBar onMobileMenuOpen={() => setMobileMenuOpen(true)} />
 
         <main className="flex-1 min-w-0 max-w-[1480px] mx-auto px-4 sm:px-6 w-full pt-5 pb-10">

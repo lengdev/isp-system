@@ -75,12 +75,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
           <NavLink
             key={item.path}
             to={item.path}
+            title={item.name}
             onClick={onMobileClose}
             className={cn(
-              'relative flex items-center h-[34px] rounded-lg text-[13px] font-semibold tracking-[-0.01em] select-none group transition-colors',
+              'relative flex items-center h-[34px] rounded-lg text-[13px] font-medium tracking-[-0.01em] select-none group transition-colors',
               sidebarCollapsed ? 'justify-center w-9' : 'justify-between px-2.5 w-full',
               isActive
-                ? 'text-[var(--brand)] font-semibold'
+                ? 'text-[var(--brand)] font-medium'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[rgba(16,24,40,0.04)] dark:hover:bg-[rgba(255,255,255,0.05)]'
             )}
           >
@@ -181,24 +182,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
       {/* 2. Search Menu Trigger Button */}
       <div className="shrink-0 mb-3">
         {sidebarCollapsed ? (
-          <Tooltip content="Search menu (Ctrl+K)" side="right">
-            <button
-              type="button"
-              onClick={() => setCommandPaletteOpen(true)}
-              className="flex items-center justify-center w-full h-[34px] rounded-lg text-[var(--text-muted)] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--brand)]/40 hover:text-[var(--brand)] transition-colors"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          </Tooltip>
+          <div className="w-full flex justify-center">
+            <Tooltip content="Search menu (Ctrl+K)" side="right" className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
+                title="Search menu (Ctrl+K)"
+                className="flex items-center justify-center w-9 h-[34px] rounded-lg text-[var(--text-muted)] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--border-strong)] hover:text-[var(--text)] transition-colors mx-auto"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          </div>
         ) : (
           <button
             type="button"
             onClick={() => setCommandPaletteOpen(true)}
-            className="flex items-center justify-between w-full h-[34px] px-2.5 text-[12px] text-[var(--text-muted)] bg-[var(--surface)] dark:bg-[rgba(255,255,255,0.04)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-lg focus:outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(234,106,60,0.14)] transition-[border-color,box-shadow] duration-120 ease-out group"
+            className="flex items-center justify-between w-full h-[34px] px-2.5 text-[12px] text-[var(--text-muted)] bg-[var(--surface)] dark:bg-[rgba(255,255,255,0.04)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-lg focus:outline-none focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-950/10 dark:focus:ring-white/10 transition-[border-color,box-shadow] duration-120 ease-out group"
           >
             <div className="flex items-center gap-2 truncate">
-              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--brand)] transition-colors shrink-0" />
-              <span className="truncate">Search menu...</span>
+              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors shrink-0" />
+              <span className="truncate font-normal">Search menu...</span>
             </div>
             <kbd className="px-1.5 py-0.5 text-[11px] font-medium text-[var(--text-muted)] bg-[rgba(16,24,40,0.06)] dark:bg-[rgba(255,255,255,0.08)] rounded-[4px] pointer-events-none select-none shrink-0">
               Ctrl K
@@ -268,18 +272,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
 
         {/* Help Center */}
         {sidebarCollapsed ? (
-          <Tooltip content="Help center" side="right">
-            <NavLink
-              to="/settings"
-              onClick={onMobileClose}
-              className="flex items-center justify-center w-full h-[34px] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors"
-            >
-              <HelpCircle className="w-4 h-4 text-[var(--text-muted)]" />
-            </NavLink>
-          </Tooltip>
+          <div className="w-full flex justify-center py-0.5">
+            <Tooltip content="Help center" side="right" className="flex justify-center">
+              <NavLink
+                to="/settings"
+                title="Help center"
+                onClick={onMobileClose}
+                className="flex items-center justify-center w-9 h-[34px] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors mx-auto"
+              >
+                <HelpCircle className="w-4 h-4 text-[var(--text-muted)]" />
+              </NavLink>
+            </Tooltip>
+          </div>
         ) : (
           <NavLink
             to="/settings"
+            title="Help center"
             onClick={onMobileClose}
             className="flex items-center gap-2.5 px-2.5 h-[34px] text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
           >
