@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, MoreHorizontal } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
-import { Dropdown } from './Dropdown';
 
 interface StatCardProps {
   label: string;
@@ -24,17 +23,14 @@ interface StatCardProps {
 export const StatCard: React.FC<StatCardProps> = ({
   label,
   value,
-  isCurrency,
   prefix = '',
   suffix = '',
   changeValue,
   isPositive = true,
   changeLabel = 'vs last month',
   icon,
-  iconBgColor = 'bg-[#FFF1EA] dark:bg-orange-950/40',
-  iconTextColor = 'text-[#F26B3A]',
-  onRefresh,
-  onViewReport,
+  iconBgColor = 'bg-[var(--brand-soft)]',
+  iconTextColor = 'text-[var(--brand)]',
   className,
 }) => {
   // Animated count-up simulation for numbers
@@ -44,8 +40,8 @@ export const StatCard: React.FC<StatCardProps> = ({
     if (typeof value === 'number') {
       let start = 0;
       const end = value;
-      const duration = 500;
-      const steps = 20;
+      const duration = 400;
+      const steps = 16;
       const stepTime = duration / steps;
       const increment = (end - start) / steps;
 
@@ -77,69 +73,62 @@ export const StatCard: React.FC<StatCardProps> = ({
 
   return (
     <motion.div
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.15 }}
+      whileHover={{ y: -1 }}
+      transition={{ duration: 0.12 }}
       className={cn(
-        'p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs hover:shadow-soft-hover transition-all flex flex-col justify-between h-full select-none',
+        'h-[112px] p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] flex flex-col justify-between select-none transition-all',
         className
       )}
     >
-      {/* 1. Header Row: Icon Tile + Label + "..." Menu */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
+      {/* 1. Header Row: 32px Icon Tile + 12px Muted Label + "..." menu */}
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div
             className={cn(
-              'flex items-center justify-center w-10 h-10 rounded-xl shrink-0 transition-transform',
+              'flex items-center justify-center w-8 h-8 rounded-lg shrink-0',
               iconBgColor,
               iconTextColor
             )}
           >
-            {icon}
+            {React.isValidElement(icon)
+              ? React.cloneElement(icon as React.ReactElement<any>, {
+                  className: cn('w-4 h-4 stroke-[2]', (icon.props as any)?.className),
+                })
+              : icon}
           </div>
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 tracking-tight truncate">
+          <span className="text-[12px] font-medium text-[var(--text-muted)] tracking-tight truncate">
             {label}
           </span>
         </div>
-
-        <Dropdown
-          align="right"
-          trigger={
-            <button
-              type="button"
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-          }
-          items={[
-            { label: 'View Detailed Report', onClick: onViewReport },
-            { label: 'Refresh Metric', onClick: onRefresh },
-          ]}
-        />
+        <button
+          type="button"
+          aria-label="Stat options"
+          className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors opacity-60 hover:opacity-100"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
       </div>
 
-      {/* 2. Value Row: Big Number (28px, Semibold, Tabular-nums) */}
-      <div className="my-3">
-        <div className="text-[28px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tabular-nums tracking-tight">
-          {formattedDisplay()}
-        </div>
+      {/* 2. Value Row: 22px / 600 Tabular-nums */}
+      <div className="text-[22px] leading-tight font-semibold text-[var(--text)] tabular-nums tracking-tight">
+        {formattedDisplay()}
       </div>
 
-      {/* 3. Footer Row: Inside Padding with 1px Top Divider + ONE Trend Icon */}
-      <div className="pt-3 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between text-xs mt-auto">
-        <span className="text-gray-400 dark:text-gray-500 text-xs">{changeLabel}</span>
+      {/* 3. Footer Row: Inline 11px Muted + 11px Trend Pill (No Divider) */}
+      <div className="flex items-center justify-between text-[11px] leading-none">
+        <span className="text-[var(--text-muted)]">{changeLabel}</span>
         <div
           className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold',
+            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full font-semibold text-[11px]',
             isPositive
-              ? 'bg-[#EBFBF2] text-[#1E8E4D] dark:bg-[#0E3A20]/40 dark:text-[#34D399]'
-              : 'bg-[#FDEEEE] text-[#DC2626] dark:bg-[#451010]/40 dark:text-[#F87171]'
+              ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
+              : 'bg-[var(--danger-bg)] text-[var(--danger-text)]'
           )}
         >
           {isPositive ? (
-            <TrendingUp className="w-3.5 h-3.5 stroke-[2]" />
+            <TrendingUp className="w-3 h-3 stroke-[2]" />
           ) : (
-            <TrendingDown className="w-3.5 h-3.5 stroke-[2]" />
+            <TrendingDown className="w-3 h-3 stroke-[2]" />
           )}
           <span>{isPositive ? `+${cleanChangeValue}` : cleanChangeValue}</span>
         </div>

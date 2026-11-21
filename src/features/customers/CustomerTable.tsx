@@ -1,10 +1,7 @@
-import React from 'react';
+import React, { useMemo, useEffect } from 'react';
 import {
   MoreHorizontal,
   Star,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Eye,
   Edit2,
   Power,
@@ -13,499 +10,710 @@ import {
   Zap,
   Trash2,
   HardDrive,
+  Wifi,
+  Activity,
+  Cpu,
+  Clock,
+  MapPin,
+  FileText,
+  CheckCircle2,
+  AlertTriangle,
+  RotateCw,
+  Copy,
 } from 'lucide-react';
-import { Customer } from '../../types';
+import { Customer, CustomerStatus } from '../../types';
 import { useStore } from '../../store/useStore';
 import { Avatar } from '../../components/ui/Avatar';
-import { Dropdown } from '../../components/ui/Dropdown';
 import { StatusChangePopover } from './StatusChangePopover';
-import { Skeleton } from '../../components/ui/Skeleton';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { formatCurrency, formatNumber, cn } from '../../lib/utils';
+import { DataTable, DataTableColumnDef, RowAction } from '../../components/ui/DataTable';
 
 interface CustomerTableProps {
   customers: Customer[];
-  allPageCustomerIds: string[];
+  allPageCustomerIds?: string[];
+  total?: number;
+  loading?: boolean;
 }
 
 export const CustomerTable: React.FC<CustomerTableProps> = ({
   customers,
-  allPageCustomerIds,
+  loading = false,
 }) => {
-  const selectedIds = useStore((s) => s.selectedCustomerIds);
-  const toggleSelectCustomer = useStore((s) => s.toggleSelectCustomer);
-  const selectAllCustomers = useStore((s) => s.selectAllCustomers);
   const openDrawer = useStore((s) => s.openDrawer);
   const openModal = useStore((s) => s.openModal);
-  const sort = useStore((s) => s.sort);
-  const setSort = useStore((s) => s.setSort);
-  const columns = useStore((s) => s.columns);
-  const viewMode = useStore((s) => s.viewMode);
-  const isLoading = useStore((s) => s.isLoading);
+  const updateCustomer = useStore((s) => s.updateCustomer);
+  const plans = useStore((s) => s.plans);
   const currency = useStore((s) => s.currency);
+  const showStatistics = useStore((s) => s.showStatistics);
+  const toggleStatistics = useStore((s) => s.toggleStatistics);
+  const addToast = useStore((s) => s.addToast);
+  const selectAllCustomers = useStore((s) => s.selectAllCustomers);
+  const clearSelectedCustomers = useStore((s) => s.clearSelectedCustomers);
 
-  const isAllSelected =
-    allPageCustomerIds.length > 0 &&
-    allPageCustomerIds.every((id) => selectedIds.includes(id));
-  const isSomeSelected =
-    allPageCustomerIds.some((id) => selectedIds.includes(id)) && !isAllSelected;
+  // Clear selection on load (0 rows selected on load)
+  useEffect(() => {
+    clearSelectedCustomers();
+  }, [clearSelectedCustomers]);
 
-  const isColumnVisible = (id: string) => {
-    const col = columns.find((c) => c.id === id);
-    return col ? col.visible : true;
-  };
+  // Distinct cities for filter dropdown
+  const cities = useMemo(
+    () => Array.from(new Set(customers.map((c) => c.city).filter(Boolean))).sort(),
+    [customers]
+  );
 
-  const renderSortIcon = (column: keyof Customer | 'planName') => {
-    if (sort.column !== column) {
-      return (
-        <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-      );
-    }
-    return sort.direction === 'asc' ? (
-      <ArrowUp className="w-3.5 h-3.5 text-[#F26B3A]" />
-    ) : (
-      <ArrowDown className="w-3.5 h-3.5 text-[#F26B3A]" />
+  const planOptions = useMemo(
+    () =>
+      plans.map((p) => ({
+        value: p.name,
+        label: p.name,
+        description: `${p.speedMbps} Mbps • $${p.monthlyPrice}/mo`,
+      })),
+    [plans]
+  );
+
+  const statusOptions: { value: CustomerStatus; label: string }[] = [
+    { value: 'Active', label: 'Active' },
+    { value: 'Suspended', label: 'Suspended' },
+    { value: 'Overdue', label: 'Overdue' },
+    { value: 'Pending', label: 'Pending' },
+    { value: 'Disconnected', label: 'Disconnected' },
+  ];
+
+  // Column definitions with all advanced extras
+  const columns: DataTableColumnDef<Customer>[] = useMemo(
+    () => [
+      {
+        id: 'fullName',
+        header: 'Customer',
+        accessorKey: 'fullName',
+        width: 240,
+        minWidth: 200,
+        sortable: true,
+        pinned: 'left',
+        priority: 1,
+        filter: {
+          type: 'text',
+          placeholder: 'Search customer...',
+        },
+        tooltip: (val, row) => `${row.fullName} (${row.code}) - ${row.email}`,
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div
+              className="flex items-center gap-2 min-w-0 max-w-[240px] cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                openDrawer(c.id);
+              }}
+            >
+              <div className="w-7 h-7 rounded-full bg-[var(--surface-subtle)] border border-[var(--border)] flex items-center justify-center shrink-0 text-[11px] font-semibold text-[var(--text)]">
+                {c.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <Tooltip content={c.fullName}>
+                  <div className="font-semibold text-[12px] text-[var(--text)] hover:text-[var(--brand)] transition-colors truncate">
+                    {c.fullName}
+                  </div>
+                </Tooltip>
+                <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] truncate">
+                  <span className="font-mono text-[10px]">{c.code}</span>
+                  <span>•</span>
+                  <Tooltip content={c.email}>
+                    <span className="truncate">{c.email}</span>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'planName',
+        header: 'Plan',
+        accessorKey: 'planName',
+        width: 170,
+        minWidth: 150,
+        sortable: true,
+        priority: 1,
+        filter: {
+          type: 'select',
+          options: planOptions,
+        },
+        editable: {
+          type: 'select',
+          options: planOptions,
+          onSave: async (newPlanName, row) => {
+            const chosen = plans.find((p) => p.name === newPlanName);
+            if (chosen) {
+              await updateCustomer(row.id, {
+                planId: chosen.id,
+                planName: chosen.name,
+                monthlyPrice: chosen.monthlyPrice,
+                dataCapGB: chosen.dataCapGB,
+              });
+              addToast({
+                type: 'success',
+                title: 'Plan Updated',
+                message: `Changed ${row.fullName}'s plan to ${chosen.name}`,
+              });
+            }
+          },
+        },
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div>
+              <div className="font-medium text-[12px] text-[var(--text)] truncate">
+                {c.planName}
+              </div>
+              <div className="text-[11px] text-[var(--text-muted)]">
+                {c.connectionType}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'monthlyPrice',
+        header: 'Price',
+        accessorKey: 'monthlyPrice',
+        width: 100,
+        minWidth: 80,
+        align: 'right',
+        sortable: true,
+        priority: 1,
+        aggregate: 'sum',
+        filter: {
+          type: 'range',
+          min: 0,
+          max: 200,
+        },
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <span className="font-medium text-[12px] text-[var(--text)] tabular-nums">
+              {currency}{c.monthlyPrice.toFixed(2)}<span className="text-[11px] text-[var(--text-muted)] ml-0.5">/mo</span>
+            </span>
+          );
+        },
+      },
+      {
+        id: 'dataUsageGB',
+        header: 'Usage',
+        accessorKey: 'dataUsageGB',
+        width: 170,
+        minWidth: 150,
+        sortable: true,
+        priority: 2,
+        aggregate: 'avg',
+        filter: {
+          type: 'range',
+          min: 0,
+          max: 1000,
+        },
+        cell: ({ row }) => {
+          const c = row.original;
+          const usagePercent = c.dataCapGB
+            ? Math.min(100, Math.round((c.dataUsageGB / c.dataCapGB) * 100))
+            : Math.min(100, Math.round((c.dataUsageGB / 1000) * 100));
+
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-[72px] bg-[var(--surface-subtle)] border border-[var(--border-subtle)] h-1.5 rounded-full overflow-hidden shrink-0">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-300',
+                    usagePercent > 90
+                      ? 'bg-red-500'
+                      : usagePercent > 70
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                  )}
+                  style={{ width: `${usagePercent}%` }}
+                />
+              </div>
+              <span className="text-[11px] text-[var(--text-secondary)] tabular-nums whitespace-nowrap">
+                {formatNumber(c.dataUsageGB)} GB
+                {c.dataCapGB ? ` / ${formatNumber(c.dataCapGB)}` : ''}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'balanceDue',
+        header: 'Due',
+        accessorKey: 'balanceDue',
+        width: 90,
+        minWidth: 70,
+        align: 'right',
+        sortable: true,
+        priority: 1,
+        aggregate: 'sum',
+        filter: {
+          type: 'range',
+          min: 0,
+          max: 500,
+        },
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <span
+              className={cn(
+                'tabular-nums text-[12px] font-medium',
+                c.balanceDue > 0
+                  ? 'text-red-600 dark:text-red-400 font-semibold'
+                  : 'text-[var(--text-muted)]'
+              )}
+            >
+              {currency}{c.balanceDue.toFixed(2)}
+            </span>
+          );
+        },
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        accessorKey: 'status',
+        width: 104,
+        minWidth: 90,
+        sortable: true,
+        priority: 1,
+        filter: {
+          type: 'multi',
+          options: statusOptions,
+        },
+        editable: {
+          type: 'select',
+          options: statusOptions,
+          onSave: async (newStatus, row) => {
+            await updateCustomer(row.id, { status: newStatus as CustomerStatus });
+            addToast({
+              type: 'success',
+              title: 'Status Updated',
+              message: `Subscriber ${row.fullName} is now ${newStatus}.`,
+            });
+          },
+        },
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <StatusChangePopover currentStatus={c.status} customerId={c.id} />
+            </div>
+          );
+        },
+      },
+      {
+        id: 'rating',
+        header: 'Rating',
+        accessorKey: 'rating',
+        width: 72,
+        minWidth: 60,
+        align: 'right',
+        sortable: true,
+        priority: 2,
+        aggregate: 'avg',
+        filter: {
+          type: 'range',
+          min: 1,
+          max: 5,
+        },
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className="inline-flex items-center gap-1 font-medium text-amber-500 justify-end">
+              <Star className="w-3.5 h-3.5 fill-amber-400 stroke-amber-400" />
+              <span className="text-[12px] text-[var(--text)] tabular-nums font-semibold">
+                {c.rating.toFixed(1)}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'ipAddress',
+        header: 'IP',
+        accessorKey: 'ipAddress',
+        width: 124,
+        minWidth: 100,
+        sortable: true,
+        hideable: true,
+        priority: 3,
+        filter: { type: 'text' },
+        cell: ({ row }) => (
+          <div className="group/ip flex items-center gap-1.5">
+            <span className="font-mono text-[11px] text-[var(--text-secondary)]">
+              {row.original.ipAddress}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(row.original.ipAddress);
+                addToast({
+                  type: 'info',
+                  title: 'IP Copied',
+                  message: `Copied ${row.original.ipAddress} to clipboard.`,
+                });
+              }}
+              className="opacity-0 group-hover/ip:opacity-100 transition-opacity p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
+              title="Copy IP"
+            >
+              <Copy className="w-3 h-3" />
+            </button>
+          </div>
+        ),
+      },
+      {
+        id: 'city',
+        header: 'City',
+        accessorKey: 'city',
+        width: 130,
+        sortable: true,
+        priority: 3,
+        filter: {
+          type: 'select',
+          options: cities.map((city) => ({ value: city, label: city })),
+        },
+        cell: ({ row }) => (
+          <Tooltip content={row.original.city}>
+            <span className="text-[12px] text-[var(--text-secondary)] truncate block">
+              {row.original.city}
+            </span>
+          </Tooltip>
+        ),
+      },
+    ],
+    [plans, planOptions, cities, currency, updateCustomer, addToast, openDrawer]
+  );
+
+  // Row actions for dropdown menu and right-click context menu
+  const getRowActions = (c: Customer): RowAction<Customer>[] => [
+    {
+      label: 'View Full Details',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: () => openDrawer(c.id),
+    },
+    {
+      label: 'Edit Profile',
+      icon: <Edit2 className="w-3.5 h-3.5" />,
+      onClick: () => openModal('addEditCustomer', { customerId: c.id }),
+    },
+    {
+      label:
+        c.status === 'Suspended'
+          ? 'Activate Connection'
+          : 'Suspend Connection',
+      icon: <Power className="w-3.5 h-3.5" />,
+      onClick: () =>
+        openModal('statusConfirmation', {
+          customerIds: [c.id],
+          targetStatus: c.status === 'Suspended' ? 'Active' : 'Suspended',
+        }),
+    },
+    {
+      label: 'Record Payment',
+      icon: <CreditCard className="w-3.5 h-3.5" />,
+      onClick: () => openModal('recordPayment', { customerId: c.id }),
+    },
+    {
+      label: 'Send SMS / Email',
+      icon: <Mail className="w-3.5 h-3.5" />,
+      onClick: () =>
+        openModal('sendMessage', { customerId: c.id, isBulk: false }),
+    },
+    {
+      label: 'Run Speed Test',
+      icon: <Zap className="w-3.5 h-3.5" />,
+      onClick: () => openModal('speedTest', { customerId: c.id }),
+    },
+    { divider: true, label: '', onClick: () => {} },
+    {
+      label: 'Delete Subscriber',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      danger: true,
+      onClick: () =>
+        openModal('deleteConfirmation', {
+          customerIds: [c.id],
+          isBulk: false,
+        }),
+    },
+  ];
+
+  // Detail panel rendered when row chevron is expanded
+  const renderExpanded = (c: Customer) => (
+    <div className="p-4 rounded-xl bg-gray-50/80 dark:bg-[#161618] border border-gray-200/60 dark:border-gray-800 text-xs space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Hardware & Provisioning */}
+        <div className="space-y-1.5 p-3 rounded-lg bg-white dark:bg-[#1C1C1F] border border-gray-200/50 dark:border-gray-800">
+          <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100">
+            <Cpu className="w-3.5 h-3.5 text-[#F26B3A]" />
+            <span>ONT Hardware</span>
+          </div>
+          <div className="text-gray-500 dark:text-gray-400 space-y-1 text-[11px]">
+            <div>Model: <span className="font-semibold text-gray-800 dark:text-gray-200">Huawei HG8245H</span></div>
+            <div>MAC: <span className="font-mono text-gray-700 dark:text-gray-300">{c.macAddress}</span></div>
+            <div>IP: <span className="font-mono text-gray-700 dark:text-gray-300">{c.ipAddress}</span></div>
+            <div>Firmware: <span className="font-mono">v3.21.0-build4</span></div>
+          </div>
+        </div>
+
+        {/* Optical Link Telemetry */}
+        <div className="space-y-1.5 p-3 rounded-lg bg-white dark:bg-[#1C1C1F] border border-gray-200/50 dark:border-gray-800">
+          <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100">
+            <Wifi className="w-3.5 h-3.5 text-blue-500" />
+            <span>Link Diagnostics</span>
+          </div>
+          <div className="text-gray-500 dark:text-gray-400 space-y-1 text-[11px]">
+            <div>Optical Rx: <span className="font-semibold text-emerald-600">-19.4 dBm (Normal)</span></div>
+            <div>Optical Tx: <span className="font-semibold text-gray-800 dark:text-gray-200">+2.3 dBm</span></div>
+            <div>Latency: <span className="font-semibold text-gray-800 dark:text-gray-200">12 ms</span></div>
+            <div>Last Ping: <span className="font-semibold text-emerald-600">0% Loss (2m ago)</span></div>
+          </div>
+        </div>
+
+        {/* Dispatch & Address */}
+        <div className="space-y-1.5 p-3 rounded-lg bg-white dark:bg-[#1C1C1F] border border-gray-200/50 dark:border-gray-800">
+          <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100">
+            <MapPin className="w-3.5 h-3.5 text-amber-500" />
+            <span>Service Address</span>
+          </div>
+          <div className="text-gray-500 dark:text-gray-400 space-y-1 text-[11px]">
+            <div className="font-medium text-gray-800 dark:text-gray-200">{c.address}</div>
+            <div>City: {c.city}</div>
+            <div>Tech: <span className="font-semibold text-[#F26B3A]">{c.assignedTechnician || 'Unassigned'}</span></div>
+            <div>Installed: {c.installationDate}</div>
+          </div>
+        </div>
+
+        {/* Notes & Quick Actions */}
+        <div className="space-y-2 p-3 rounded-lg bg-white dark:bg-[#1C1C1F] border border-gray-200/50 dark:border-gray-800 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100 mb-1">
+              <FileText className="w-3.5 h-3.5 text-purple-500" />
+              <span>Subscriber Notes</span>
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2">
+              {c.notes || 'No active service tickets or dispatch flags on this subscriber account.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={() => openModal('speedTest', { customerId: c.id })}
+              className="text-[11px] font-semibold text-[#F26B3A] hover:underline inline-flex items-center gap-1"
+            >
+              <Zap className="w-3 h-3" /> Run Speed Test
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
+              type="button"
+              onClick={() => openDrawer(c.id, 'billing')}
+              className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 hover:underline"
+            >
+              Ledger History
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Responsive card view (used when in cards mode or <768px)
+  const renderCard = (
+    c: Customer,
+    isSelected: boolean,
+    onSelect: () => void
+  ) => {
+    const usagePercent = c.dataCapGB
+      ? Math.min(100, Math.round((c.dataUsageGB / c.dataCapGB) * 100))
+      : Math.min(100, Math.round((c.dataUsageGB / 1000) * 100));
+
+    return (
+      <div
+        data-testid="customer-card"
+        onClick={() => openDrawer(c.id)}
+        className={cn(
+          'relative p-4 rounded-2xl bg-[var(--surface)] border transition-all cursor-pointer select-none flex flex-col justify-between shadow-[var(--shadow-card)] hover:border-[var(--border-strong)] text-[12px] group',
+          isSelected
+            ? 'border-[var(--selected-indicator)] bg-[var(--selected-bg)] ring-2 ring-[var(--selected-ring)]'
+            : 'border-[var(--border)]'
+        )}
+      >
+        <div>
+          {/* Top header row: Checkbox, Avatar, Name/Email, Actions dropdown */}
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={onSelect}
+                  className="rounded border-[var(--border-strong)] text-[var(--brand)] focus:ring-[var(--brand-ring)] w-4 h-4 cursor-pointer accent-[var(--brand)] mr-0.5"
+                />
+              </div>
+              <Avatar
+                name={c.fullName}
+                size="md"
+                online={c.onlineStatus === 'online'}
+              />
+              <div className="min-w-0 flex-1">
+                <Tooltip content={c.fullName}>
+                  <h4 className="text-[13px] font-semibold text-[var(--text)] truncate group-hover:text-[var(--brand)] transition-colors">
+                    {c.fullName}
+                  </h4>
+                </Tooltip>
+                <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] truncate">
+                  <span className="font-mono text-[10px]">{c.code}</span>
+                  <span>•</span>
+                  <Tooltip content={c.email}>
+                    <span className="truncate">{c.email}</span>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+
+            {/* Top-right Status badge popover & actions menu */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 shrink-0"
+            >
+              <StatusChangePopover currentStatus={c.status} customerId={c.id} />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDrawer(c.id);
+                }}
+                className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors"
+                title="Customer options"
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Details list */}
+          <div className="mt-3.5 pt-2.5 border-t border-[var(--border-subtle)] space-y-1.5 text-[11px]">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--text-muted)]">Plan:</span>
+              <span className="font-semibold text-[var(--text)] truncate max-w-[170px]">
+                {c.planName} <span className="font-normal text-[var(--text-muted)]">({c.connectionType})</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--text-muted)]">Price:</span>
+              <span className="font-bold text-[var(--text)] tabular-nums">
+                {currency}{c.monthlyPrice.toFixed(2)}/mo
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--text-muted)]">Usage:</span>
+              <div className="flex items-center gap-2">
+                <div className="w-16 bg-[var(--surface-subtle)] border border-[var(--border-subtle)] h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      usagePercent > 90
+                        ? 'bg-red-500'
+                        : usagePercent > 70
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                    )}
+                    style={{ width: `${usagePercent}%` }}
+                  />
+                </div>
+                <span className="tabular-nums font-medium text-[var(--text-secondary)]">
+                  {formatNumber(c.dataUsageGB)} GB
+                  {c.dataCapGB ? ` / ${formatNumber(c.dataCapGB)}` : ''}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--text-muted)]">Due:</span>
+              <span
+                className={cn(
+                  'tabular-nums font-semibold',
+                  c.balanceDue > 0
+                    ? 'text-red-600 dark:text-red-400 font-bold'
+                    : 'text-[var(--text-muted)]'
+                )}
+              >
+                {currency}{c.balanceDue.toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer: Rating and IP */}
+        <div className="mt-3 pt-2.5 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+          <div className="flex items-center gap-1">
+            <Star className="w-3.5 h-3.5 fill-amber-400 stroke-amber-400 text-amber-500" />
+            <span className="font-bold text-[var(--text)] tabular-nums">
+              {c.rating.toFixed(1)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 font-mono text-[10px] text-[var(--text-muted)]">
+            <span>{c.ipAddress}</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(c.ipAddress);
+                addToast({
+                  type: 'info',
+                  title: 'IP Copied',
+                  message: `Copied ${c.ipAddress} to clipboard.`,
+                });
+              }}
+              className="p-0.5 rounded hover:text-[var(--text)]"
+              title="Copy IP"
+            >
+              <Copy className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
     );
   };
 
-  const isCompact = viewMode === 'compact';
-
   return (
-    <div className="w-full overflow-hidden rounded-2xl bg-white dark:bg-[#1C1C1F] border border-gray-200/80 dark:border-gray-800 shadow-xs select-none">
-      <div className="overflow-x-auto max-h-[640px] relative scrollbar-none">
-        <table className="w-full text-left border-collapse">
-          {/* Sticky Header (44px height, subtle #FAFAFA, uppercase-free 12px semibold muted labels) */}
-          <thead className="sticky top-0 z-10 bg-[#FAFAFA] dark:bg-[#1A1A1D] border-b border-gray-200/80 dark:border-gray-800 shadow-[0_1px_0_0_rgba(0,0,0,0.03)]">
-            <tr className="h-11 text-xs font-semibold text-gray-500 dark:text-gray-400">
-              {/* Checkbox column (48px wide) */}
-              {isColumnVisible('select') && (
-                <th className="w-12 px-4 text-center">
-                  <input
-                    type="checkbox"
-                    checked={isAllSelected}
-                    ref={(input) => {
-                      if (input) input.indeterminate = isSomeSelected;
-                    }}
-                    onChange={() => selectAllCustomers(allPageCustomerIds)}
-                    className="rounded border-gray-300 dark:border-gray-700 text-[#F26B3A] focus:ring-[#F26B3A]/30 w-4 h-4 cursor-pointer accent-[#F26B3A]"
-                  />
-                </th>
-              )}
-
-              {/* Customer */}
-              {isColumnVisible('customer') && (
-                <th
-                  onClick={() => setSort('fullName')}
-                  className="px-4 cursor-pointer group hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Customer</span>
-                    {renderSortIcon('fullName')}
-                  </div>
-                </th>
-              )}
-
-              {/* Plan */}
-              {isColumnVisible('plan') && (
-                <th
-                  onClick={() => setSort('planName')}
-                  className="px-4 cursor-pointer group hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Plan</span>
-                    {renderSortIcon('planName')}
-                  </div>
-                </th>
-              )}
-
-              {/* Price */}
-              {isColumnVisible('price') && (
-                <th
-                  onClick={() => setSort('monthlyPrice')}
-                  className="px-4 cursor-pointer group hover:text-gray-900 dark:hover:text-gray-200 transition-colors text-right"
-                >
-                  <div className="flex items-center justify-end gap-1.5">
-                    <span>Monthly price</span>
-                    {renderSortIcon('monthlyPrice')}
-                  </div>
-                </th>
-              )}
-
-              {/* Usage */}
-              {isColumnVisible('usage') && (
-                <th
-                  onClick={() => setSort('dataUsageGB')}
-                  className="px-4 cursor-pointer group hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Usage</span>
-                    {renderSortIcon('dataUsageGB')}
-                  </div>
-                </th>
-              )}
-
-              {/* Due Amount */}
-              {isColumnVisible('dueAmount') && (
-                <th
-                  onClick={() => setSort('balanceDue')}
-                  className="px-4 cursor-pointer group hover:text-gray-900 dark:hover:text-gray-200 transition-colors text-right"
-                >
-                  <div className="flex items-center justify-end gap-1.5">
-                    <span>Due amount</span>
-                    {renderSortIcon('balanceDue')}
-                  </div>
-                </th>
-              )}
-
-              {/* Status */}
-              {isColumnVisible('status') && (
-                <th
-                  onClick={() => setSort('status')}
-                  className="px-4 cursor-pointer group hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Status</span>
-                    {renderSortIcon('status')}
-                  </div>
-                </th>
-              )}
-
-              {/* Rating */}
-              {isColumnVisible('rating') && (
-                <th
-                  onClick={() => setSort('rating')}
-                  className="px-4 cursor-pointer group hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Rating</span>
-                    {renderSortIcon('rating')}
-                  </div>
-                </th>
-              )}
-
-              {/* Optional Columns */}
-              {isColumnVisible('ipAddress') && <th className="px-4">IP address</th>}
-              {isColumnVisible('city') && <th className="px-4">City</th>}
-              {isColumnVisible('connectionType') && <th className="px-4">Connection</th>}
-              {isColumnVisible('installationDate') && <th className="px-4">Install date</th>}
-
-              {/* Action column */}
-              {isColumnVisible('action') && <th className="px-4 text-center w-14">Action</th>}
-            </tr>
-          </thead>
-
-          {/* Table Body (Row height 64px or 44px compact, cell padding px-4) */}
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800/80 text-xs">
-            {isLoading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <tr key={`skel-${i}`} className={isCompact ? 'h-11' : 'h-16'}>
-                  {isColumnVisible('select') && (
-                    <td className="w-12 px-4 text-center">
-                      <Skeleton className="w-4 h-4 mx-auto rounded" />
-                    </td>
-                  )}
-                  {isColumnVisible('customer') && (
-                    <td className="px-4">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="w-9 h-9 rounded-full shrink-0" />
-                        <div className="space-y-1.5">
-                          <Skeleton className="w-32 h-3.5 rounded" />
-                          <Skeleton className="w-40 h-2.5 rounded" />
-                        </div>
-                      </div>
-                    </td>
-                  )}
-                  {isColumnVisible('plan') && (
-                    <td className="px-4">
-                      <Skeleton className="w-24 h-4 rounded" />
-                    </td>
-                  )}
-                  {isColumnVisible('price') && (
-                    <td className="px-4 text-right">
-                      <Skeleton className="w-14 h-4 ml-auto rounded" />
-                    </td>
-                  )}
-                  {isColumnVisible('usage') && (
-                    <td className="px-4">
-                      <Skeleton className="w-36 h-3 rounded" />
-                    </td>
-                  )}
-                  {isColumnVisible('dueAmount') && (
-                    <td className="px-4 text-right">
-                      <Skeleton className="w-12 h-4 ml-auto rounded" />
-                    </td>
-                  )}
-                  {isColumnVisible('status') && (
-                    <td className="px-4">
-                      <Skeleton className="w-16 h-6 rounded-full" />
-                    </td>
-                  )}
-                  {isColumnVisible('rating') && (
-                    <td className="px-4">
-                      <Skeleton className="w-10 h-4 rounded" />
-                    </td>
-                  )}
-                  {isColumnVisible('action') && (
-                    <td className="px-4 text-center">
-                      <Skeleton className="w-6 h-6 mx-auto rounded" />
-                    </td>
-                  )}
-                </tr>
-              ))
-            ) : customers.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={12}
-                  className="py-16 text-center text-gray-400 dark:text-gray-500"
-                >
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center text-[#F26B3A] mb-3">
-                      <HardDrive className="w-6 h-6" />
-                    </div>
-                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
-                      No subscribers found
-                    </h4>
-                    <p className="text-xs text-gray-500 max-w-sm">
-                      Try clearing filters or adjusting your search keyword.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              customers.map((c) => {
-                const isSelected = selectedIds.includes(c.id);
-                const usagePercent = c.dataCapGB
-                  ? Math.min(100, Math.round((c.dataUsageGB / c.dataCapGB) * 100))
-                  : Math.min(100, Math.round((c.dataUsageGB / 1000) * 100));
-
-                return (
-                  <tr
-                    key={c.id}
-                    onClick={() => openDrawer(c.id)}
-                    className={cn(
-                      'transition-colors cursor-pointer group align-middle',
-                      isCompact ? 'h-11' : 'h-16',
-                      isSelected
-                        ? 'bg-[#FFF6F2] dark:bg-orange-950/25'
-                        : 'hover:bg-gray-50/70 dark:hover:bg-gray-800/40'
-                    )}
-                  >
-                    {/* Checkbox */}
-                    {isColumnVisible('select') && (
-                      <td
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-12 px-4 text-center"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectCustomer(c.id)}
-                          className="rounded border-gray-300 dark:border-gray-700 text-[#F26B3A] focus:ring-[#F26B3A]/30 w-4 h-4 cursor-pointer accent-[#F26B3A]"
-                        />
-                      </td>
-                    )}
-
-                    {/* Customer Info (Avatar 36px, name & email truncated with tooltip) */}
-                    {isColumnVisible('customer') && (
-                      <td className="px-4">
-                        <div className="flex items-center gap-3 min-w-0 max-w-[240px]">
-                          <Avatar
-                            name={c.fullName}
-                            size="md"
-                            online={c.onlineStatus === 'online'}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <Tooltip content={c.fullName}>
-                              <div className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-[#F26B3A] transition-colors truncate">
-                                {c.fullName}
-                              </div>
-                            </Tooltip>
-                            <Tooltip content={c.email}>
-                              <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
-                                {c.email}
-                              </div>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      </td>
-                    )}
-
-                    {/* Plan */}
-                    {isColumnVisible('plan') && (
-                      <td className="px-4">
-                        <div className="font-medium text-gray-800 dark:text-gray-200">
-                          {c.planName}
-                        </div>
-                        <div className="text-[11px] text-gray-400">
-                          {c.connectionType}
-                        </div>
-                      </td>
-                    )}
-
-                    {/* Price (Right-aligned, tabular-nums) */}
-                    {isColumnVisible('price') && (
-                      <td className="px-4 text-right font-medium text-gray-900 dark:text-gray-100 tabular-nums">
-                        {currency}{c.monthlyPrice.toFixed(2)}
-                      </td>
-                    )}
-
-                    {/* Usage Progress Bar (Fixed 96px width, 6px height, rounded-full) */}
-                    {isColumnVisible('usage') && (
-                      <td className="px-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-24 bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden shrink-0">
-                            <div
-                              className={cn(
-                                'h-full rounded-full transition-all duration-300',
-                                usagePercent > 90
-                                  ? 'bg-red-500'
-                                  : usagePercent > 70
-                                  ? 'bg-amber-500'
-                                  : 'bg-emerald-500'
-                              )}
-                              style={{ width: `${usagePercent}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
-                            {formatNumber(c.dataUsageGB)} GB
-                            {c.dataCapGB ? ` / ${formatNumber(c.dataCapGB)}` : ''}
-                          </span>
-                        </div>
-                      </td>
-                    )}
-
-                    {/* Due Amount (Right-aligned, tabular-nums) */}
-                    {isColumnVisible('dueAmount') && (
-                      <td className="px-4 text-right">
-                        <span
-                          className={cn(
-                            'tabular-nums font-medium',
-                            c.balanceDue > 0
-                              ? 'text-red-600 dark:text-red-400 font-semibold'
-                              : 'text-gray-500 dark:text-gray-400'
-                          )}
-                        >
-                          {currency}{c.balanceDue.toFixed(2)}
-                        </span>
-                      </td>
-                    )}
-
-                    {/* Status Badge (Consistent 24px height, soft bg) */}
-                    {isColumnVisible('status') && (
-                      <td className="px-4">
-                        <StatusChangePopover currentStatus={c.status} customerId={c.id} />
-                      </td>
-                    )}
-
-                    {/* Rating */}
-                    {isColumnVisible('rating') && (
-                      <td className="px-4">
-                        <div className="inline-flex items-center gap-1 font-medium text-amber-500">
-                          <Star className="w-3.5 h-3.5 fill-amber-400 stroke-amber-400" />
-                          <span className="text-gray-800 dark:text-gray-200 tabular-nums text-xs">
-                            {c.rating.toFixed(1)}
-                          </span>
-                        </div>
-                      </td>
-                    )}
-
-                    {/* Optional columns */}
-                    {isColumnVisible('ipAddress') && (
-                      <td className="px-4 font-mono text-[11px] text-gray-600 dark:text-gray-300">
-                        {c.ipAddress}
-                      </td>
-                    )}
-                    {isColumnVisible('city') && (
-                      <td className="px-4 text-gray-600 dark:text-gray-300">{c.city}</td>
-                    )}
-                    {isColumnVisible('connectionType') && (
-                      <td className="px-4 text-gray-600 dark:text-gray-300">{c.connectionType}</td>
-                    )}
-                    {isColumnVisible('installationDate') && (
-                      <td className="px-4 text-gray-500 dark:text-gray-400 tabular-nums">
-                        {c.installationDate}
-                      </td>
-                    )}
-
-                    {/* Action Dropdown Menu (Only fully opaque on row hover/focus) */}
-                    {isColumnVisible('action') && (
-                      <td
-                        onClick={(e) => e.stopPropagation()}
-                        className="px-4 text-center w-14"
-                      >
-                        <div className="opacity-100 sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                          <Dropdown
-                            align="right"
-                            trigger={
-                              <button
-                                type="button"
-                                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </button>
-                            }
-                            items={[
-                              {
-                                label: 'View Full Details',
-                                icon: <Eye className="w-3.5 h-3.5" />,
-                                onClick: () => openDrawer(c.id),
-                              },
-                              {
-                                label: 'Edit Profile',
-                                icon: <Edit2 className="w-3.5 h-3.5" />,
-                                onClick: () => openModal('addEditCustomer', { customerId: c.id }),
-                              },
-                              {
-                                label:
-                                  c.status === 'Suspended'
-                                    ? 'Activate Connection'
-                                    : 'Suspend Connection',
-                                icon: <Power className="w-3.5 h-3.5" />,
-                                onClick: () =>
-                                  openModal('statusConfirmation', {
-                                    customerIds: [c.id],
-                                    targetStatus: c.status === 'Suspended' ? 'Active' : 'Suspended',
-                                  }),
-                              },
-                              {
-                                label: 'Record Payment',
-                                icon: <CreditCard className="w-3.5 h-3.5" />,
-                                onClick: () => openModal('recordPayment', { customerId: c.id }),
-                              },
-                              {
-                                label: 'Send SMS / Email',
-                                icon: <Mail className="w-3.5 h-3.5" />,
-                                onClick: () =>
-                                  openModal('sendMessage', { customerId: c.id, isBulk: false }),
-                              },
-                              {
-                                label: 'Run Speed Test',
-                                icon: <Zap className="w-3.5 h-3.5" />,
-                                onClick: () => openModal('speedTest', { customerId: c.id }),
-                              },
-                              { divider: true, label: '' },
-                              {
-                                label: 'Delete Subscriber',
-                                icon: <Trash2 className="w-3.5 h-3.5" />,
-                                danger: true,
-                                onClick: () =>
-                                  openModal('deleteConfirmation', {
-                                    customerIds: [c.id],
-                                    isBulk: false,
-                                  }),
-                              },
-                            ]}
-                          />
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <DataTable<Customer>
+      columns={columns}
+      data={customers}
+      loading={loading}
+      rowId={(c) => c.id}
+      viewKey="customers_master_table"
+      onRowClick={(c) => openDrawer(c.id)}
+      onSelectionChange={(selected) => selectAllCustomers(selected.map((c) => c.id))}
+      rowActions={getRowActions}
+      renderExpanded={renderExpanded}
+      renderCard={renderCard}
+      showStatisticsToggle={false}
+      showStatistics={showStatistics}
+      onToggleStatistics={toggleStatistics}
+      enableImport={true}
+      onImport={async (importedRows) => {
+        addToast({
+          type: 'success',
+          title: 'Subscribers Imported',
+          message: `Successfully validated and staged ${importedRows.length} new subscribers.`,
+        });
+      }}
+      autoRefreshInterval={30}
+      onRefresh={async () => {
+        addToast({
+          type: 'info',
+          title: 'Subscribers Refreshed',
+          message: 'Real-time telemetry and balance ledger synchronized.',
+        });
+      }}
+      emptyTitle="No subscribers found"
+      emptySubtitle="Try adjusting your filters, clearing your search query, or adding a new subscriber."
+      onAddNew={() => openModal('addEditCustomer')}
+      addNewLabel="Add New Customer"
+    />
   );
 };

@@ -1,12 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Power, CheckCircle, Mail, Download, Trash2, X, Wifi, User } from 'lucide-react';
+import {
+  Mail,
+  Wifi,
+  Download,
+  CheckCircle,
+  Power,
+  MoreHorizontal,
+  Trash2,
+  X,
+  Loader2,
+  User,
+  Bell,
+  Tag,
+  KeyRound,
+} from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { downloadCSV } from '../../lib/utils';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
+import { Tooltip } from '../../components/ui/Tooltip';
+import { SPRING_SOFT } from '../../lib/motion';
+import { cn } from '../../lib/utils';
 
 export const BulkActionBar: React.FC = () => {
   const selectedIds = useStore((s) => s.selectedCustomerIds);
+  const selectAll = useStore((s) => s.selectAllCustomers);
   const clearSelected = useStore((s) => s.clearSelectedCustomers);
   const customers = useStore((s) => s.customers);
   const plans = useStore((s) => s.plans);
@@ -16,9 +34,24 @@ export const BulkActionBar: React.FC = () => {
   const bulkSetCustomerStatus = useStore((s) => s.bulkSetCustomerStatus);
   const addToast = useStore((s) => s.addToast);
 
-  const [activeAction, setActiveAction] = useState<'none' | 'plan' | 'technician'>('none');
+  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  // Esc key clears selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedIds.length > 0) {
+        clearSelected();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds, clearSelected]);
 
   if (selectedIds.length === 0) return null;
+
+  const totalCount = customers.length;
+  const isAllSelected = selectedIds.length === totalCount;
 
   const planOptions: ComboboxOption[] = plans.map((p) => ({
     value: p.id,
@@ -26,15 +59,10 @@ export const BulkActionBar: React.FC = () => {
     description: `${p.speedMbps} Mbps • $${p.monthlyPrice}/mo`,
   }));
 
-  const technicianOptions: ComboboxOption[] = technicians.map((t) => ({
-    value: t.name,
-    label: t.name,
-    description: t.zone,
-  }));
-
   const handleBulkAssignPlan = async (planId: string) => {
     const chosenPlan = plans.find((p) => p.id === planId);
     if (!chosenPlan) return;
+    setActiveAction('assignPlan');
     for (const id of selectedIds) {
       await updateCustomer(id, {
         planId: chosenPlan.id,
@@ -43,23 +71,11 @@ export const BulkActionBar: React.FC = () => {
         dataCapGB: chosenPlan.dataCapGB,
       });
     }
-    setActiveAction('none');
+    setActiveAction(null);
     addToast({
       type: 'success',
       title: 'Plan Assigned',
       message: `Updated plan to ${chosenPlan.name} for ${selectedIds.length} subscribers.`,
-    });
-  };
-
-  const handleBulkAssignTechnician = async (techName: string) => {
-    for (const id of selectedIds) {
-      await updateCustomer(id, { assignedTechnician: techName });
-    }
-    setActiveAction('none');
-    addToast({
-      type: 'success',
-      title: 'Technician Assigned',
-      message: `Assigned ${techName} to ${selectedIds.length} subscribers.`,
     });
   };
 
@@ -97,7 +113,7 @@ export const BulkActionBar: React.FC = () => {
       c.dataUsageGB,
       c.balanceDue,
     ]);
-    downloadCSV(`netpulse-selected-subscribers-${Date.now()}.csv`, headers, rows);
+    downloadCSV(`netpulse-selected-${Date.now()}.csv`, headers, rows);
     addToast({
       type: 'success',
       title: 'CSV Exported',
@@ -108,111 +124,115 @@ export const BulkActionBar: React.FC = () => {
   return (
     <AnimatePresence>
       <motion.div
+        role="toolbar"
+        aria-label="Bulk actions toolbar"
         initial={{ y: 80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 80, opacity: 0 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-        className="fixed bottom-6 inset-x-0 mx-auto z-40 max-w-2xl w-[94%] sm:w-auto px-4 py-3 rounded-2xl bg-gray-900/95 dark:bg-[#1E1E22]/95 backdrop-blur-md text-white shadow-2xl border border-gray-700/60 flex items-center justify-between gap-3 sm:gap-4 select-none flex-wrap sm:flex-nowrap"
+        transition={SPRING_SOFT}
+        className="fixed bottom-6 inset-x-0 mx-auto z-40 max-w-3xl w-[94%] sm:w-auto h-14 px-4 rounded-2xl bg-[#1A1C20] text-[#E7E9EE] shadow-2xl border border-white/10 flex items-center justify-between gap-3 select-none flex-nowrap"
       >
-        <div className="flex items-center gap-2">
-          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#F26B3A] text-white text-xs font-bold">
+        {/* Left Count + Select All / Clear */}
+        <div className="flex items-center gap-2.5 shrink-0" aria-live="polite">
+          <span className="flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-[var(--brand)] text-white text-[11px] font-bold tabular-nums">
             {selectedIds.length}
           </span>
-          <span className="text-xs font-semibold text-gray-200">
-            Selected
+          <span className="text-[12px] font-medium text-[#B4B9C4] hidden sm:inline">
+            selected
           </span>
+
+          {!isAllSelected ? (
+            <button
+              type="button"
+              onClick={() => selectAll(customers.map((c) => c.id))}
+              className="text-[12px] font-medium text-[var(--brand)] hover:underline ml-1"
+            >
+              Select all {totalCount}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={clearSelected}
+              className="text-[12px] font-medium text-[var(--brand)] hover:underline ml-1"
+            >
+              All {totalCount} selected — Clear
+            </button>
+          )}
         </div>
 
-        {/* Quick Bulk Action Buttons + Inline Comboboxes */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        {/* Center Ghost Actions */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Message */}
+          <button
+            type="button"
+            onClick={() => openModal('sendMessage', { isBulk: true })}
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors"
+          >
+            <Mail className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden sm:inline">Message</span>
+          </button>
+
+          {/* Assign Plan Combobox or Button */}
           {activeAction === 'plan' ? (
-            <div className="w-48 text-gray-900">
+            <div className="w-44 text-black">
               <Combobox
                 options={planOptions}
                 value=""
                 onChange={(val) => handleBulkAssignPlan(val as string)}
-                placeholder="Select plan..."
+                placeholder="Choose plan..."
                 size="sm"
+                autoCloseOnSelect
               />
             </div>
           ) : (
             <button
               type="button"
               onClick={() => setActiveAction('plan')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors"
             >
-              <Wifi className="w-3.5 h-3.5 text-[#F26B3A]" />
-              <span>Assign Plan</span>
+              <Wifi className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Assign plan</span>
             </button>
           )}
 
-          {activeAction === 'technician' ? (
-            <div className="w-44 text-gray-900">
-              <Combobox
-                options={technicianOptions}
-                value=""
-                onChange={(val) => handleBulkAssignTechnician(val as string)}
-                placeholder="Select engineer..."
-                size="sm"
-              />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setActiveAction('technician')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors"
-            >
-              <User className="w-3.5 h-3.5 text-blue-400" />
-              <span>Assign Tech</span>
-            </button>
-          )}
-
-          {/* Activate */}
-          <button
-            type="button"
-            onClick={() => bulkSetCustomerStatus(selectedIds, 'Active')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold transition-colors"
-          >
-            <CheckCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Activate</span>
-          </button>
-
-          {/* Suspend */}
-          <button
-            type="button"
-            onClick={() =>
-              openModal('statusConfirmation', {
-                customerIds: selectedIds,
-                targetStatus: 'Suspended',
-              })
-            }
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold transition-colors"
-          >
-            <Power className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Suspend</span>
-          </button>
-
-          {/* Send Message */}
-          <button
-            type="button"
-            onClick={() => openModal('sendMessage', { isBulk: true })}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-semibold transition-colors"
-          >
-            <Mail className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Message</span>
-          </button>
-
-          {/* Export Selected */}
+          {/* Export */}
           <button
             type="button"
             onClick={handleExportSelected}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
             <span className="hidden sm:inline">Export</span>
           </button>
 
-          {/* Delete Selected */}
+          {/* Segmented Activate / Suspend group (icon colors only, hover tint) */}
+          <div className="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5">
+            <button
+              type="button"
+              title="Activate selected"
+              onClick={() => bulkSetCustomerStatus(selectedIds, 'Active')}
+              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+            >
+              <CheckCircle className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Activate</span>
+            </button>
+            <button
+              type="button"
+              title="Suspend selected"
+              onClick={() =>
+                openModal('statusConfirmation', {
+                  customerIds: selectedIds,
+                  targetStatus: 'Suspended',
+                })
+              }
+              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Suspend</span>
+            </button>
+          </div>
+
+          {/* Delete Action (red ghost) */}
           <button
             type="button"
             onClick={() =>
@@ -221,17 +241,19 @@ export const BulkActionBar: React.FC = () => {
                 isBulk: true,
               })
             }
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 text-[12px] font-medium transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Delete</span>
           </button>
         </div>
 
+        {/* Close X (Esc clears) */}
         <button
           type="button"
           onClick={clearSelected}
-          className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
+          title="Clear selection (Esc)"
+          className="p-1.5 rounded-lg text-[#8B92A0] hover:text-white hover:bg-white/10 transition-colors shrink-0 ml-1"
         >
           <X className="w-4 h-4" />
         </button>
@@ -239,3 +261,4 @@ export const BulkActionBar: React.FC = () => {
     </AnimatePresence>
   );
 };
+export default BulkActionBar;
