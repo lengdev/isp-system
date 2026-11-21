@@ -58,6 +58,12 @@ interface AppStore {
   isCommandPaletteOpen: boolean;
   isLoading: boolean;
   darkMode: boolean;
+  themeMode: 'light' | 'dark' | 'system';
+  comfort: 'soft' | 'standard' | 'high-contrast';
+  density: 'compact' | 'comfortable';
+  animations: 'system' | 'on' | 'reduced';
+  sidebarCollapsed: boolean;
+  sidebarUpgradeDismissed: boolean;
   currency: string;
 
   // Undo and feedback
@@ -89,6 +95,13 @@ interface AppStore {
   toggleStatistics: () => void;
   toggleDarkMode: () => void;
   setDarkMode: (enabled: boolean) => void;
+  setThemeMode: (mode: 'light' | 'dark' | 'system') => void;
+  setComfort: (comfort: 'soft' | 'standard' | 'high-contrast') => void;
+  setDensity: (density: 'compact' | 'comfortable') => void;
+  setAnimations: (mode: 'system' | 'on' | 'reduced') => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebarCollapsed: () => void;
+  setSidebarUpgradeDismissed: (dismissed: boolean) => void;
   setCurrency: (currency: string) => void;
 
   // Selection actions
@@ -141,6 +154,9 @@ interface AppStore {
   // Notifications
   markAllNotificationsRead: () => void;
   markNotificationRead: (id: string) => void;
+  toggleNotificationRead: (id: string) => void;
+  deleteNotification: (id: string) => void;
+  addNotification: (item: Omit<NotificationItem, 'id'>) => void;
 
   // System
   resetDemoData: () => void;
@@ -187,6 +203,21 @@ export const useStore = create<AppStore>()(
       isCommandPaletteOpen: false,
       isLoading: false,
       darkMode: false,
+      themeMode: 'light',
+      comfort: (typeof window !== 'undefined' && (localStorage.getItem('netpulse_comfort') as any)) || 'soft',
+      density:
+        (typeof window !== 'undefined' &&
+          (localStorage.getItem('netpulse_density') as any)) ||
+        'compact',
+      animations: 'system',
+      sidebarCollapsed:
+        (typeof window !== 'undefined' &&
+          localStorage.getItem('netpulse_sidebar_collapsed') === 'true') ||
+        false,
+      sidebarUpgradeDismissed:
+        (typeof window !== 'undefined' &&
+          localStorage.getItem('netpulse_upgrade_dismissed') === 'true') ||
+        false,
       currency: '$',
 
       lastDeletedCustomers: [],
@@ -265,11 +296,65 @@ export const useStore = create<AppStore>()(
         }
       },
       setDarkMode: (enabled) => {
-        set({ darkMode: enabled });
+        set({ darkMode: enabled, themeMode: enabled ? 'dark' : 'light' });
         if (enabled) {
           document.documentElement.classList.add('dark');
         } else {
           document.documentElement.classList.remove('dark');
+        }
+      },
+      setThemeMode: (themeMode) => {
+        const isDark =
+          themeMode === 'dark' ||
+          (themeMode === 'system' &&
+            typeof window !== 'undefined' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        set({ themeMode, darkMode: isDark });
+        if (typeof document !== 'undefined') {
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        }
+      },
+      setComfort: (comfort) => {
+        set({ comfort });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('netpulse_comfort', comfort);
+          document.documentElement.setAttribute('data-comfort', comfort);
+        }
+      },
+      setDensity: (density) => {
+        set({ density });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('netpulse_density', density);
+          document.documentElement.setAttribute('data-density', density);
+        }
+      },
+      setAnimations: (animations) => {
+        set({ animations });
+        if (typeof document !== 'undefined') {
+          document.documentElement.setAttribute('data-motion', animations);
+        }
+      },
+      setSidebarCollapsed: (sidebarCollapsed) => {
+        set({ sidebarCollapsed });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('netpulse_sidebar_collapsed', String(sidebarCollapsed));
+        }
+      },
+      toggleSidebarCollapsed: () => {
+        const next = !get().sidebarCollapsed;
+        set({ sidebarCollapsed: next });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('netpulse_sidebar_collapsed', String(next));
+        }
+      },
+      setSidebarUpgradeDismissed: (sidebarUpgradeDismissed) => {
+        set({ sidebarUpgradeDismissed });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('netpulse_upgrade_dismissed', String(sidebarUpgradeDismissed));
         }
       },
       setCurrency: (currency) => set({ currency }),
@@ -313,7 +398,7 @@ export const useStore = create<AppStore>()(
         set((state) => ({
           toasts: [...state.toasts, { ...toast, id }],
         }));
-        const duration = toast.duration ?? (toast.type === 'error' ? 6000 : 4000);
+        const duration = toast.duration ?? (toast.type === 'error' ? 4000 : 3000);
         setTimeout(() => {
           get().removeToast(id);
         }, duration);
@@ -683,6 +768,27 @@ export const useStore = create<AppStore>()(
           notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
         }));
       },
+      toggleNotificationRead: (id) => {
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, read: !n.read } : n
+          ),
+        }));
+      },
+      deleteNotification: (id) => {
+        set((state) => ({
+          notifications: state.notifications.filter((n) => n.id !== id),
+        }));
+      },
+      addNotification: (item) => {
+        const newItem: NotificationItem = {
+          ...item,
+          id: 'notif-' + Date.now(),
+        };
+        set((state) => ({
+          notifications: [newItem, ...state.notifications],
+        }));
+      },
 
       // Reset Demo Data
       resetDemoData: () => {
@@ -720,6 +826,12 @@ export const useStore = create<AppStore>()(
         columns: state.columns,
         showStatistics: state.showStatistics,
         darkMode: state.darkMode,
+        themeMode: state.themeMode,
+        comfort: state.comfort,
+        density: state.density,
+        animations: state.animations,
+        sidebarCollapsed: state.sidebarCollapsed,
+        sidebarUpgradeDismissed: state.sidebarUpgradeDismissed,
         currency: state.currency,
         viewMode: state.viewMode,
       }),

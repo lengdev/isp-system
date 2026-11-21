@@ -134,7 +134,8 @@ export interface NotificationItem {
   description: string;
   timestamp: string;
   read: boolean;
-  type: 'alert' | 'invoice' | 'ticket' | 'system';
+  type: 'alert' | 'invoice' | 'ticket' | 'system' | 'critical' | 'payment';
+  link?: string;
 }
 
 export type TableViewMode = 'table' | 'compact' | 'cards';
@@ -173,3 +174,9 @@ export interface ToastItem {
   duration?: number;
   undoAction?: () => void;
 }
+
+export type ThemeMode = 'light' | 'dark' | 'system';
+export type ComfortMode = 'soft' | 'standard' | 'high-contrast';
+export type DensityMode = 'compact' | 'comfortable';
+export type AnimationMode = 'system' | 'on' | 'reduced';
+

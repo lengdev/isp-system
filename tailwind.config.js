@@ -8,29 +8,51 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: '#FFF5F0',
-          100: '#FFE8DE',
-          200: '#FED0BD',
-          300: '#FCAE92',
-          400: '#F88560',
-          500: '#F26B3A', // Primary accent
-          600: '#E05220',
-          700: '#BC3E14',
-          800: '#953416',
-          900: '#792E17',
-          950: '#421408',
+        bg: {
+          app: 'var(--bg-app)',
+          sidebar: 'var(--bg-sidebar)',
         },
         surface: {
-          warm: '#FAF7F5', // warm off-white
-          card: '#FFFFFF',
-          dark: '#121214',
-          darkCard: '#1C1C1F',
-          darkBorder: '#2E2E33',
-        }
+          DEFAULT: 'var(--surface)',
+          card: 'var(--surface)',
+          raised: 'var(--surface-raised)',
+          subtle: 'var(--surface-subtle)',
+          warm: 'var(--bg-app)',
+          dark: 'var(--bg-app)',
+          darkCard: 'var(--surface)',
+          darkBorder: 'var(--border)',
+        },
+        border: {
+          DEFAULT: 'var(--border)',
+          subtle: 'var(--border-subtle)',
+          strong: 'var(--border-strong)',
+        },
+        text: {
+          DEFAULT: 'var(--text)',
+          secondary: 'var(--text-secondary)',
+          muted: 'var(--text-muted)',
+          subtle: 'var(--text-subtle)',
+        },
+        brand: {
+          DEFAULT: 'var(--brand)',
+          hover: 'var(--brand-hover)',
+          soft: 'var(--brand-soft)',
+          ring: 'var(--brand-ring)',
+          50: '#FDEFE8',
+          100: '#FCDFD1',
+          200: '#F9BFB4',
+          300: '#F59F87',
+          400: '#F07F5B',
+          500: 'var(--brand)',
+          600: 'var(--brand-hover)',
+          700: '#C2451C',
+          800: '#9B3314',
+          900: '#75250E',
+          950: '#421408',
+        },
       },
       fontFamily: {
-        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'Noto Sans Khmer', 'Kantumruy Pro', 'Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['11px', '14px'],
@@ -52,14 +74,15 @@ export default {
         '10': '40px',
       },
       boxShadow: {
-        'xs': '0 1px 2px rgba(16, 24, 40, 0.04)',
-        'soft': '0 1px 2px rgba(16, 24, 40, 0.04)',
-        'soft-hover': '0 4px 16px rgba(242, 107, 58, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02)',
-        'modal': '0 20px 40px -15px rgba(0, 0, 0, 0.15)',
-        'popover': '0 8px 24px -4px rgba(16, 24, 40, 0.12), 0 2px 6px -1px rgba(16, 24, 40, 0.04)',
+        'xs': 'var(--shadow-card)',
+        'soft': 'var(--shadow-card)',
+        'card': 'var(--shadow-card)',
+        'soft-hover': '0 4px 16px rgba(234, 106, 60, 0.08), var(--shadow-card)',
+        'modal': 'var(--shadow-modal)',
+        'popover': 'var(--shadow-popover)',
       },
       borderRadius: {
-        'control': '10px',
+        'control': '8px',
         'xl': '12px',
         '2xl': '16px',
         '3xl': '24px',

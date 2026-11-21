@@ -4,3 +4,6 @@ dist-ssr
 *.local
 .vscode
 .DS_Store
+*.tsbuildinfo
+test-results/
+playwright-report/

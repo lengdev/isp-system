@@ -2,14 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23F26B3A'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z'/></svg>" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23EA6A3C'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#F6F5F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>NetPulse - ISP Customer Management & Operations</title>
+    <!-- Prevent theme/comfort/density/motion flash on initial load -->
+    <script>
+      (function() {
+        try {
+          var state = (JSON.parse(localStorage.getItem('netpulse-storage') || '{}')).state || {};
+          var themeMode = state.themeMode || (state.darkMode ? 'dark' : 'light');
+          var isDark = themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var comfort = state.comfort || 'soft';
+          var density = state.density || 'compact';
+          var animations = state.animations || 'system';
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          document.documentElement.setAttribute('data-comfort', comfort);
+          document.documentElement.setAttribute('data-density', density);
+          document.documentElement.setAttribute('data-motion', animations);
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-[#FAF7F5] dark:bg-[#121214] text-gray-800 dark:text-gray-100 antialiased selection:bg-orange-500/20 selection:text-orange-600 transition-colors duration-200">
+  <body class="bg-[var(--bg-app)] text-[var(--text)] antialiased selection:bg-[var(--brand-soft)] selection:text-[var(--brand)]">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
