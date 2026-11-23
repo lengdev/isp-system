@@ -23,7 +23,6 @@ import {
   ExpandedState,
   GroupingState,
 } from '@tanstack/react-table';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpDown,
@@ -525,11 +524,14 @@ export const DataTable = <T extends Record<string, any>>({
     };
   }, [autoRefreshInterval, onRefresh]);
 
-  // Window resize: auto-force cards on small screens (<768px)
+  // Window resize: auto-force cards on small screens (<768px) and sync container width
+  const [windowWidth, setWindowWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1200));
+
   useEffect(() => {
     const handleResize = () => {
       if (!isMountedRef.current) return;
       const width = window.innerWidth;
+      setWindowWidth(width);
       if (width < 768) {
         setViewModeState((prev) => (prev !== 'cards' ? 'cards' : prev));
       }
@@ -927,43 +929,10 @@ export const DataTable = <T extends Record<string, any>>({
     return leafColumns.reduce((sum, col) => sum + col.getSize(), 0);
   }, [leafColumns]);
 
-  // Conditional horizontal scrolling: only scroll when table overflows container width
-  const [isOverflowingX, setIsOverflowingX] = useState(false);
-
-  useEffect(() => {
-    let animId: number | null = null;
-    const container = tableContainerRef.current;
-    if (!container) return;
-
-    const checkOverflow = () => {
-      if (animId !== null) {
-        cancelAnimationFrame(animId);
-      }
-      animId = requestAnimationFrame(() => {
-        if (!isMountedRef.current || !tableContainerRef.current) return;
-        const overflows = totalTableWidth > tableContainerRef.current.clientWidth;
-        setIsOverflowingX((prev) => (prev !== overflows ? overflows : prev));
-      });
-    };
-
-    const ro = new ResizeObserver(checkOverflow);
-    ro.observe(container);
-
-    return () => {
-      if (animId !== null) {
-        cancelAnimationFrame(animId);
-      }
-      ro.disconnect();
-    };
-  }, [totalTableWidth]);
-
-  // TanStack Virtualizer
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => currentRowHeight,
-    overscan: 10,
-  });
+  // Derive horizontal overflow cleanly without mount-time state update side-effects
+  const isOverflowingX = useMemo(() => {
+    return totalTableWidth > (windowWidth - 280);
+  }, [totalTableWidth, windowWidth]);
 
   // Commit inline edit
   const handleCommitCellEdit = async (row: T, col: DataTableColumnDef<T>) => {
