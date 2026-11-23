@@ -22,6 +22,34 @@ export interface ModalProps {
   ariaDescribedBy?: string;
 }
 
+// Global scroll lock tracking to prevent layout shifts across nested modals
+let scrollLockCount = 0;
+let savedBodyOverflow = '';
+let savedBodyPaddingRight = '';
+
+function acquireScrollLock() {
+  if (typeof document === 'undefined') return;
+  if (scrollLockCount === 0) {
+    savedBodyOverflow = document.body.style.overflow;
+    savedBodyPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    document.body.style.overflow = 'hidden';
+  }
+  scrollLockCount++;
+}
+
+function releaseScrollLock() {
+  if (typeof document === 'undefined') return;
+  scrollLockCount = Math.max(0, scrollLockCount - 1);
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = savedBodyOverflow;
+    document.body.style.paddingRight = savedBodyPaddingRight;
+  }
+}
+
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
@@ -55,9 +83,15 @@ export const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setTimeout(checkScroll, 60);
+      // Passive layout observation after mount to avoid mid-animation reflow jitter
+      const raf = requestAnimationFrame(() => {
+        checkScroll();
+      });
       window.addEventListener('resize', checkScroll);
-      return () => window.removeEventListener('resize', checkScroll);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener('resize', checkScroll);
+      };
     }
   }, [isOpen, checkScroll]);
 
@@ -70,10 +104,14 @@ export const Modal: React.FC<ModalProps> = ({
     }
   }, [isDirty, onClose]);
 
-  // Escape key & body scroll lock
+  // Escape key & body scroll lock with layout-shift compensation
   useEffect(() => {
+    if (!isOpen) return;
+
+    acquireScrollLock();
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         if (showDiscardConfirm) {
@@ -84,13 +122,10 @@ export const Modal: React.FC<ModalProps> = ({
       }
     };
 
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.body.style.overflow = 'unset';
+      releaseScrollLock();
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, showDiscardConfirm, handleAttemptClose]);
@@ -110,126 +145,135 @@ export const Modal: React.FC<ModalProps> = ({
     amber: 'bg-[var(--warning-bg)] text-[var(--warning-text)]',
   };
 
+  if (typeof document === 'undefined') return null;
+
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden">
-            {/* Backdrop with 6px blur */}
+      {createPortal(
+        <AnimatePresence>
+          {isOpen && (
             <motion.div
+              key="modal-portal-wrapper"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              onClick={handleAttemptClose}
-              className="fixed inset-0 bg-[var(--backdrop)] backdrop-blur-[6px]"
-            />
-
-            {/* Modal Container: Bottom sheet on mobile (<640px), centered dialog on >=sm */}
-            <motion.div
-              ref={modalRef}
-              variants={modalVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              role="dialog"
-              aria-modal="true"
-              aria-describedby={ariaDescribedBy}
-              className={cn(
-                'relative w-full rounded-t-2xl sm:rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-modal)] z-10 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[calc(100dvh-64px)]',
-                sizeMap[size],
-                className
-              )}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden select-none"
             >
-              {/* Mobile Drag Handle */}
-              <div className="sm:hidden w-10 h-1 bg-[var(--border-strong)] rounded-full mx-auto my-2.5 shrink-0" />
+              {/* Backdrop with 6px blur */}
+              <div
+                onClick={handleAttemptClose}
+                className="fixed inset-0 bg-[var(--backdrop)] backdrop-blur-[6px] transition-opacity"
+                aria-hidden="true"
+              />
 
-              {/* Header: px-6 pt-5 pb-4 */}
-              {(title || icon || showCloseButton) && (
+              {/* Modal Container: Bottom sheet on mobile (<640px), centered dialog on >=sm */}
+              <motion.div
+                ref={modalRef}
+                variants={modalVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                role="dialog"
+                aria-modal="true"
+                aria-describedby={ariaDescribedBy}
+                className={cn(
+                  'relative w-full rounded-t-2xl sm:rounded-2xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-modal)] z-10 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[calc(100dvh-64px)] transform-gpu will-change-transform origin-bottom sm:origin-center',
+                  sizeMap[size],
+                  className
+                )}
+              >
+                {/* Mobile Drag Handle */}
+                <div className="sm:hidden w-10 h-1 bg-[var(--border-strong)] rounded-full mx-auto my-2.5 shrink-0" />
+
+                {/* Header: px-6 pt-5 pb-4 */}
+                {(title || icon || showCloseButton) && (
+                  <div
+                    className={cn(
+                      'flex items-start justify-between px-6 pt-4 sm:pt-5 pb-4 shrink-0 transition-colors',
+                      canScrollUp
+                        ? 'border-b border-[var(--border)] bg-[var(--surface-raised)]/95 backdrop-blur-xs'
+                        : 'border-b border-transparent'
+                    )}
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0 pr-4">
+                      {icon && (
+                        <div
+                          className={cn(
+                            'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl font-bold',
+                            iconColorStyles[iconColor]
+                          )}
+                        >
+                          {icon}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        {typeof title === 'string' ? (
+                          <h3 className="text-[18px] font-semibold text-[var(--text)] tracking-tight truncate">
+                            {title}
+                          </h3>
+                        ) : (
+                          title
+                        )}
+                        {subtitle && (
+                          <p className="text-[13px] text-[var(--text-muted)] mt-0.5 truncate">
+                            {subtitle}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {showCloseButton && (
+                      <button
+                        type="button"
+                        onClick={handleAttemptClose}
+                        data-testid="modal-close-btn"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] focus:outline-none focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] focus-visible:outline-offset-2 transition-colors shrink-0 -mr-1 mt-0.5"
+                        aria-label="Close dialog"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Top Scroll Shadow Gradient */}
                 <div
                   className={cn(
-                    'flex items-start justify-between px-6 pt-4 sm:pt-5 pb-4 shrink-0 transition-colors',
-                    canScrollUp
-                      ? 'border-b border-[var(--border)] bg-[var(--surface-raised)]/95 backdrop-blur-xs'
-                      : 'border-b border-transparent'
+                    'absolute left-0 right-0 top-[72px] h-4 bg-gradient-to-b from-black/5 to-transparent pointer-events-none transition-opacity duration-200 z-10',
+                    canScrollUp ? 'opacity-100' : 'opacity-0'
                   )}
+                />
+
+                {/* Body: px-6 py-5, gap-4 */}
+                <div
+                  ref={bodyRef}
+                  onScroll={checkScroll}
+                  className="px-6 py-5 overflow-y-auto flex-1 scrollbar-thin scrollbar-gutter-stable space-y-4"
                 >
-                  <div className="flex items-center gap-3.5 min-w-0 pr-4">
-                    {icon && (
-                      <div
-                        className={cn(
-                          'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl font-bold',
-                          iconColorStyles[iconColor]
-                        )}
-                      >
-                        {icon}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      {typeof title === 'string' ? (
-                        <h3 className="text-[18px] font-semibold text-[var(--text)] tracking-tight truncate">
-                          {title}
-                        </h3>
-                      ) : (
-                        title
-                      )}
-                      {subtitle && (
-                        <p className="text-[13px] text-[var(--text-muted)] mt-0.5 truncate">
-                          {subtitle}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  {children}
+                </div>
 
-                  {showCloseButton && (
-                    <button
-                      type="button"
-                      onClick={handleAttemptClose}
-                      data-testid="modal-close-btn"
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] focus:outline-none focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] focus-visible:outline-offset-2 transition-colors shrink-0 -mr-1 mt-0.5"
-                      aria-label="Close dialog"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                {/* Bottom Scroll Shadow Gradient */}
+                <div
+                  className={cn(
+                    'absolute left-0 right-0 bottom-[68px] h-4 bg-gradient-to-t from-black/5 to-transparent pointer-events-none transition-opacity duration-200 z-10',
+                    canScrollDown ? 'opacity-100' : 'opacity-0'
                   )}
-                </div>
-              )}
+                />
 
-              {/* Top Scroll Shadow Gradient */}
-              <div
-                className={cn(
-                  'absolute left-0 right-0 top-[72px] h-4 bg-gradient-to-b from-black/5 to-transparent pointer-events-none transition-opacity duration-200 z-10',
-                  canScrollUp ? 'opacity-100' : 'opacity-0'
+                {/* Footer: sticky at bottom, px-6 py-4 */}
+                {footer && (
+                  <div className="px-6 py-3.5 sm:py-4 bg-[var(--surface-subtle)] border-t border-[var(--border)] shrink-0">
+                    {footer}
+                  </div>
                 )}
-              />
-
-              {/* Body: px-6 py-5, gap-4 */}
-              <div
-                ref={bodyRef}
-                onScroll={checkScroll}
-                className="px-6 py-5 overflow-y-auto flex-1 scrollbar-thin scrollbar-gutter-stable space-y-4"
-              >
-                {children}
-              </div>
-
-              {/* Bottom Scroll Shadow Gradient */}
-              <div
-                className={cn(
-                  'absolute left-0 right-0 bottom-[68px] h-4 bg-gradient-to-t from-black/5 to-transparent pointer-events-none transition-opacity duration-200 z-10',
-                  canScrollDown ? 'opacity-100' : 'opacity-0'
-                )}
-              />
-
-              {/* Footer: sticky at bottom, px-6 py-4 */}
-              {footer && (
-                <div className="px-6 py-3.5 sm:py-4 bg-[var(--surface-subtle)] border-t border-[var(--border)] shrink-0">
-                  {footer}
-                </div>
-              )}
+              </motion.div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Separate Portaled Discard Confirmation Dialog (Spec 9.1: rendered in its own Portal on document.body) */}
       {typeof document !== 'undefined' &&

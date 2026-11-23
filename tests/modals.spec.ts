@@ -75,7 +75,9 @@ test.describe('NetPulse ISP Modals & Multi-Step System E2E', () => {
     await customerCell.click();
 
     // Click Run Speed Test button in drawer
-    const speedTestBtn = page.locator('button:has-text("Run Speed Test")').first();
+    const drawer = page.locator('[role="dialog"][aria-modal="true"]');
+    await expect(drawer).toBeVisible();
+    const speedTestBtn = drawer.locator('button:has-text("Run Speed Test")').first();
     await speedTestBtn.click();
 
     const modal = page.locator('[role="dialog"]').filter({ hasText: 'Diagnostic Line Speed Test' }).first();

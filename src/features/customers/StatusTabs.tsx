@@ -87,12 +87,30 @@ export const StatusTabs: React.FC = () => {
     return undefined;
   }, [canScrollLeft, canScrollRight]);
 
+  // Sync status filter from URL on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const statusParam = params.get('status');
+    if (statusParam) {
+      const statuses = statusParam.split(',').filter(Boolean) as CustomerStatus[];
+      if (statuses.length > 0) {
+        setFilters({ status: statuses });
+      }
+    }
+  }, [setFilters]);
+
   const handlePillClick = (val: 'All' | CustomerStatus) => {
+    const params = new URLSearchParams(window.location.search);
     if (val === 'All') {
+      params.delete('status');
       setFilters({ status: [] });
     } else {
+      params.set('status', val);
       setFilters({ status: [val] });
     }
+    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+    window.history.replaceState(null, '', newUrl);
   };
 
   return (
@@ -115,7 +133,7 @@ export const StatusTabs: React.FC = () => {
               type="button"
               onClick={() => handlePillClick(pill.value)}
               className={cn(
-                'relative h-7 px-3 rounded-full text-[12px] font-medium transition-colors shrink-0 flex items-center gap-1.5',
+                'relative h-9 px-3 rounded-full text-[12px] font-medium transition-colors shrink-0 flex items-center gap-1.5',
                 isSelected
                   ? 'text-[var(--text)] font-semibold'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)]'
@@ -131,7 +149,7 @@ export const StatusTabs: React.FC = () => {
               <span className="relative z-10">{pill.label}</span>
               <span
                 className={cn(
-                  'relative z-10 text-[10px] tabular-nums font-semibold px-1.5 py-0.5 rounded-full',
+                  'relative z-10 min-w-[18px] h-[18px] inline-flex items-center justify-center leading-none text-[10px] tabular-nums font-semibold px-1.5 rounded-full',
                   isSelected
                     ? 'bg-[var(--selected-indicator)] text-white'
                     : 'bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)]'

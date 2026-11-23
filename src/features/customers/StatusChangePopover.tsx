@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CustomerStatus } from '../../types';
-import { Badge } from '../../components/ui/Badge';
+import { Chip } from '../../components/ui/Chip';
 import { Popover } from '../../components/ui/Popover';
 import { Check } from 'lucide-react';
 import { useStore } from '../../store/useStore';
@@ -35,15 +35,15 @@ export const StatusChangePopover: React.FC<StatusChangePopoverProps> = ({
           className="cursor-pointer transition-transform hover:scale-105 active:scale-95"
           title="Click to change status"
         >
-          <Badge status={currentStatus} dot />
+          <Chip status={currentStatus} variant="dot" size="sm" />
         </button>
       }
       content={
         <div
           onClick={(e) => e.stopPropagation()}
-          className="w-52 p-1.5 flex flex-col gap-[2px] select-none rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)]"
+          className="w-52 p-1.5 flex flex-col gap-[2px] select-none"
         >
-          <div className="text-[11px] font-bold text-gray-400 dark:text-gray-500 px-2 py-1 uppercase tracking-wider">
+          <div className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 px-2 py-1 uppercase tracking-wider">
             Change Status
           </div>
           {statuses.map(({ status }) => {
@@ -53,13 +53,13 @@ export const StatusChangePopover: React.FC<StatusChangePopoverProps> = ({
                 key={status}
                 onClick={() => setCustomerStatus(customerId, status)}
                 className={cn(
-                  'flex items-center justify-between w-full px-2.5 py-1.5 rounded-[8px] text-xs font-medium transition-colors duration-[120ms] text-left border select-none',
+                  'flex items-center justify-between w-full px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150 text-left border select-none cursor-pointer',
                   isSelected
                     ? 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] border-[var(--option-selected-border)] hover:bg-[var(--option-selected-hover-bg)]'
-                    : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)]'
+                    : 'border-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/[0.08] hover:text-zinc-900 dark:hover:text-white'
                 )}
               >
-                <Badge status={status} size="sm" />
+                <Chip status={status} size="sm" />
                 <div className="w-4 h-4 ml-2 shrink-0 flex items-center justify-center">
                   <AnimatePresence>
                     {isSelected && (

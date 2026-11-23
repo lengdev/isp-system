@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Tooltip } from './Tooltip';
+import {
+  FIELD_BASE_STYLES,
+  FIELD_FOCUS_STYLES,
+  FIELD_ERROR_STYLES,
+  FIELD_DISABLED_STYLES,
+} from './Field';
 
 export interface ComboboxOption {
   value: string;
@@ -354,11 +360,11 @@ export const Combobox: React.FC<ComboboxProps> = ({
     }
   };
 
-  // Spec: Toolbar 32px / 12px text / 8px radius; Form/Modal 40px (44px on mobile) / 14px text / 10px radius
+  // HeroUI size tokens
   const sizeStyles = {
-    sm: 'h-8 min-h-[32px] text-[12px] px-2.5 rounded-[8px]',
-    md: 'h-10 max-sm:h-11 min-h-[40px] max-sm:min-h-[44px] text-[14px] max-sm:text-[16px] px-3 rounded-[10px]',
-    lg: 'h-11 min-h-[44px] text-[14px] px-3.5 rounded-[10px]',
+    sm: 'h-8 min-h-[32px] text-[12px] px-3 rounded-[8px]',
+    md: 'h-10 min-h-[40px] text-[13px] sm:text-[14px] px-3.5 rounded-[10px]',
+    lg: 'h-11 min-h-[44px] text-[14px] px-4 rounded-[10px]',
   };
 
   // Single selected option
@@ -414,9 +420,15 @@ export const Combobox: React.FC<ComboboxProps> = ({
         ref={triggerRef}
         type="button"
         role="combobox"
+        data-combobox-trigger="true"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-controls={`listbox-${uniqueId}`}
+        aria-activedescendant={
+          isOpen && visibleItems[highlightedIndex]
+            ? `option-${uniqueId}-${visibleItems[highlightedIndex].value}`
+            : undefined
+        }
         disabled={disabled}
         onClick={() => {
           if (!disabled) {
@@ -424,15 +436,15 @@ export const Combobox: React.FC<ComboboxProps> = ({
           }
         }}
         className={cn(
-          'w-full flex items-center justify-between border bg-[var(--surface)] text-[var(--text)] transition-colors select-none focus:outline-none overflow-hidden relative',
-          multiple ? 'pr-16' : 'pr-9',
-          isOpen
-            ? 'border-neutral-900 dark:border-neutral-100 ring-1 ring-neutral-950/10 dark:ring-white/10'
-            : error
-              ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
-              : 'border-[var(--border)] hover:border-[var(--border-strong)]',
+          'field-control',
+          FIELD_BASE_STYLES,
+          FIELD_FOCUS_STYLES,
+          'flex items-center justify-between select-none cursor-pointer',
           sizeStyles[size],
-          disabled && 'opacity-60 cursor-not-allowed bg-[var(--surface-subtle)]',
+          multiple ? 'pr-16' : 'pr-9',
+          isOpen && '!border-[#006FEE] ![box-shadow:inset_0_0_0_1px_#006FEE] bg-[var(--surface)] dark:bg-[#18181b]',
+          error && FIELD_ERROR_STYLES,
+          disabled && FIELD_DISABLED_STYLES,
           triggerClassName
         )}
       >
@@ -440,7 +452,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
         <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden text-left">
           {multiple ? (
             selectedValues.length === 0 ? (
-              <span className="text-[var(--text-subtle)] truncate text-[13px] font-normal">
+              <span className="text-zinc-400 dark:text-zinc-500 truncate text-[13px] font-normal">
                 {placeholder}
               </span>
             ) : (
@@ -448,13 +460,13 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 {visibleChips.map((opt) => (
                   <span
                     key={opt.value}
-                    className="inline-flex items-center gap-1.5 px-2 h-6 text-[12px] font-medium rounded-md bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] border border-[var(--option-selected-border)] shrink-0"
+                    className="inline-flex items-center gap-1.5 px-2.5 h-6 text-[12px] font-medium rounded-full bg-zinc-200/90 dark:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 border border-zinc-300/40 dark:border-white/10 shrink-0 shadow-2xs"
                   >
                     <span className="truncate max-w-[140px]">{opt.shortLabel || opt.label}</span>
                     <button
                       type="button"
                       onClick={(e) => handleRemoveChip(e, opt.value)}
-                      className="w-3.5 h-3.5 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                      className="w-3.5 h-3.5 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-300/60 dark:hover:bg-zinc-600 transition-colors cursor-pointer"
                       title="Remove"
                     >
                       <X className="w-3 h-3 stroke-[2.5]" />
@@ -463,7 +475,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 ))}
                 {hiddenCount > 0 && (
                   <Tooltip content={hiddenLabels}>
-                    <span className="h-6 px-1.5 flex items-center text-[11px] font-bold rounded-md bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)] shrink-0">
+                    <span className="h-6 px-2 flex items-center text-[11px] font-semibold rounded-full bg-zinc-200/80 dark:bg-zinc-700/80 text-zinc-600 dark:text-zinc-300 border border-zinc-300/40 dark:border-white/10 shrink-0">
                       +{hiddenCount}
                     </span>
                   </Tooltip>
@@ -473,7 +485,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
           ) : singleSelectedOption ? (
             <div className="flex items-center gap-2 truncate">
               {singleSelectedOption.icon && (
-                <span className="shrink-0 text-[var(--text-muted)] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]">
+                <span className="shrink-0 text-zinc-400 dark:text-zinc-500 [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]">
                   {singleSelectedOption.icon}
                 </span>
               )}
@@ -482,30 +494,30 @@ export const Combobox: React.FC<ComboboxProps> = ({
               </span>
             </div>
           ) : (
-            <span className="text-[var(--text-subtle)] truncate text-[13px] font-normal">
+            <span className="text-zinc-400 dark:text-zinc-500 truncate text-[13px] font-normal">
               {placeholder}
             </span>
           )}
         </div>
 
         {/* Right Icons: Clear + Chevron/Loading */}
-        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 shrink-0 text-[var(--text-muted)] pointer-events-auto">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 shrink-0 text-zinc-400 dark:text-zinc-500 pointer-events-auto">
           {clearable && selectedValues.length > 0 && !disabled && (
             <span
               onClick={handleClearAll}
-              className="p-0.5 hover:text-[var(--text)] rounded transition-colors cursor-pointer"
+              className="p-0.5 hover:text-[var(--text)] rounded-full transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5 stroke-[2]" />
             </span>
           )}
 
           {loading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
+            <Loader2 className="w-4 h-4 animate-spin text-[#006FEE]" />
           ) : (
             <ChevronDown
               className={cn(
-                'w-3.5 h-3.5 stroke-[1.75] transition-transform duration-200',
-                isOpen && 'rotate-180 text-[var(--brand)]'
+                'w-4 h-4 stroke-[2] transition-transform duration-200 ease-out',
+                isOpen && 'rotate-180 text-[#006FEE]'
               )}
             />
           )}
@@ -542,30 +554,34 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   maxHeight: `${coords.maxHeight}px`,
                   zIndex: 9999,
                 }}
-                className="rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[0_10px_30px_-5px_rgba(0,0,0,0.12),0_4px_10px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_-5px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden select-none"
+                className="rounded-[12px] bg-[var(--surface-raised)] border border-zinc-200 dark:border-zinc-700/80 shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] backdrop-blur-xl flex flex-col overflow-hidden select-none"
               >
-                {/* Search Input Box (Spec 4.1: borderless input, 36px, bottom hairline, 14px icon, 13px text, transparent bg, NO orange border/ring) */}
+                {/* Search Input Box */}
                 {searchable && (
-                  <div className="relative h-9 flex items-center px-3 border-b border-[var(--border-subtle)] bg-transparent shrink-0">
-                    <Search className="w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none shrink-0 mr-2" />
+                  <div className="relative flex items-center w-full h-[38px] px-3 bg-transparent border-b border-zinc-200/80 dark:border-white/10 shrink-0">
+                    <Search className="w-4 h-4 text-zinc-400 dark:text-zinc-500 pointer-events-none shrink-0 mr-2.5" />
                     <input
                       ref={searchInputRef}
                       type="text"
+                      role="searchbox"
+                      aria-label="Search options"
                       value={searchQuery}
                       onChange={(e) => {
                         setSearchQuery(e.target.value);
                         setHighlightedIndex(0);
                       }}
                       placeholder="Search..."
-                      className="w-full h-full text-[13px] bg-transparent border-none text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-0 select-text"
+                      className="w-full h-full text-[13px] bg-transparent border-0 border-none outline-none focus:outline-none focus:ring-0 text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 select-text caret-[#006FEE]"
+                      style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
                     />
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={() => setSearchQuery('')}
-                        className="p-1 text-[var(--text-muted)] hover:text-[var(--text)] rounded transition-colors"
+                        aria-label="Clear search"
+                        className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-full transition-colors cursor-pointer"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
@@ -600,7 +616,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   role="listbox"
                   aria-multiselectable={multiple}
                   onMouseMove={() => setIsKeyboardNav(false)}
-                  className="overflow-y-auto flex-1 p-1.5 flex flex-col gap-[2px] scrollbar-thin"
+                  className="overflow-y-auto flex-1 p-[6px] flex flex-col gap-[2px] scrollbar-thin"
                 >
                   {filteredOptions.length === 0 && !canCreate ? (
                     <div className="py-6 px-3 text-center text-[12px] text-[var(--text-muted)] select-none">
@@ -624,7 +640,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                     <button
                       type="button"
                       onClick={handleCreate}
-                      className="flex items-center gap-2 w-full px-2.5 py-2 text-[12px] font-medium text-[var(--option-selected-icon)] hover:bg-[var(--option-hover-bg)] rounded-[8px] transition-colors text-left"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-medium text-[#006FEE] hover:bg-zinc-100 dark:hover:bg-white/[0.08] rounded-[8px] transition-colors text-left cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Create "{searchQuery.trim()}"</span>
@@ -666,6 +682,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
     return (
       <button
         key={opt.value}
+        id={`option-${uniqueId}-${opt.value}`}
         type="button"
         role="option"
         aria-selected={isSelected}
@@ -677,32 +694,28 @@ export const Combobox: React.FC<ComboboxProps> = ({
           setHighlightedIndex(itemIndex);
         }}
         className={cn(
-          'flex items-center justify-between w-full px-2.5 rounded-[6px] text-left select-none',
-          opt.description ? 'h-[40px]' : 'h-[32px]',
+          'flex items-center justify-between w-full px-3 py-2 rounded-[8px] text-left select-none transition-colors duration-150',
+          opt.description ? 'min-h-[40px]' : 'min-h-[34px]',
           size === 'sm' ? 'text-[12px]' : 'text-[13px]',
           opt.disabled
             ? 'opacity-50 cursor-not-allowed pointer-events-none'
             : isSelected
-              ? isKeyboardActive
-                ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] ring-1 ring-inset ring-neutral-400 dark:ring-neutral-600 transition-colors duration-100'
-                : isHovered
-                  ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] transition-colors duration-100'
-                  : 'bg-neutral-100/90 dark:bg-neutral-800/90 text-[var(--text)] transition-colors duration-100'
-              : isKeyboardActive
-                ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] ring-1 ring-inset ring-neutral-300 dark:ring-neutral-700 transition-colors duration-100'
-                : isHovered
-                  ? 'bg-neutral-100 dark:bg-neutral-800 text-[var(--text)] transition-colors duration-100'
-                  : 'text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-[var(--text)] transition-colors duration-100'
+              ? isHighlighted
+                ? 'bg-blue-100/80 dark:bg-blue-900/40 text-[#006FEE] font-medium'
+                : 'bg-blue-50/90 dark:bg-blue-950/40 text-[#006FEE] font-medium'
+              : isHighlighted
+                ? 'bg-zinc-100 dark:bg-white/[0.08] text-[var(--text)]'
+                : 'text-[var(--text-secondary)] hover:bg-zinc-100 dark:hover:bg-white/[0.08] hover:text-[var(--text)]'
         )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {multiple && (
             <div
               className={cn(
-                'w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors',
+                'w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0 transition-colors',
                 isSelected
-                  ? 'bg-[var(--option-selected-icon)] border-[var(--option-selected-icon)] text-white'
-                  : 'border-[var(--border-strong)] bg-[var(--surface)]'
+                  ? 'bg-[#006FEE] border-[#006FEE] text-white'
+                  : 'border-zinc-300 dark:border-zinc-600 bg-transparent'
               )}
             >
               {isSelected && (
@@ -712,19 +725,19 @@ export const Combobox: React.FC<ComboboxProps> = ({
           )}
 
           {opt.icon && (
-            <span className="shrink-0 text-[var(--text-muted)] [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]">
+            <span className="shrink-0 text-zinc-400 dark:text-zinc-500 [&>svg]:w-4 [&>svg]:h-4 [&>svg]:stroke-[1.75]">
               {opt.icon}
             </span>
           )}
 
           <div className="min-w-0 flex-1 flex items-center gap-1.5 truncate">
-            <span className={cn('truncate font-normal text-[var(--text)]', size === 'sm' ? 'text-[12px]' : 'text-[13px]')}>
+            <span className={cn('truncate font-normal', isSelected ? 'text-[#006FEE] font-medium' : 'text-[var(--text)]', size === 'sm' ? 'text-[12px]' : 'text-[13px]')}>
               {highlightMatch(opt.label, searchQuery)}
             </span>
             {opt.description && (
               <>
-                <span className="text-[var(--text-muted)] text-[11px] select-none shrink-0">•</span>
-                <span className="text-[11px] text-[var(--text-muted)] font-normal truncate">
+                <span className="text-zinc-400 dark:text-zinc-500 text-[11px] select-none shrink-0">•</span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-normal truncate">
                   {opt.description}
                 </span>
               </>
@@ -732,7 +745,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
           </div>
 
           {opt.badge && (
-            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 border border-zinc-200/60 dark:border-white/10">
               {opt.badge}
             </span>
           )}
@@ -741,7 +754,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
         {!multiple && (
           <div className="w-4 h-4 shrink-0 ml-2 flex items-center justify-center">
             {isSelected && (
-              <Check className="w-4 h-4 stroke-[2] text-[var(--option-selected-icon)]" />
+              <Check className="w-4 h-4 stroke-[2.5] text-[#006FEE]" />
             )}
           </div>
         )}

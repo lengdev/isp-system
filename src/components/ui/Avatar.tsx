@@ -51,18 +51,17 @@ export const Avatar: React.FC<AvatarProps> = ({
       .toUpperCase();
 
   return (
-    <div className={cn('relative inline-flex shrink-0 select-none', className)}>
+    <div className={cn('relative inline-flex items-center justify-center shrink-0 select-none rounded-full', sizeMap[size], className)}>
       {avatarUrl ? (
         <img
           src={avatarUrl}
           alt={name}
-          className={cn('rounded-full object-cover ring-1 ring-gray-200/80 dark:ring-gray-700', sizeMap[size])}
+          className="w-full h-full rounded-full object-cover ring-1 ring-gray-200/80 dark:ring-gray-700"
         />
       ) : (
         <div
           className={cn(
-            'flex items-center justify-center rounded-full transition-transform',
-            sizeMap[size],
+            'w-full h-full flex items-center justify-center rounded-full transition-transform',
             colorClass
           )}
         >

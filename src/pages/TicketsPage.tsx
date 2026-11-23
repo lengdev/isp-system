@@ -17,9 +17,10 @@ import { SupportTicket } from '../types';
 type TicketStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
 type TicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
 import { formatDate, cn } from '../lib/utils';
 import { CreateTicketModal } from '../features/customers/CreateTicketModal';
-import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox } from '../components/ui/DataTable';
 
 export const TicketsPage: React.FC = () => {
   const tickets = useStore((s) => s.tickets);
@@ -62,7 +63,6 @@ export const TicketsPage: React.FC = () => {
         accessorKey: 'ticketNumber',
         width: 130,
         sortable: true,
-        pinned: 'left',
         priority: 1,
         filter: { type: 'text', placeholder: 'Search ticket...' },
         cell: ({ row }) => (
@@ -83,10 +83,10 @@ export const TicketsPage: React.FC = () => {
           const t = row.original;
           return (
             <div>
-              <div className="font-bold text-gray-900 dark:text-gray-100 truncate">
+              <div className="font-bold text-[var(--text)] truncate">
                 {t.title}
               </div>
-              <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+              <div className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
                 {t.description}
               </div>
             </div>
@@ -106,7 +106,10 @@ export const TicketsPage: React.FC = () => {
           return (
             <button
               type="button"
-              onClick={() => openDrawer(t.customerId, 'tickets')}
+              onClick={(e) => {
+                e.stopPropagation();
+                openDrawer(t.customerId, 'tickets');
+              }}
               className="font-semibold text-[var(--text)] hover:text-[var(--brand)] text-left truncate transition-colors"
             >
               {t.customerName}
@@ -124,17 +127,18 @@ export const TicketsPage: React.FC = () => {
         filter: { type: 'select', options: priorityOptions },
         cell: ({ row }) => {
           const p = row.original.priority;
+          const color =
+            p === 'Critical'
+              ? 'danger'
+              : p === 'High'
+                ? 'warning'
+                : p === 'Medium'
+                  ? 'accent'
+                  : 'default';
           return (
-            <span
-              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${p === 'Critical'
-                ? 'bg-red-100 text-red-700 dark:bg-red-950/60'
-                : p === 'High'
-                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60'
-                  : 'bg-blue-100 text-blue-700 dark:bg-blue-950/60'
-                }`}
-            >
+            <Chip size="sm" color={color}>
               {p} Priority
-            </span>
+            </Chip>
           );
         },
       },
@@ -160,17 +164,16 @@ export const TicketsPage: React.FC = () => {
         },
         cell: ({ row }) => {
           const st = row.original.status;
+          const color =
+            st === 'Resolved' || st === 'Closed'
+              ? 'success'
+              : st === 'In Progress'
+                ? 'accent'
+                : 'warning';
           return (
-            <span
-              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${st === 'Resolved' || st === 'Closed'
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60'
-                : st === 'In Progress'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60'
-                }`}
-            >
+            <Chip size="sm" color={color}>
               {st}
-            </span>
+            </Chip>
           );
         },
       },
@@ -318,31 +321,43 @@ export const TicketsPage: React.FC = () => {
     onSelect: () => void
   ) => (
     <div
+      data-testid="support-ticket-card"
       onClick={() => openDrawer(t.customerId, 'tickets')}
       className={cn(
-        'p-5 rounded-2xl bg-[var(--surface)] border shadow-[var(--shadow-card)] cursor-pointer transition-all flex flex-col justify-between space-y-3',
+        'p-5 rounded-2xl bg-[var(--surface)] border shadow-[var(--shadow-card)] cursor-pointer transition-all flex flex-col justify-between space-y-3 select-none',
         isSelected
           ? 'border-[var(--selected-indicator)] bg-[var(--selected-bg)] ring-2 ring-[var(--selected-ring)]'
           : 'border-[var(--border)] hover:border-[var(--border-strong)]'
       )}
     >
       <div>
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-xs font-bold text-[var(--brand)]">
-            {t.ticketNumber}
-          </span>
-          <span
-            className={cn(
-              'px-2 py-0.5 rounded-full text-[10px] font-bold',
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div onClick={(e) => e.stopPropagation()}>
+              <DataTableCheckbox
+                checked={isSelected}
+                onChange={onSelect}
+                ariaLabel={`Select ticket ${t.ticketNumber}`}
+              />
+            </div>
+            <span className="font-mono text-xs font-bold text-[var(--brand)]">
+              {t.ticketNumber}
+            </span>
+          </div>
+          <Chip
+            size="sm"
+            color={
               t.priority === 'Critical'
-                ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'
+                ? 'danger'
                 : t.priority === 'High'
-                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                  : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-            )}
+                  ? 'warning'
+                  : t.priority === 'Medium'
+                    ? 'accent'
+                    : 'default'
+            }
           >
             {t.priority}
-          </span>
+          </Chip>
         </div>
 
         <h4 className="text-[13px] font-semibold text-[var(--text)] mt-2 truncate">
@@ -368,20 +383,87 @@ export const TicketsPage: React.FC = () => {
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[var(--text-muted)]">Status:</span>
-          <span
-            className={cn(
-              'px-2 py-0.5 rounded-full text-[10px] font-bold',
+          <Chip
+            size="sm"
+            color={
               t.status === 'Resolved' || t.status === 'Closed'
-                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-            )}
+                ? 'success'
+                : t.status === 'In Progress'
+                  ? 'accent'
+                  : 'warning'
+            }
           >
             {t.status}
-          </span>
+          </Chip>
         </div>
       </div>
     </div>
   );
+
+  const renderBulkActions = (selectedRows: SupportTicket[], clearSelection: () => void) => (
+    <div className="flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          selectedRows.forEach((t) => updateTicketStatus(t.id, 'In Progress'));
+          addToast({
+            type: 'info',
+            title: 'Tickets In Progress',
+            message: `Marked ${selectedRows.length} ticket(s) as In Progress.`,
+          });
+          clearSelection();
+        }}
+        className="h-8 text-xs"
+      >
+        <Clock className="w-3.5 h-3.5 text-blue-500" />
+        <span>Mark In Progress</span>
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          selectedRows.forEach((t) => updateTicketStatus(t.id, 'Resolved'));
+          addToast({
+            type: 'success',
+            title: 'Tickets Resolved',
+            message: `Resolved ${selectedRows.length} ticket(s).`,
+          });
+          clearSelection();
+        }}
+        className="h-8 text-xs"
+      >
+        <Check className="w-3.5 h-3.5 text-emerald-600" />
+        <span>Mark Resolved</span>
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          selectedRows.forEach((t) => updateTicketStatus(t.id, 'Closed'));
+          addToast({
+            type: 'info',
+            title: 'Tickets Closed',
+            message: `Closed ${selectedRows.length} ticket(s).`,
+          });
+          clearSelection();
+        }}
+        className="h-8 text-xs"
+      >
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        <span>Close Tickets</span>
+      </Button>
+    </div>
+  );
+
+  const handleRefresh = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    addToast({
+      type: 'info',
+      title: 'Tickets Synchronized',
+      message: 'Support queue and field dispatch status refreshed.',
+    });
+  };
 
   return (
     <div className="space-y-4 pb-12 select-none">
@@ -416,6 +498,9 @@ export const TicketsPage: React.FC = () => {
         rowActions={getRowActions}
         renderExpanded={renderExpanded}
         renderCard={renderCard}
+        bulkActions={renderBulkActions}
+        autoRefreshInterval={30}
+        onRefresh={handleRefresh}
         emptyTitle="No support tickets found"
         emptySubtitle="All network incidents and subscriber issues are currently resolved."
         onAddNew={() => openModal('createTicket')}

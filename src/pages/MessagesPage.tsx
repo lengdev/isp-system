@@ -3,6 +3,7 @@ import { Mail, MessageSquare, Send } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Button } from '../components/ui/Button';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
+import { Input, Textarea } from '../components/ui/Field';
 
 export const MessagesPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
@@ -106,30 +107,28 @@ export const MessagesPage: React.FC = () => {
 
             {channel === 'Email' && (
               <div>
-                <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1.5 text-sm">
                   Subject Line
                 </label>
-                <input
+                <Input
                   type="text"
                   required
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full h-10 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
                 />
               </div>
             )}
 
             <div>
-              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+              <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1.5 text-sm">
                 Message Body
               </label>
-              <textarea
+              <Textarea
                 rows={4}
                 required
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type notification text..."
-                className="w-full p-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#18181B] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
               />
             </div>
 

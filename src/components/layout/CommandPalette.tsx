@@ -17,6 +17,8 @@ import {
   CreditCard,
   X,
   ArrowRight,
+  Boxes,
+  Package,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { cn } from '../../lib/utils';
@@ -60,6 +62,7 @@ export const CommandPalette: React.FC = () => {
 
   const navItems = [
     { title: 'Customers', subtitle: 'Browse subscribers and active lines', icon: Users, path: '/customers' },
+    { title: 'Inventory Products', subtitle: 'Hardware catalog, ONTs, routers & stock levels', icon: Boxes, path: '/inventory/products' },
     { title: 'Dashboard', subtitle: 'Network analytics, revenue & churn', icon: LayoutDashboard, path: '/dashboard' },
     { title: 'Internet Plans', subtitle: 'Configure bandwidth tiers and pricing', icon: Wifi, path: '/plans' },
     { title: 'Billing & Invoices', subtitle: 'Subscriber invoicing and payments', icon: Receipt, path: '/billing' },
@@ -79,6 +82,12 @@ export const CommandPalette: React.FC = () => {
       subtitle: 'Create a new subscriber account',
       icon: Plus,
       action: () => openModal('addEditCustomer'),
+    },
+    {
+      title: 'Add New Product',
+      subtitle: 'Create a new inventory hardware item',
+      icon: Package,
+      action: () => openModal('addEditProduct'),
     },
     {
       title: 'Record Payment',

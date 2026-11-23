@@ -9,6 +9,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Field, Input, Textarea, FormSectionTitle } from '../../components/ui/Field';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
+import { DatePicker } from '../../components/ui/DatePicker';
 import { ConnectionType, CustomerStatus } from '../../types';
 
 const customerSchema = z.object({
@@ -573,13 +574,20 @@ export const AddEditCustomerModal: React.FC = () => {
                   </Field>
                 </div>
 
-                <Field label="Billing due date" required error={errors.dueDate?.message}>
-                  <Input
-                    {...register('dueDate')}
-                    type="date"
-                    hasError={Boolean(errors.dueDate)}
-                  />
-                </Field>
+                <Controller
+                  control={control}
+                  name="dueDate"
+                  render={({ field }) => (
+                    <DatePicker
+                      label="Billing due date"
+                      required
+                      value={field.value}
+                      onChange={(_, dateStr) => field.onChange(dateStr)}
+                      error={errors.dueDate?.message}
+                      placeholder="mm / dd / yyyy"
+                    />
+                  )}
+                />
               </motion.div>
             )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Filter, X, Check, RotateCcw } from 'lucide-react';
+import { Filter, X, Check, RotateCcw, ChevronUp, ChevronDown } from 'lucide-react';
 import { ColumnFilterDef } from './types';
 import { Popover } from '../Popover';
 import { Combobox, ComboboxOption } from '../Combobox';
@@ -56,7 +56,7 @@ export const DataTableColumnFilter: React.FC<DataTableColumnFilterProps> = ({
         <button
           type="button"
           className={cn(
-            'p-1 rounded-md transition-colors',
+            'p-0.5 rounded transition-colors',
             isActive
               ? 'text-[var(--brand)] bg-[var(--brand-soft)]'
               : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)]'
@@ -94,7 +94,7 @@ export const DataTableColumnFilter: React.FC<DataTableColumnFilterProps> = ({
                 value={localVal || ''}
                 onChange={(e) => setLocalVal(e.target.value)}
                 placeholder={filterDef.placeholder || `Search ${columnTitle.toLowerCase()}...`}
-                className="w-full h-9 px-3 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1C1C1F] text-gray-800 dark:text-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+                className="w-full h-9 px-3.5 rounded-full border-2 border-transparent hover:border-zinc-300/80 dark:hover:border-white/20 bg-zinc-100/90 dark:bg-white/[0.06] text-gray-800 dark:text-gray-200 text-xs focus:outline-none focus:border-[#006FEE] focus:ring-2 focus:ring-[#006FEE]/20 transition-all caret-[#006FEE]"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleApply();
@@ -136,33 +136,95 @@ export const DataTableColumnFilter: React.FC<DataTableColumnFilterProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[11px] text-gray-400 block mb-1">Min</label>
-                <input
-                  type="number"
-                  value={localVal?.min ?? ''}
-                  onChange={(e) =>
-                    setLocalVal({
-                      ...localVal,
-                      min: e.target.value === '' ? undefined : Number(e.target.value),
-                    })
-                  }
-                  placeholder={String(filterDef.min ?? '0')}
-                  className="w-full h-9 px-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1C1C1F] text-gray-800 dark:text-gray-200 text-xs"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    value={localVal?.min ?? ''}
+                    onChange={(e) =>
+                      setLocalVal({
+                        ...localVal,
+                        min: e.target.value === '' ? undefined : Number(e.target.value),
+                      })
+                    }
+                    placeholder={String(filterDef.min ?? '0')}
+                    className="w-full h-9 pl-3 pr-7 rounded-full border border-transparent hover:border-zinc-300/80 dark:hover:border-white/20 bg-zinc-100/90 dark:bg-white/[0.06] text-gray-800 dark:text-gray-200 text-xs focus:outline-none focus:border-[#006FEE] focus:ring-1 focus:ring-[#006FEE]/20 transition-all caret-[#006FEE]"
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center justify-center">
+                    <button
+                      type="button"
+                      aria-label="Increase min"
+                      onClick={() =>
+                        setLocalVal((prev: any) => {
+                          const current = prev?.min ?? Number(filterDef.min ?? 0);
+                          return { ...prev, min: current + 10 };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronUp className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Decrease min"
+                      onClick={() =>
+                        setLocalVal((prev: any) => {
+                          const current = prev?.min ?? Number(filterDef.min ?? 0);
+                          const next = Math.max(Number(filterDef.min ?? 0), current - 10);
+                          return { ...prev, min: next };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronDown className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="text-[11px] text-gray-400 block mb-1">Max</label>
-                <input
-                  type="number"
-                  value={localVal?.max ?? ''}
-                  onChange={(e) =>
-                    setLocalVal({
-                      ...localVal,
-                      max: e.target.value === '' ? undefined : Number(e.target.value),
-                    })
-                  }
-                  placeholder={String(filterDef.max ?? '1000')}
-                  className="w-full h-9 px-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1C1C1F] text-gray-800 dark:text-gray-200 text-xs"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    value={localVal?.max ?? ''}
+                    onChange={(e) =>
+                      setLocalVal({
+                        ...localVal,
+                        max: e.target.value === '' ? undefined : Number(e.target.value),
+                      })
+                    }
+                    placeholder={String(filterDef.max ?? '1000')}
+                    className="w-full h-9 pl-3 pr-7 rounded-full border border-transparent hover:border-zinc-300/80 dark:hover:border-white/20 bg-zinc-100/90 dark:bg-white/[0.06] text-gray-800 dark:text-gray-200 text-xs focus:outline-none focus:border-[#006FEE] focus:ring-1 focus:ring-[#006FEE]/20 transition-all caret-[#006FEE]"
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center justify-center">
+                    <button
+                      type="button"
+                      aria-label="Increase max"
+                      onClick={() =>
+                        setLocalVal((prev: any) => {
+                          const current = prev?.max ?? Number(filterDef.max ?? 100);
+                          return { ...prev, max: current + 10 };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronUp className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Decrease max"
+                      onClick={() =>
+                        setLocalVal((prev: any) => {
+                          const current = prev?.max ?? Number(filterDef.max ?? 100);
+                          const next = Math.max(0, current - 10);
+                          return { ...prev, max: next };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronDown className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

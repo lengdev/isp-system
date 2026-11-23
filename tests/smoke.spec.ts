@@ -10,6 +10,7 @@ test.describe('NetPulse ISP Smoke & Full Page Navigation Suite', () => {
   const routes = [
     { path: '/dashboard', title: 'Network Operations Dashboard' },
     { path: '/customers', title: 'Customers' },
+    { path: '/inventory/products', title: 'Products' },
     { path: '/plans', title: 'Internet Plans Catalog' },
     { path: '/billing', title: 'Billing & Invoices' },
     { path: '/tickets', title: 'Support Tickets & Dispatch' },

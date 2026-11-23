@@ -11,6 +11,7 @@ import {
   tabContentVariants,
 } from '../lib/motion';
 import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
 import { useStore } from '../store/useStore';
 import { Check, Play, RefreshCw, X } from 'lucide-react';
 
@@ -100,6 +101,23 @@ export const DevMotionPage: React.FC = () => {
               {mode}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* HeroUI Chip Components Showcase (Matches HeroUI spec and uploaded screenshot) */}
+      <div className="p-5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--text)]">HeroUI Chips</h3>
+          <p className="text-[12px] text-[var(--text-muted)] mt-0.5">
+            Flat pill chips matching HeroUI specification and dark mode styling.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <Chip color="default">Default</Chip>
+          <Chip color="accent">Accent</Chip>
+          <Chip color="success">Success</Chip>
+          <Chip color="warning">Warning</Chip>
+          <Chip color="danger">Danger</Chip>
         </div>
       </div>
 

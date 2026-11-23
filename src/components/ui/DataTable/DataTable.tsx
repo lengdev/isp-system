@@ -53,8 +53,6 @@ import {
   TableQuery,
 } from './types';
 import { DataTableToolbar } from './DataTableToolbar';
-import { DataTableColumnFilter } from './DataTableColumnFilter';
-import { DataTableColumnMenu } from './DataTableColumnMenu';
 import { DataTableShortcutsModal } from './DataTableShortcutsModal';
 import { DataTableImportModal } from './DataTableImportModal';
 import { DataTableCheckbox } from './DataTableCheckbox';
@@ -65,6 +63,192 @@ import { Skeleton } from '../Skeleton';
 import { Tooltip } from '../Tooltip';
 import { useStore } from '../../../store/useStore';
 import { cn } from '../../../lib/utils';
+import { RowAction } from './types';
+
+interface ActionMenuButtonProps<T> {
+  row: any;
+  actions: RowAction<T>[];
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}
+
+const ActionMenuButton = <T,>({
+  row,
+  actions,
+  isOpen,
+  onToggle,
+  onClose,
+}: ActionMenuButtonProps<T>) => {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+    maxHeight: number;
+    placeAbove: boolean;
+  } | null>(null);
+
+  const updateCoords = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const estimatedMenuHeight = actions.reduce(
+      (acc, act) => acc + (act.divider ? 9 : 36),
+      16
+    );
+
+    // Align right edge of menu flush with right edge of button
+    const right = Math.max(12, window.innerWidth - rect.right);
+
+    // Available space above and below the button
+    const spaceBelow = window.innerHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+
+    // Flip to show above if space below is insufficient and space above is larger or can fit the menu
+    const placeAbove =
+      spaceBelow < estimatedMenuHeight && (spaceAbove >= estimatedMenuHeight || spaceAbove > spaceBelow);
+
+    if (placeAbove) {
+      setCoords({
+        bottom: window.innerHeight - rect.top + 4,
+        right,
+        maxHeight: Math.max(120, spaceAbove),
+        placeAbove: true,
+      });
+    } else {
+      setCoords({
+        top: rect.bottom + 4,
+        right,
+        maxHeight: Math.max(120, spaceBelow),
+        placeAbove: false,
+      });
+    }
+  }, [actions]);
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+    }
+  }, [isOpen, updateCoords]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        triggerRef.current?.contains(e.target as Node) ||
+        menuRef.current?.contains(e.target as Node)
+      ) {
+        return;
+      }
+      onClose();
+    };
+
+    const handleScrollOrResize = (e: Event) => {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) return;
+      onClose();
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isOpen, onClose]);
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="relative text-center flex items-center justify-center"
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className={cn(
+          'w-7 h-7 min-w-[28px] min-h-[28px] max-w-[28px] max-h-[28px] shrink-0 rounded-lg flex items-center justify-center transition-colors cursor-pointer',
+          isOpen
+            ? 'bg-zinc-200/80 dark:bg-white/15 text-zinc-900 dark:text-white'
+            : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100/80 dark:hover:bg-white/[0.08]'
+        )}
+        title="Row actions"
+        aria-label="Row actions"
+      >
+        <MoreHorizontal className="w-3.5 h-3.5" />
+      </button>
+
+      {isOpen && coords && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <motion.div
+            ref={menuRef}
+            initial={{ opacity: 0, scale: 0.95, y: coords.placeAbove ? 4 : -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: coords.placeAbove ? 4 : -4 }}
+            transition={{ duration: 0.12, ease: 'easeOut' }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: coords.top !== undefined ? `${coords.top}px` : undefined,
+              bottom: coords.bottom !== undefined ? `${coords.bottom}px` : undefined,
+              right: `${coords.right}px`,
+              maxHeight: `${coords.maxHeight}px`,
+              transformOrigin: coords.placeAbove ? 'bottom right' : 'top right',
+              zIndex: 9999,
+            }}
+            className="w-[215px] rounded-2xl bg-white/95 dark:bg-[#18181b]/95 backdrop-blur-md border border-zinc-200/80 dark:border-white/10 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.14),0_4px_12px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_36px_-6px_rgba(0,0,0,0.65)] p-1.5 select-none focus:outline-none overflow-y-auto"
+          >
+            {actions.map((act, i) => {
+              if (act.divider && !act.label) {
+                return (
+                  <div
+                    key={i}
+                    className="my-1 border-t border-zinc-100 dark:border-white/[0.08]"
+                  />
+                );
+              }
+              return (
+                <React.Fragment key={i}>
+                  {act.divider && (
+                    <div className="my-1 border-t border-zinc-100 dark:border-white/[0.08]" />
+                  )}
+                  <button
+                    type="button"
+                    disabled={act.disabled}
+                    onClick={() => {
+                      act.onClick(row.original);
+                      onClose();
+                    }}
+                    className={cn(
+                      'w-full h-9 flex items-center gap-2.5 px-3 text-left transition-colors duration-150 text-[13px] font-medium rounded-xl group cursor-pointer',
+                      act.disabled && 'opacity-40 cursor-not-allowed',
+                      act.danger
+                        ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 [&>svg]:text-red-500'
+                        : 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/[0.08] hover:text-zinc-900 dark:hover:text-white [&>svg]:text-zinc-400 [&>svg]:group-hover:text-zinc-700 dark:[&>svg]:group-hover:text-zinc-200'
+                    )}
+                  >
+                    <span className="shrink-0 flex items-center justify-center [&>svg]:w-4 [&>svg]:h-4 [&>svg]:transition-colors">
+                      {act.icon}
+                    </span>
+                    <span className="truncate">{act.label}</span>
+                  </button>
+                </React.Fragment>
+              );
+            })}
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
+    </div>
+  );
+};
 
 export const DataTable = <T extends Record<string, any>>({
   columns,
@@ -99,6 +283,8 @@ export const DataTable = <T extends Record<string, any>>({
   onAddNew,
   addNewLabel = 'Add New',
   className,
+  cardGridClassName,
+  searchPlaceholder,
 }: DataTableProps<T>) => {
   const addToast = useStore((s) => s.addToast);
 
@@ -161,31 +347,85 @@ export const DataTable = <T extends Record<string, any>>({
 
   // Column Visibility & Pinning & Sizing
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
+    const initial: VisibilityState = {
+      select: true,
+      expander: true,
+      actions: true,
+    };
+    columns.forEach((c) => {
+      if (c.hideable === false) initial[c.id] = true;
+    });
     const saved = localStorage.getItem(storageKeyCols);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const merged = { ...parsed, select: true, expander: true, actions: true };
+        columns.forEach((c) => {
+          if (c.hideable === false) merged[c.id] = true;
+        });
+        return merged;
       } catch (e) {
         void e;
       }
     }
-    const initial: VisibilityState = {};
-    columns.forEach((c) => {
-      if (c.hideable === false) initial[c.id] = true;
-    });
     return initial;
   });
 
-  const [columnPinning, setColumnPinning] = useState<{ left: string[]; right: string[] }>({
-    left: ['select', 'expander', 'fullName'],
-    right: ['actions'],
-  });
+  const hasSubRows = useMemo(() => {
+    return Array.isArray(data) && data.some((r: any) =>
+      Boolean(
+        (r?.subRows && r.subRows.length > 0) ||
+        (r?.children && r.children.length > 0) ||
+        (r?.items && r.items.length > 0) ||
+        (r?.subrows && r.subrows.length > 0)
+      )
+    );
+  }, [data]);
+
+  const showExpander = Boolean(renderExpanded || hasSubRows);
+
+  const initialPinnedLeft = useMemo(() => {
+    const leftCols: string[] = [];
+    columns.forEach((c) => {
+      if (c.pinned === 'left' && !leftCols.includes(c.id)) leftCols.push(c.id);
+    });
+    if (leftCols.length > 0) {
+      const leading: string[] = ['select'];
+      if (showExpander) leading.push('expander');
+      return [...leading, ...leftCols];
+    }
+    return leftCols;
+  }, [columns, showExpander]);
+
+  const initialPinnedRight = useMemo(() => {
+    const rightCols: string[] = [];
+    columns.forEach((c) => {
+      if (c.pinned === 'right' && !rightCols.includes(c.id)) rightCols.push(c.id);
+    });
+    if (rowActions) rightCols.push('actions');
+    return rightCols;
+  }, [rowActions, columns]);
+
+  const [columnPinning, setColumnPinning] = useState<{ left: string[]; right: string[] }>(() => ({
+    left: initialPinnedLeft,
+    right: initialPinnedRight,
+  }));
 
   // Grouping
   const [grouping, setGrouping] = useState<GroupingState>([]);
 
-  // Expanded rows
+  // Expanded rows (collapsed by default)
   const [expanded, setExpanded] = useState<ExpandedState>({});
+
+  // Active action menu row id (positions absolute under parent relative)
+  const [activeActionRowId, setActiveActionRowId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeActionRowId) return;
+    const handleClickOutside = () => setActiveActionRowId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [activeActionRowId]);
 
   // Pagination
   const [{ pageIndex, pageSize }, setPagination] = useState({
@@ -226,13 +466,6 @@ export const DataTable = <T extends Record<string, any>>({
     error?: string;
   } | null>(null);
 
-  // Context Menu state
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    row: T;
-  } | null>(null);
-
   // Modals state
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -270,12 +503,6 @@ export const DataTable = <T extends Record<string, any>>({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Close context menu on window click
-  useEffect(() => {
-    const handleWindowClick = () => setContextMenu(null);
-    window.addEventListener('click', handleWindowClick);
-    return () => window.removeEventListener('click', handleWindowClick);
-  }, []);
 
   // TanStack Table columns mapping
   const tableColumns = useMemo<TanStackColumnDef<T, any>[]>(() => {
@@ -286,6 +513,8 @@ export const DataTable = <T extends Record<string, any>>({
       id: 'select',
       size: 40,
       enableResizing: false,
+      enableHiding: false,
+      enablePinning: false,
       header: ({ table }) => (
         <div className="w-[40px] h-full flex items-center justify-center select-none">
           <DataTableCheckbox
@@ -310,31 +539,60 @@ export const DataTable = <T extends Record<string, any>>({
       ),
     });
 
-    // Expand toggle column if renderExpanded is provided (28px)
-    if (renderExpanded) {
+    // Expand toggle column if renderExpanded or nested children exist (28px)
+    if (showExpander) {
       mapped.push({
         id: 'expander',
         size: 28,
         enableResizing: false,
+        enableHiding: false,
+        enablePinning: false,
         header: () => null,
-        cell: ({ row }) => (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-[28px] text-center flex items-center justify-center"
-          >
-            <button
-              type="button"
-              onClick={() => row.toggleExpanded()}
-              className="p-1 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+        cell: ({ row }) => {
+          const canExpand = Boolean(
+            row.getCanExpand() ||
+            (row.subRows && row.subRows.length > 0) ||
+            (row.original?.subRows && row.original.subRows.length > 0) ||
+            (row.original?.children && row.original.children.length > 0) ||
+            (row.original?.items && row.original.items.length > 0) ||
+            (row.original?.subrows && row.original.subrows.length > 0) ||
+            renderExpanded
+          );
+
+          if (!canExpand) {
+            return <div className="w-[28px] h-full" />;
+          }
+
+          const isExpanded = row.getIsExpanded();
+          return (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-[28px] h-full flex items-center justify-center select-none"
             >
-              {row.getIsExpanded() ? (
-                <ChevronDown className="w-3.5 h-3.5 text-[#F26B3A]" />
-              ) : (
-                <ChevronRight className="w-3.5 h-3.5" />
-              )}
-            </button>
-          </div>
-        ),
+              <button
+                type="button"
+                aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  row.toggleExpanded();
+                }}
+                className={cn(
+                  'w-5 h-5 flex items-center justify-center rounded transition-colors cursor-pointer',
+                  isExpanded
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-[#006FEE]'
+                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/10'
+                )}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="w-3.5 h-3.5 text-[#006FEE]" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200" />
+                )}
+              </button>
+            </div>
+          );
+        },
       });
     }
 
@@ -406,7 +664,7 @@ export const DataTable = <T extends Record<string, any>>({
                       setEditingCell(null);
                     }
                   }}
-                  className="h-8 px-2 rounded-lg border border-[#F26B3A] text-xs bg-white dark:bg-[#1C1C1F] text-gray-900 dark:text-gray-100 focus:outline-none ring-2 ring-[#F26B3A]/20"
+                  className="h-8 px-3 rounded-full border-2 border-[#006FEE] text-xs bg-white dark:bg-[#1C1C1F] text-gray-900 dark:text-gray-100 focus:outline-none ring-2 ring-[#006FEE]/20 caret-[#006FEE]"
                 />
                 <button
                   type="button"
@@ -448,78 +706,52 @@ export const DataTable = <T extends Record<string, any>>({
       });
     });
 
-    // Row Actions Menu column if rowActions provided (56px)
+    // Row Actions Menu column if rowActions provided (44px)
     if (rowActions) {
       mapped.push({
         id: 'actions',
-        size: 56,
+        size: 44,
         enableResizing: false,
-        header: () => (
-          <span className="text-center block text-[12px] font-semibold text-[var(--text-muted)]">
-            Action
-          </span>
-        ),
+        enableHiding: false,
+        enablePinning: false,
+        header: () => null,
         cell: ({ row }) => {
           const actions = rowActions(row.original);
           if (actions.length === 0) return null;
+          const isOpen = activeActionRowId === row.id;
 
           return (
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="text-center flex items-center justify-center"
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (contextMenu?.row === row.original) {
-                    setContextMenu(null);
-                    return;
-                  }
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const menuWidth = 220;
-                  const padding = 12;
-                  // Always align to the right edge of the button (expanding leftwards)
-                  let x = rect.right - menuWidth;
-                  if (x < padding) {
-                    x = padding;
-                  }
-                  if (x + menuWidth > window.innerWidth - padding) {
-                    x = window.innerWidth - padding - menuWidth;
-                  }
-                  let y = rect.bottom + 4;
-                  const menuHeight = 280;
-                  if (y + menuHeight > window.innerHeight - padding) {
-                    y = Math.max(padding, rect.top - menuHeight - 4);
-                  }
-                  if (y < padding) {
-                    y = padding;
-                  }
-                  setContextMenu({
-                    x,
-                    y,
-                    row: row.original,
-                  });
-                }}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface-subtle)]/70 hover:bg-[var(--surface-subtle)] border border-[var(--border-subtle)] hover:border-[var(--border)] transition-colors shadow-2xs"
-                title="Row actions"
-              >
-                <MoreHorizontal className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <ActionMenuButton
+              row={row}
+              actions={actions}
+              isOpen={isOpen}
+              onToggle={() => {
+                setActiveActionRowId(isOpen ? null : row.id);
+              }}
+              onClose={() => setActiveActionRowId(null)}
+            />
           );
         },
       });
     }
 
     return mapped;
-  }, [columns, renderExpanded, rowActions, editingCell]);
+  }, [columns, showExpander, renderExpanded, rowActions, editingCell, activeActionRowId]);
 
   // TanStack table instance
   const table = useReactTable({
     data,
     columns: tableColumns,
     getRowId: (row, index) => (rowId ? rowId(row) : String((row as any).id || index)),
+    getSubRows: (row: any) => row.subRows || row.children || row.items || row.subrows,
+    getRowCanExpand: (row) => Boolean(
+      (row.subRows && row.subRows.length > 0) ||
+      (row.original?.subRows && row.original.subRows.length > 0) ||
+      (row.original?.children && row.original.children.length > 0) ||
+      (row.original?.items && row.original.items.length > 0) ||
+      (row.original?.subrows && row.original.subrows.length > 0) ||
+      renderExpanded
+    ),
     state: {
       sorting,
       columnFilters,
@@ -527,17 +759,39 @@ export const DataTable = <T extends Record<string, any>>({
       rowSelection,
       expanded,
       grouping,
+      columnPinning,
       pagination: {
         pageIndex,
         pageSize,
       },
       globalFilter,
     },
+    onColumnPinningChange: (updater) => {
+      setColumnPinning((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        let left = next.left || [];
+        const userPinned = left.filter((id) => id !== 'select' && id !== 'expander');
+        if (userPinned.length > 0) {
+          const leading = ['select'];
+          if (showExpander) leading.push('expander');
+          left = [...leading, ...userPinned];
+        } else {
+          left = [];
+        }
+        return {
+          left,
+          right: next.right || [],
+        };
+      });
+    },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: (updater) => {
       setColumnVisibility((prev) => {
         const next = typeof updater === 'function' ? updater(prev) : updater;
+        next.select = true;
+        next.expander = true;
+        next.actions = true;
         localStorage.setItem(storageKeyCols, JSON.stringify(next));
         return next;
       });
@@ -547,11 +801,12 @@ export const DataTable = <T extends Record<string, any>>({
     onGroupingChange: setGrouping,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    paginateExpandedRows: false,
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
   });
@@ -581,12 +836,10 @@ export const DataTable = <T extends Record<string, any>>({
     let lastLeftPinnedIdx = -1;
     for (let i = 0; i < leafColumns.length; i++) {
       const col = leafColumns[i];
-      const colDef = columns.find((c) => c.id === col.id);
-      const pinned =
-        col.id === 'select' ||
-        col.id === 'expander' ||
-        colDef?.pinned === 'left';
-      if (pinned) {
+      const isPinned =
+        col.getIsPinned() === 'left' ||
+        columnPinning.left.includes(col.id);
+      if (isPinned) {
         isPinnedLeft[col.id] = true;
         leftOffsets[col.id] = currentLeft;
         currentLeft += col.getSize();
@@ -600,11 +853,11 @@ export const DataTable = <T extends Record<string, any>>({
     let firstRightPinnedIdx = -1;
     for (let i = leafColumns.length - 1; i >= 0; i--) {
       const col = leafColumns[i];
-      const colDef = columns.find((c) => c.id === col.id);
-      const pinned =
+      const isPinned =
         col.id === 'actions' ||
-        colDef?.pinned === 'right';
-      if (pinned) {
+        col.getIsPinned() === 'right' ||
+        columnPinning.right.includes(col.id);
+      if (isPinned) {
         isPinnedRight[col.id] = true;
         rightOffsets[col.id] = currentRight;
         currentRight += col.getSize();
@@ -622,11 +875,28 @@ export const DataTable = <T extends Record<string, any>>({
       lastLeftPinnedId: lastLeftPinnedIdx >= 0 ? leafColumns[lastLeftPinnedIdx]?.id : null,
       firstRightPinnedId: firstRightPinnedIdx >= 0 ? leafColumns[firstRightPinnedIdx]?.id : null,
     };
-  }, [leafColumns, columns]);
+  }, [leafColumns, columnPinning]);
 
   const totalTableWidth = useMemo(() => {
     return leafColumns.reduce((sum, col) => sum + col.getSize(), 0);
   }, [leafColumns]);
+
+  // Conditional horizontal scrolling: only scroll when table overflows container width
+  const [isOverflowingX, setIsOverflowingX] = useState(false);
+
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const checkOverflow = () => {
+      setIsOverflowingX(totalTableWidth > container.clientWidth);
+    };
+
+    checkOverflow();
+    const ro = new ResizeObserver(checkOverflow);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [totalTableWidth]);
 
   // TanStack Virtualizer
   const rowVirtualizer = useVirtualizer({
@@ -788,8 +1058,20 @@ export const DataTable = <T extends Record<string, any>>({
     if (view.globalSearch !== undefined) setGlobalFilter(view.globalSearch);
     if (view.sort) setSorting(view.sort.map((s) => ({ id: s.id, desc: s.desc })));
     if (view.columnVisibility) setColumnVisibility(view.columnVisibility);
-    if (view.groupBy) setGrouping([view.groupBy]);
-    else setGrouping([]);
+    if (view.groupBy) {
+      setGrouping([view.groupBy]);
+      const initialExpanded: Record<string, boolean> = {};
+      data.forEach((item: any) => {
+        const val = item[view.groupBy!];
+        if (val !== undefined && val !== null) {
+          initialExpanded[`${view.groupBy!}:${val}`] = true;
+        }
+      });
+      setExpanded(initialExpanded);
+    } else {
+      setGrouping([]);
+      setExpanded({});
+    }
     if (view.pageSize) {
       setPagination((prev) => ({ ...prev, pageSize: view.pageSize || 10 }));
     }
@@ -799,6 +1081,14 @@ export const DataTable = <T extends Record<string, any>>({
     const updated = savedViews.filter((v) => v.id !== id);
     setSavedViews(updated);
     localStorage.setItem(storageKeyViews, JSON.stringify(updated));
+    if (activeViewId === id) {
+      setActiveViewId('default');
+    }
+    addToast({
+      type: 'info',
+      title: 'View Deleted',
+      message: 'Saved view has been removed.',
+    });
   };
 
   const handleSetDefaultView = (id: string) => {
@@ -896,14 +1186,47 @@ export const DataTable = <T extends Record<string, any>>({
         columns={columns}
         visibleColumnIds={table.getVisibleLeafColumns().map((c) => c.id)}
         onToggleColumnVisibility={(colId) => {
-          const col = table.getColumn(colId);
-          if (col) col.toggleVisibility();
+          setColumnVisibility((prev) => {
+            const isCurrentlyVisible = prev[colId] !== undefined ? prev[colId] : true;
+            const next = {
+              ...prev,
+              [colId]: !isCurrentlyVisible,
+              select: true,
+              expander: true,
+              actions: true,
+            };
+            localStorage.setItem(storageKeyCols, JSON.stringify(next));
+            return next;
+          });
         }}
-        onResetColumns={() => setColumnVisibility({})}
+        onResetColumns={() => {
+          const initial: VisibilityState = {
+            select: true,
+            expander: true,
+            actions: true,
+          };
+          columns.forEach((c) => {
+            if (c.hideable === false) initial[c.id] = true;
+          });
+          localStorage.removeItem(storageKeyCols);
+          setColumnVisibility(initial);
+        }}
         groupBy={grouping[0]}
         onGroupByChange={(colId) => {
-          if (colId) setGrouping([colId]);
-          else setGrouping([]);
+          if (colId) {
+            setGrouping([colId]);
+            const initialExpanded: Record<string, boolean> = {};
+            data.forEach((item: any) => {
+              const val = item[colId];
+              if (val !== undefined && val !== null) {
+                initialExpanded[`${colId}:${val}`] = true;
+              }
+            });
+            setExpanded(initialExpanded);
+          } else {
+            setGrouping([]);
+            setExpanded({});
+          }
         }}
         sortRules={currentSortRules}
         onApplySortRules={handleApplySortRules}
@@ -935,6 +1258,7 @@ export const DataTable = <T extends Record<string, any>>({
         onRefresh={onRefresh}
         lastUpdatedSeconds={lastUpdated}
         toolbarExtras={toolbarExtras}
+        searchPlaceholder={searchPlaceholder}
         onToast={addToast}
       />
 
@@ -971,11 +1295,11 @@ export const DataTable = <T extends Record<string, any>>({
       {viewMode === 'cards' ? (
         <div className="w-full select-none">
           {loading && !serverMode ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className={cn(cardGridClassName || 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4')}>
               {Array.from({ length: pageSize }).map((_, i) => (
                 <div
                   key={`card-skel-${i}`}
-                  className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3"
+                  className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3 min-w-0 h-full"
                 >
                   <div className="flex items-center gap-3">
                     <Skeleton className="w-9 h-9 rounded-full" />
@@ -1023,96 +1347,128 @@ export const DataTable = <T extends Record<string, any>>({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {rows.map((row) => (
-                <motion.div
-                  key={row.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  {renderCard ? (
-                    renderCard(
-                      row.original,
-                      row.getIsSelected(),
-                      () => row.toggleSelected()
-                    )
-                  ) : (
-                    // Default universal fallback card
+            <div className={cn(cardGridClassName || 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4')}>
+              {rows.map((row) => {
+                if (row.getIsGrouped()) {
+                  const groupCol = columns.find((c) => c.id === row.groupingColumnId);
+                  const groupHeader = groupCol ? (typeof groupCol.header === 'string' ? groupCol.header : groupCol.id) : row.groupingColumnId;
+                  return (
                     <div
-                      onClick={(e) => onRowClick?.(row.original, e)}
-                      className={cn(
-                        'p-4 rounded-2xl bg-[var(--surface)] border transition-all cursor-pointer select-none flex flex-col justify-between gap-3 group relative shadow-[var(--shadow-card)] hover:border-[var(--border-strong)]',
-                        row.getIsSelected()
-                          ? 'border-[var(--brand)] bg-[var(--brand-soft)] ring-2 ring-[var(--brand-ring)]'
-                          : 'border-[var(--border)]'
-                      )}
+                      key={row.id}
+                      onClick={() => row.toggleExpanded()}
+                      className="col-span-full py-2.5 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-[var(--border)] flex items-center justify-between cursor-pointer hover:bg-zinc-200/70 dark:hover:bg-zinc-800 transition-colors select-none"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <DataTableCheckbox
-                            checked={row.getIsSelected()}
-                            onChange={() => row.toggleSelected()}
-                            ariaLabel={`Select row ${row.id}`}
-                          />
-                          <div className="font-semibold text-xs text-[var(--text)] truncate">
-                            {String(
-                              row.original.fullName ||
-                              row.original.name ||
-                              row.original.title ||
-                              row.original.invoiceNumber ||
-                              row.original.ticketNumber ||
-                              row.original.deviceName ||
-                              row.original.id ||
-                              'Record'
-                            )}
-                          </div>
-                        </div>
-                        {row.original.status && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
-                            {String(row.original.status)}
-                          </span>
+                      <div className="flex items-center gap-2">
+                        {row.getIsExpanded() ? (
+                          <ChevronDown className="w-4 h-4 text-zinc-500" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-zinc-500" />
                         )}
+                        <span className="text-[var(--text-muted)] text-[11px] uppercase tracking-wider font-medium">
+                          {groupHeader}:
+                        </span>
+                        <span className="text-[var(--text)] font-semibold text-[13px]">
+                          {String(row.groupingValue ?? 'Unassigned')}
+                        </span>
                       </div>
-
-                      <div className="space-y-1.5 text-[11px] pt-2 border-t border-[var(--border-subtle)]">
-                        {columns
-                          .filter(
-                            (c) =>
-                              c.id !== 'select' &&
-                              c.id !== 'expander' &&
-                              c.id !== 'actions' &&
-                              c.id !== 'fullName' &&
-                              c.id !== 'name' &&
-                              c.id !== 'title'
-                          )
-                          .slice(0, 4)
-                          .map((col) => {
-                            const val = col.accessorFn
-                              ? col.accessorFn(row.original)
-                              : col.accessorKey
-                                ? row.original[col.accessorKey as string]
-                                : undefined;
-                            if (val === undefined || val === null) return null;
-                            return (
-                              <div
-                                key={col.id}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="text-[var(--text-muted)] truncate">
-                                  {typeof col.header === 'string' ? col.header : col.id}:
-                                </span>
-                                <span className="font-medium text-[var(--text)] truncate tabular-nums">
-                                  {String(val)}
-                                </span>
-                              </div>
-                            );
-                          })}
-                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">
+                        {row.subRows?.length ?? 0} {(row.subRows?.length ?? 0) === 1 ? 'record' : 'records'}
+                      </span>
                     </div>
-                  )}
-                </motion.div>
-              ))}
+                  );
+                }
+
+                return (
+                  <motion.div
+                    key={row.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="min-w-0 h-full"
+                  >
+                    {renderCard ? (
+                      renderCard(
+                        row.original,
+                        row.getIsSelected(),
+                        () => row.toggleSelected()
+                      )
+                    ) : (
+                      // Default universal fallback card
+                      <div
+                        onClick={(e) => onRowClick?.(row.original, e)}
+                        className={cn(
+                          'p-4 rounded-2xl bg-[var(--surface)] border transition-all cursor-pointer select-none flex flex-col justify-between gap-3 group relative shadow-[var(--shadow-card)] hover:border-[var(--border-strong)] min-w-0 h-full',
+                          row.getIsSelected()
+                            ? 'border-[var(--brand)] bg-[var(--brand-soft)] ring-2 ring-[var(--brand-ring)]'
+                            : 'border-[var(--border)]'
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <DataTableCheckbox
+                              checked={row.getIsSelected()}
+                              onChange={() => row.toggleSelected()}
+                              ariaLabel={`Select row ${row.id}`}
+                            />
+                            <div className="font-semibold text-xs text-[var(--text)] truncate">
+                              {String(
+                                row.original.fullName ||
+                                row.original.name ||
+                                row.original.title ||
+                                row.original.invoiceNumber ||
+                                row.original.ticketNumber ||
+                                row.original.deviceName ||
+                                row.original.id ||
+                                'Record'
+                              )}
+                            </div>
+                          </div>
+                          {row.original.status && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
+                              {String(row.original.status)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5 text-[11px] pt-2 border-t border-[var(--border-subtle)]">
+                          {columns
+                            .filter(
+                              (c) =>
+                                c.id !== 'select' &&
+                                c.id !== 'expander' &&
+                                c.id !== 'actions' &&
+                                c.id !== 'fullName' &&
+                                c.id !== 'name' &&
+                                c.id !== 'title'
+                            )
+                            .slice(0, 4)
+                            .map((col) => {
+                              const val = col.accessorFn
+                                ? col.accessorFn(row.original)
+                                : col.accessorKey
+                                  ? row.original[col.accessorKey as string]
+                                  : undefined;
+                              if (val === undefined || val === null) return null;
+                              return (
+                                <div
+                                  key={col.id}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="text-[var(--text-muted)] truncate">
+                                    {typeof col.header === 'string' ? col.header : col.id}:
+                                  </span>
+                                  <span className="font-medium text-[var(--text)] truncate tabular-nums">
+                                    {String(val)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1125,22 +1481,44 @@ export const DataTable = <T extends Record<string, any>>({
         >
           <div
             ref={tableContainerRef}
-            className="overflow-x-auto max-h-[640px] relative scrollbar-none"
+            className={cn(
+              isOverflowingX ? 'overflow-x-auto scrollbar-thin' : 'overflow-x-hidden',
+              'max-h-[640px] relative'
+            )}
           >
             <table
               className="w-full text-left border-collapse table-fixed"
-              style={{ minWidth: `${Math.max(1140, totalTableWidth)}px` }}
+              style={{
+                width: isOverflowingX ? `${totalTableWidth}px` : '100%',
+                minWidth: `${totalTableWidth}px`,
+              }}
             >
+              {(() => {
+                const flexColId = leafColumns.find(
+                  (c) =>
+                    (c.id === 'fullName' || c.id === 'customerName' || c.id === 'name' || c.id === 'title') &&
+                    !columnPinningInfo.isPinnedLeft[c.id]
+                )?.id;
+                return null;
+              })()}
               <colgroup>
-                {leafColumns.map((col) => (
-                  <col
-                    key={col.id}
-                    style={{
-                      width: `${col.getSize()}px`,
-                      minWidth: `${col.getSize()}px`,
-                    }}
-                  />
-                ))}
+                {leafColumns.map((col) => {
+                  const flexColId = leafColumns.find(
+                    (c) =>
+                      (c.id === 'fullName' || c.id === 'customerName' || c.id === 'name' || c.id === 'title') &&
+                      !columnPinningInfo.isPinnedLeft[c.id]
+                  )?.id;
+                  const isFlexCol = !isOverflowingX && col.id === flexColId;
+                  return (
+                    <col
+                      key={col.id}
+                      style={{
+                        width: isFlexCol ? undefined : `${col.getSize()}px`,
+                        minWidth: isFlexCol ? '260px' : `${col.getSize()}px`,
+                      }}
+                    />
+                  );
+                })}
               </colgroup>
               {/* Sticky Header (36px, var(--surface-subtle), 12px/600 muted labels) */}
               <thead className="sticky top-0 z-20 bg-[var(--surface-subtle)] border-b border-[var(--border)] shadow-[0_1px_0_0_rgba(0,0,0,0.03)] select-none">
@@ -1151,8 +1529,15 @@ export const DataTable = <T extends Record<string, any>>({
                       const sortDir = header.column.getIsSorted();
                       const colDef = columns.find((c) => c.id === header.id);
 
+                      const flexColId = leafColumns.find(
+                        (c) =>
+                          (c.id === 'fullName' || c.id === 'customerName' || c.id === 'name' || c.id === 'title') &&
+                          !columnPinningInfo.isPinnedLeft[c.id]
+                      )?.id;
+                      const isFlexCol = !isOverflowingX && header.id === flexColId;
+
                       const isPinnedL = columnPinningInfo.isPinnedLeft[header.id];
-                      const isPinnedR = columnPinningInfo.isPinnedRight[header.id];
+                      const isPinnedR = isOverflowingX && columnPinningInfo.isPinnedRight[header.id];
                       const isLastLeftPinned = columnPinningInfo.lastLeftPinnedId === header.id;
                       const isFirstRightPinned = columnPinningInfo.firstRightPinnedId === header.id;
 
@@ -1175,9 +1560,9 @@ export const DataTable = <T extends Record<string, any>>({
                             zIndex: 30,
                           }
                           : {
-                            width: `${header.getSize()}px`,
+                            width: isFlexCol ? undefined : `${header.getSize()}px`,
                             minWidth: `${header.getSize()}px`,
-                            maxWidth: `${header.getSize()}px`,
+                            maxWidth: isFlexCol ? undefined : `${header.getSize()}px`,
                           };
 
                       return (
@@ -1185,7 +1570,7 @@ export const DataTable = <T extends Record<string, any>>({
                           key={header.id}
                           style={headerStickyStyle}
                           className={cn(
-                            header.id === 'select' ? 'px-0' : 'px-3',
+                            header.id === 'select' || header.id === 'expander' ? 'px-0' : header.id === 'status' ? 'px-1' : 'px-3',
                             'relative group align-middle transition-colors whitespace-nowrap overflow-visible',
                             (isPinnedL || isPinnedR) && 'bg-[var(--surface-subtle)]',
                             isLastLeftPinned && 'border-r border-[var(--border-subtle)] shadow-[1px_0_0_0_rgba(0,0,0,0.03)]',
@@ -1197,7 +1582,7 @@ export const DataTable = <T extends Record<string, any>>({
                           <div
                             onClick={header.column.getToggleSortingHandler()}
                             className={cn(
-                              'flex items-center gap-1 w-full min-w-0 select-none',
+                              'flex items-center gap-1.5 w-full min-w-0 select-none',
                               colDef?.align === 'right' ? 'justify-end' : colDef?.align === 'center' ? 'justify-center' : 'justify-start',
                               isSortable && 'cursor-pointer hover:text-[var(--text)]'
                             )}
@@ -1211,7 +1596,6 @@ export const DataTable = <T extends Record<string, any>>({
                                 )}
                             </span>
 
-                            {/* Sort Arrow */}
                             {isSortable && (
                               <span className="shrink-0">
                                 {sortDir === 'asc' ? (
@@ -1221,51 +1605,6 @@ export const DataTable = <T extends Record<string, any>>({
                                 ) : (
                                   <ArrowUpDown className="w-3.5 h-3.5 text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
                                 )}
-                              </span>
-                            )}
-
-                            {/* Column Filter Icon */}
-                            {colDef?.filter && (
-                              <span
-                                onClick={(e) => e.stopPropagation()}
-                                className="shrink-0 opacity-0 group-hover:opacity-100 has-[.active-filter]:opacity-100 transition-opacity"
-                              >
-                                <DataTableColumnFilter
-                                  columnId={header.id}
-                                  columnTitle={
-                                    typeof colDef.header === 'string'
-                                      ? colDef.header
-                                      : header.id
-                                  }
-                                  filterDef={colDef.filter}
-                                  currentValue={header.column.getFilterValue()}
-                                  onChange={(val) => header.column.setFilterValue(val)}
-                                />
-                              </span>
-                            )}
-
-                            {/* Column Menu */}
-                            {header.id !== 'select' && header.id !== 'expander' && (
-                              <span
-                                onClick={(e) => e.stopPropagation()}
-                                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <DataTableColumnMenu
-                                  columnId={header.id}
-                                  columnTitle={
-                                    typeof colDef?.header === 'string'
-                                      ? colDef.header
-                                      : header.id
-                                  }
-                                  isSorted={sortDir}
-                                  onSort={(desc) => header.column.toggleSorting(desc)}
-                                  onClearSort={() => header.column.clearSorting()}
-                                  isPinned={header.column.getIsPinned()}
-                                  onPin={(pos) => header.column.pin(pos)}
-                                  onHide={() => header.column.toggleVisibility(false)}
-                                  canHide={colDef?.hideable !== false}
-                                  onAutoFit={() => header.column.resetSize()}
-                                />
                               </span>
                             )}
                           </div>
@@ -1359,6 +1698,43 @@ export const DataTable = <T extends Record<string, any>>({
                   </tr>
                 ) : (
                   rows.map((row) => {
+                    if (row.getIsGrouped()) {
+                      const groupCol = columns.find((c) => c.id === row.groupingColumnId);
+                      const groupHeader = groupCol ? (typeof groupCol.header === 'string' ? groupCol.header : groupCol.id) : row.groupingColumnId;
+                      return (
+                        <tr
+                          key={row.id}
+                          style={{ height: currentRowHeight }}
+                          onClick={() => row.toggleExpanded()}
+                          className="bg-zinc-100/90 dark:bg-zinc-800/60 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 border-y border-[var(--border)] cursor-pointer select-none transition-colors"
+                        >
+                          <td
+                            colSpan={leafColumns.length}
+                            className="px-4 py-2 text-xs font-semibold text-[var(--text)] sticky left-0 z-10"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="p-1 rounded-md text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
+                                {row.getIsExpanded() ? (
+                                  <ChevronDown className="w-4 h-4 stroke-[2]" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 stroke-[2]" />
+                                )}
+                              </span>
+                              <span className="text-[var(--text-muted)] text-[11px] uppercase tracking-wider font-medium">
+                                {groupHeader}:
+                              </span>
+                              <span className="text-[var(--text)] font-semibold text-[13px]">
+                                {String(row.groupingValue ?? 'Unassigned')}
+                              </span>
+                              <span className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-medium bg-zinc-200/80 dark:bg-zinc-700/80 text-zinc-600 dark:text-zinc-300">
+                                {row.subRows.length} {row.subRows.length === 1 ? 'record' : 'records'}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     const isSelected = row.getIsSelected();
 
                     return (
@@ -1366,29 +1742,6 @@ export const DataTable = <T extends Record<string, any>>({
                         <tr
                           style={{ height: currentRowHeight }}
                           onClick={(e) => onRowClick?.(row.original, e)}
-                          onContextMenu={(e) => {
-                            if (rowActions) {
-                              e.preventDefault();
-                              const menuWidth = 220;
-                              const padding = 12;
-                              let x = e.clientX;
-                              if (x + menuWidth > window.innerWidth - padding) {
-                                x = Math.max(padding, e.clientX - menuWidth);
-                              }
-                              if (x < padding) x = padding;
-                              let y = e.clientY + 4;
-                              const menuHeight = 280;
-                              if (y + menuHeight > window.innerHeight - padding) {
-                                y = Math.max(padding, e.clientY - menuHeight - 4);
-                              }
-                              if (y < padding) y = padding;
-                              setContextMenu({
-                                x,
-                                y,
-                                row: row.original,
-                              });
-                            }
-                          }}
                           className={cn(
                             'group transition-colors cursor-pointer align-middle',
                             isSelected
@@ -1399,10 +1752,17 @@ export const DataTable = <T extends Record<string, any>>({
                           {row.getVisibleCells().map((cell, cellIndex) => {
                             const colDef = columns.find((c) => c.id === cell.column.id);
                             const isPinnedL = columnPinningInfo.isPinnedLeft[cell.column.id];
-                            const isPinnedR = columnPinningInfo.isPinnedRight[cell.column.id];
+                            const isPinnedR = isOverflowingX && columnPinningInfo.isPinnedRight[cell.column.id];
                             const isLastLeftPinned = columnPinningInfo.lastLeftPinnedId === cell.column.id;
                             const isFirstRightPinned = columnPinningInfo.firstRightPinnedId === cell.column.id;
                             const isFirstCell = cellIndex === 0;
+
+                            const flexColId = leafColumns.find(
+                              (c) =>
+                                (c.id === 'fullName' || c.id === 'customerName' || c.id === 'name' || c.id === 'title') &&
+                                !columnPinningInfo.isPinnedLeft[c.id]
+                            )?.id;
+                            const isFlexCol = !isOverflowingX && cell.column.id === flexColId;
 
                             const cellStickyStyle: React.CSSProperties = isPinnedL
                               ? {
@@ -1420,12 +1780,12 @@ export const DataTable = <T extends Record<string, any>>({
                                   maxWidth: `${cell.column.getSize()}px`,
                                   position: 'sticky',
                                   right: `${columnPinningInfo.rightOffsets[cell.column.id]}px`,
-                                  zIndex: 10,
+                                  zIndex: cell.column.id === 'actions' && activeActionRowId === row.id ? 40 : 10,
                                 }
                                 : {
-                                  width: `${cell.column.getSize()}px`,
+                                  width: isFlexCol ? undefined : `${cell.column.getSize()}px`,
                                   minWidth: `${cell.column.getSize()}px`,
-                                  maxWidth: `${cell.column.getSize()}px`,
+                                  maxWidth: isFlexCol ? undefined : `${cell.column.getSize()}px`,
                                 };
 
                             return (
@@ -1433,8 +1793,9 @@ export const DataTable = <T extends Record<string, any>>({
                                 key={cell.id}
                                 style={cellStickyStyle}
                                 className={cn(
-                                  cell.column.id === 'select' ? 'px-0' : 'px-3',
+                                  cell.column.id === 'select' || cell.column.id === 'expander' ? 'px-0' : cell.column.id === 'status' ? 'px-1' : 'px-3',
                                   'h-full text-[12px] text-[var(--text)] align-middle transition-colors',
+                                  (cell.column.id === 'actions' || cell.column.id === 'status' || cell.column.id === 'expander') && 'overflow-visible',
                                   isPinnedL || isPinnedR
                                     ? isSelected
                                       ? 'bg-[#FDEFE8] dark:bg-[#2A1D1A] group-hover:bg-[#FCE7DC] dark:group-hover:bg-[#34221D]'
@@ -1448,7 +1809,7 @@ export const DataTable = <T extends Record<string, any>>({
                                 )}
                               >
                                 <div className={cn(
-                                  'min-w-0 overflow-hidden',
+                                  (cell.column.id === 'actions' || cell.column.id === 'status' || cell.column.id === 'expander') ? 'overflow-visible' : 'min-w-0 overflow-hidden',
                                   colDef?.align === 'right' ? 'flex justify-end' : colDef?.align === 'center' ? 'flex justify-center' : ''
                                 )}>
                                   {flexRender(
@@ -1462,19 +1823,15 @@ export const DataTable = <T extends Record<string, any>>({
                         </tr>
 
                         {/* Expandable row detail panel */}
-                        {row.getIsExpanded() && renderExpanded && (
-                          <tr>
+                        {!row.getIsGrouped() && row.getIsExpanded() && renderExpanded && (
+                          <tr className="bg-[var(--surface-subtle)] border-y border-[var(--border-subtle)]">
                             <td
                               colSpan={leafColumns.length}
-                              className="p-4 bg-[var(--surface-subtle)] border-y border-[var(--border-subtle)]"
+                              className="p-4"
                             >
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                              >
+                              <div className="w-full transition-opacity duration-200">
                                 {renderExpanded(row.original)}
-                              </motion.div>
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -1490,10 +1847,17 @@ export const DataTable = <T extends Record<string, any>>({
                   <tr className="h-9">
                     {leafColumns.map((col) => {
                       const isPinnedL = columnPinningInfo.isPinnedLeft[col.id];
-                      const isPinnedR = columnPinningInfo.isPinnedRight[col.id];
+                      const isPinnedR = isOverflowingX && columnPinningInfo.isPinnedRight[col.id];
                       const isLastLeftPinned = columnPinningInfo.lastLeftPinnedId === col.id;
                       const isFirstRightPinned = columnPinningInfo.firstRightPinnedId === col.id;
                       const colDef = columns.find((c) => c.id === col.id);
+
+                      const flexColId = leafColumns.find(
+                        (c) =>
+                          (c.id === 'fullName' || c.id === 'customerName' || c.id === 'name' || c.id === 'title') &&
+                          !columnPinningInfo.isPinnedLeft[c.id]
+                      )?.id;
+                      const isFlexCol = !isOverflowingX && col.id === flexColId;
 
                       const footStickyStyle: React.CSSProperties = isPinnedL
                         ? {
@@ -1514,9 +1878,9 @@ export const DataTable = <T extends Record<string, any>>({
                             zIndex: 20,
                           }
                           : {
-                            width: `${col.getSize()}px`,
+                            width: isFlexCol ? undefined : `${col.getSize()}px`,
                             minWidth: `${col.getSize()}px`,
-                            maxWidth: `${col.getSize()}px`,
+                            maxWidth: isFlexCol ? undefined : `${col.getSize()}px`,
                           };
 
                       return (
@@ -1656,56 +2020,14 @@ export const DataTable = <T extends Record<string, any>>({
         </div>
       )}
 
-      {/* 6. Context Menu at Cursor / Action button (Portaled, auto-flipped left, backdrop dismiss) */}
-      {contextMenu && rowActions && createPortal(
-        <div
-          className="fixed inset-0 z-[9999] pointer-events-auto bg-transparent"
-          onClick={() => setContextMenu(null)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setContextMenu(null);
-          }}
-        >
-          <div
-            style={{ top: contextMenu.y, left: contextMenu.x }}
-            onClick={(e) => e.stopPropagation()}
-            className="fixed w-[220px] rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[0_10px_30px_-5px_rgba(0,0,0,0.12),0_4px_10px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_-5px_rgba(0,0,0,0.5)] py-1.5 text-xs select-none max-h-[320px] overflow-y-auto"
-          >
-            {rowActions(contextMenu.row).map((act, i) => {
-              if (act.divider) {
-                return <div key={i} className="my-1 border-t border-[var(--border-subtle)]" />;
-              }
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => {
-                    act.onClick(contextMenu.row);
-                    setContextMenu(null);
-                  }}
-                  className={cn(
-                    'w-[calc(100%-8px)] mx-1 h-8 flex items-center gap-2.5 px-2.5 text-left transition-colors text-[12px] font-medium rounded-lg',
-                    act.danger
-                      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30'
-                      : 'text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-[var(--text)]'
-                  )}
-                >
-                  {act.icon}
-                  <span className="truncate">{act.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* 7. Bulk Action Bar slot */}
+      {/* 6. Bulk Action Bar slot */}
       {selectedRows.length > 0 && bulkActions && (
-        <div className="sticky bottom-6 z-30">
-          {typeof bulkActions === 'function'
-            ? bulkActions(selectedRows, () => table.resetRowSelection())
-            : bulkActions}
+        <div className="fixed bottom-6 inset-x-0 z-30 flex justify-center pointer-events-none">
+          <div className="pointer-events-auto">
+            {typeof bulkActions === 'function'
+              ? bulkActions(selectedRows, () => table.resetRowSelection())
+              : bulkActions}
+          </div>
         </div>
       )}
 

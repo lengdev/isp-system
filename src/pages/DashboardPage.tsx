@@ -21,6 +21,7 @@ import {
 import { useStore } from '../store/useStore';
 import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
 import { useNavigate } from 'react-router-dom';
 
 export const DashboardPage: React.FC = () => {
@@ -254,14 +255,12 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${dev.status === 'Online'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-amber-100 text-amber-700'
-                      }`}
+                  <Chip
+                    size="sm"
+                    color={dev.status === 'Online' ? 'success' : 'warning'}
                   >
                     {dev.status} ({dev.lastPingMs}ms)
-                  </span>
+                  </Chip>
                   <div className="text-[10px] text-gray-400 mt-0.5">CPU: {dev.cpuLoadPercent}%</div>
                 </div>
               </div>

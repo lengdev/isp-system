@@ -113,4 +113,6 @@ export interface DataTableProps<T> {
   onAddNew?: () => void;
   addNewLabel?: string;
   className?: string;
+  cardGridClassName?: string;
+  searchPlaceholder?: string;
 }

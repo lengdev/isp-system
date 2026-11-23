@@ -14,6 +14,7 @@ import {
 import { useStore } from '../store/useStore';
 import { Plan, ConnectionType } from '../types';
 import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
 import { Modal, ModalFooter } from '../components/ui/Modal';
 import { Field, Input, Textarea } from '../components/ui/Field';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
@@ -138,11 +139,15 @@ export const PlansPage: React.FC = () => {
             { value: 'DSL', label: 'DSL' },
           ],
         },
-        cell: ({ row }) => (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--brand-soft)] text-[var(--brand)] uppercase">
-            {row.original.type}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const p = row.original;
+          const color = p.type === 'Fiber' ? 'accent' : p.type === 'Wireless' ? 'warning' : 'default';
+          return (
+            <Chip size="sm" color={color} className="uppercase font-semibold tracking-wide">
+              {p.type}
+            </Chip>
+          );
+        },
       },
       {
         id: 'monthlyPrice',
@@ -292,9 +297,13 @@ export const PlansPage: React.FC = () => {
     >
       <div>
         <div className="flex items-start justify-between gap-2">
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF1EA] text-[#F26B3A] dark:bg-orange-950/60 uppercase">
+          <Chip
+            size="sm"
+            color={p.type === 'Fiber' ? 'accent' : p.type === 'Wireless' ? 'warning' : 'default'}
+            className="uppercase font-semibold tracking-wide"
+          >
             {p.type}
-          </span>
+          </Chip>
           <div className="flex items-center gap-1">
             <button
               type="button"

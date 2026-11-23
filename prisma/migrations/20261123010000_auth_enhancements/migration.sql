@@ -1,0 +1,18 @@
+-- AlterTable User
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "failedLoginAttempts" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lockedUntil" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "resetPasswordTokenHash" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "resetPasswordExpiresAt" TIMESTAMP(3);
+
+-- AlterTable Session
+ALTER TABLE "Session" ALTER COLUMN "token" DROP NOT NULL;
+ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "refreshTokenHash" TEXT;
+ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "ip" TEXT;
+ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "revokedAt" TIMESTAMP(3);
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "Session_refreshTokenHash_key" ON "Session"("refreshTokenHash");
+
+-- AlterTable AuditLog
+ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS "ip" TEXT;

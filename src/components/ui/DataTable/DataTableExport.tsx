@@ -111,6 +111,7 @@ export const DataTableExport = <T extends Record<string, any>>({
   return (
     <Popover
       align="right"
+      width="288px"
       isOpen={isOpen}
       onOpenChange={setIsOpen}
       trigger={

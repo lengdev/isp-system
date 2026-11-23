@@ -5,7 +5,7 @@ import { Modal, ModalFooter } from '../../components/ui/Modal';
 import { Field, Input } from '../../components/ui/Field';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { Avatar } from '../../components/ui/Avatar';
-import { Badge } from '../../components/ui/Badge';
+import { Chip } from '../../components/ui/Chip';
 
 export const RecordPaymentModal: React.FC = () => {
   const modalState = useStore((s) => s.modalState.recordPayment);
@@ -142,7 +142,7 @@ export const RecordPaymentModal: React.FC = () => {
                   <span className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
                     {selectedCustomer.fullName}
                   </span>
-                  <Badge status={selectedCustomer.status} />
+                  <Chip status={selectedCustomer.status} size="sm" />
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {selectedCustomer.code} • {selectedCustomer.planName}

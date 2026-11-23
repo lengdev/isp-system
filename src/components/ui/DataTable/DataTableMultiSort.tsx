@@ -80,6 +80,7 @@ export const DataTableMultiSort: React.FC<DataTableMultiSortProps> = ({
   return (
     <Popover
       align="right"
+      width="320px"
       isOpen={isOpen}
       onOpenChange={handleOpenChange}
       trigger={
@@ -88,8 +89,8 @@ export const DataTableMultiSort: React.FC<DataTableMultiSortProps> = ({
           className={cn(
             'h-8 flex items-center gap-1.5 px-3 rounded-[8px] border text-[12px] font-medium transition-colors shadow-xs select-none whitespace-nowrap',
             activeSortCount > 0
-              ? 'border-[var(--brand)]/40 text-[var(--brand)] bg-[var(--brand-soft)]'
-              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]'
+              ? 'border-[#EA6A3C]/50 dark:border-[#EA6A3C]/40 text-[var(--brand)] bg-[#EA6A3C]/10 dark:bg-[#EA6A3C]/15'
+              : 'border-[var(--border)] dark:border-white/10 bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]'
           )}
         >
           <ArrowUpDown className="w-3.5 h-3.5 stroke-[1.75]" />

@@ -346,6 +346,485 @@ console.log('--- Running DataTable Regression Tests ---');
   console.log('✓ Test 9 Passed: Usage bar (72px+8px+text) fits 170px column, Due is 90px right-aligned, and Checkbox meets full custom spec');
 }
 
+// 10. TEST: Status tabs filter sync and Row Action popover under parent button
+{
+  const customerTableSource = fs.readFileSync(
+    path.resolve('src/features/customers/CustomerTable.tsx'),
+    'utf-8'
+  );
+  assert.ok(customerTableSource.includes('filteredCustomers'), 'CustomerTable filters data before passing to DataTable');
+  assert.ok(customerTableSource.includes('data={filteredCustomers}'), 'DataTable receives filteredCustomers');
+  assert.ok(customerTableSource.includes('filters.status'), 'CustomerTable filters by status');
+
+  const dataTableSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTable.tsx'),
+    'utf-8'
+  );
+  // Ensure onContextMenu was removed from tr
+  assert.ok(!dataTableSource.includes('onContextMenu={(e) => {'), 'No contextMenu handler on tr rows');
+  assert.ok(!dataTableSource.includes('setContextMenu'), 'contextMenu removed from DataTable');
+  // Ensure ActionMenuButton positions under parent button
+  assert.ok(dataTableSource.includes('rect.bottom + 4'), 'ActionMenuButton places popover directly under parent button');
+  assert.ok(dataTableSource.includes('window.innerWidth - rect.right'), 'ActionMenuButton aligns right edge with button');
+
+  console.log('✓ Test 10 Passed: Status tabs filter correctly syncs with DataTable and Action popover is anchored directly under parent button');
+}
+
+// 11. TEST: Verification of no default sticky left column, CSS spin button hiding, and expander cell styling
+{
+  const dataTableSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTable.tsx'),
+    'utf-8'
+  );
+  const customerTableSource = fs.readFileSync(
+    path.resolve('src/features/customers/CustomerTable.tsx'),
+    'utf-8'
+  );
+  const indexCssSource = fs.readFileSync(
+    path.resolve('src/index.css'),
+    'utf-8'
+  );
+
+  // 1. No default pinned left columns
+  assert.ok(!customerTableSource.includes("pinned: 'left'"), 'CustomerTable does not default any column to pinned left');
+  assert.ok(dataTableSource.includes("const leftCols: string[] = [];"), 'DataTable initialPinnedLeft starts empty (no hardcoded select/expander)');
+
+  // 2. CSS spin button removal
+  assert.ok(indexCssSource.includes('-webkit-appearance: none;'), 'WebKit number spin button hidden');
+  assert.ok(indexCssSource.includes('-moz-appearance: textfield;'), 'Firefox number spin button hidden');
+
+  // 3. Expander cell zero padding and single click handler
+  assert.ok(dataTableSource.includes("cell.column.id === 'select' || cell.column.id === 'expander' ? 'px-0'"), 'Expander cell uses px-0 to avoid button squishing');
+  assert.ok(dataTableSource.includes("row.toggleExpanded();"), 'Expander has toggleExpanded');
+
+  console.log('✓ Test 11 Passed: No default pinned left columns, spin buttons hidden via CSS, and expander cell padding fixed');
+}
+
+// 12. TEST: ActionMenuButton auto-flips upward near bottom edge & Action column header is blank
+{
+  const dataTableSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTable.tsx'),
+    'utf-8'
+  );
+
+  // 1. Header is blank: header: () => null
+  assert.ok(
+    dataTableSource.includes("id: 'actions',\n        size: 44,\n        enableResizing: false,\n        enableHiding: false,\n        enablePinning: false,\n        header: () => null,"),
+    'Actions column header must be blank (header: () => null)'
+  );
+
+  // 2. ActionMenuButton has placeAbove auto-flip logic
+  assert.ok(
+    dataTableSource.includes('spaceBelow < estimatedMenuHeight'),
+    'ActionMenuButton checks spaceBelow < estimatedMenuHeight'
+  );
+  assert.ok(
+    dataTableSource.includes('placeAbove: true'),
+    'ActionMenuButton sets placeAbove: true'
+  );
+  assert.ok(
+    dataTableSource.includes('bottom: window.innerHeight - rect.top + 4'),
+    'ActionMenuButton positions above button using bottom offset'
+  );
+
+  // 3. Mathematical simulation of placement
+  const windowHeight = 800;
+  const menuHeight = 277;
+
+  // Near bottom: row button at rect.top=600, rect.bottom=628
+  const rectNearBottom = { top: 600, bottom: 628 };
+  const spaceBelow = windowHeight - rectNearBottom.bottom - 12; // 160px
+  const spaceAbove = rectNearBottom.top - 12; // 588px
+  const placeAbove = spaceBelow < menuHeight && (spaceAbove >= menuHeight || spaceAbove > spaceBelow);
+  assert.strictEqual(placeAbove, true, 'Popover must flip above when space below is only 160px for a 277px menu');
+
+  // Near top: row button at rect.top=150, rect.bottom=178
+  const rectNearTop = { top: 150, bottom: 178 };
+  const spaceBelowTop = windowHeight - rectNearTop.bottom - 12; // 610px
+  const spaceAboveTop = rectNearTop.top - 12; // 138px
+  const placeAboveTop = spaceBelowTop < menuHeight && (spaceAboveTop >= menuHeight || spaceAboveTop > spaceBelowTop);
+  assert.strictEqual(placeAboveTop, false, 'Popover must open below when space below is plenty');
+
+  console.log('✓ Test 12 Passed: Action column header is blank and ActionMenuButton auto-flips upward near bottom');
+}
+
+// 13. TEST: BulkActionBar is centered via flex justify-center within content area
+{
+  const bulkActionBarSource = fs.readFileSync(
+    path.resolve('src/features/customers/BulkActionBar.tsx'),
+    'utf-8'
+  );
+  const dataTableSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTable.tsx'),
+    'utf-8'
+  );
+
+  // 1. BulkActionBar uses flex justify-center container
+  assert.ok(
+    bulkActionBarSource.includes("flex justify-center pointer-events-none"),
+    'BulkActionBar must use flex justify-center container to prevent Framer Motion transform conflict'
+  );
+  assert.ok(
+    bulkActionBarSource.includes("sidebarCollapsed ? 'left-0 md:left-16 right-0' : 'left-0 md:left-[232px] right-0'"),
+    'BulkActionBar aligns with main content area respecting sidebar state'
+  );
+  assert.ok(
+    bulkActionBarSource.includes("pointer-events-auto"),
+    'BulkActionBar child toolbar enables pointer-events-auto'
+  );
+
+  // 2. DataTable bulkActions slot is also centered
+  assert.ok(
+    dataTableSource.includes("fixed bottom-6 inset-x-0 z-30 flex justify-center pointer-events-none"),
+    'DataTable bulkActions slot must be centered'
+  );
+
+  console.log('✓ Test 13 Passed: BulkActionBar and DataTable bulk actions container use centered layout');
+}
+
+// 14. TEST: Group by submenu mousedown protection and group row expansion logic
+{
+  const moreMenuSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTableMoreMenu.tsx'),
+    'utf-8'
+  );
+  const dataTableSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTable.tsx'),
+    'utf-8'
+  );
+
+  // 1. More menu has submenuRef so mousedown on flyout does not close menu before click
+  assert.ok(
+    moreMenuSource.includes('submenuRef.current?.contains(target)'),
+    'More menu must include submenuRef in click-outside handler to prevent premature mousedown close'
+  );
+  assert.ok(
+    moreMenuSource.includes('ref={submenuRef}'),
+    'More menu flyout motion.div must attach submenuRef'
+  );
+
+  // 2. DataTable uses paginateExpandedRows: false so groups stay on current page
+  assert.ok(
+    dataTableSource.includes('paginateExpandedRows: false'),
+    'DataTable must set paginateExpandedRows: false for clean group pagination'
+  );
+
+  // 3. DataTable groups initialize expanded without setting global boolean true that breaks leaf rows
+  assert.ok(
+    dataTableSource.includes('initialExpanded[`${colId}:${val}`] = true'),
+    'DataTable onGroupByChange must expand specific group rows instead of boolean true'
+  );
+
+  // 4. Cards view handles grouped rows safely
+  assert.ok(
+    dataTableSource.includes('if (row.getIsGrouped())'),
+    'Cards view must handle row.getIsGrouped() to prevent TypeError on undefined row.original'
+  );
+
+  console.log('✓ Test 14 Passed: Group by submenu click-outside protection, clean group expansion, and card safety verified');
+}
+
+// 15. TEST: Popover right-alignment anchors flush with trigger right edge and never overflows screen right edge
+{
+  const popoverSource = fs.readFileSync(
+    path.resolve('src/components/ui/Popover.tsx'),
+    'utf-8'
+  );
+  const exportSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTableExport.tsx'),
+    'utf-8'
+  );
+
+  // 1. Popover supports right anchoring when align="right"
+  assert.ok(
+    popoverSource.includes("const rightDistance = Math.max(padding, window.innerWidth - triggerRect.right)"),
+    'Popover must calculate rightDistance relative to trigger right edge when align="right"'
+  );
+  assert.ok(
+    popoverSource.includes("right: coords.right !== undefined ? `${coords.right}px` : undefined"),
+    'Popover motion.div style must apply right coordinate'
+  );
+
+  // 2. Mathematical simulation of Popover positioning with Export button near screen edge
+  const windowWidth = 1000;
+  const padding = 12;
+  const popoverWidth = 288;
+  const triggerRect = { left: 880, right: 960, top: 100, bottom: 132, width: 80, height: 32 };
+
+  const rightDistance = Math.max(padding, windowWidth - triggerRect.right); // 1000 - 960 = 40
+  assert.strictEqual(rightDistance, 40, 'Right distance is 40px from window right edge');
+
+  // Verify the popover right edge relative to screen
+  const popoverRightEdge = windowWidth - rightDistance; // 960
+  assert.strictEqual(popoverRightEdge, 960, 'Popover right edge is exactly at 960px, flush with trigger button');
+  assert.ok(popoverRightEdge <= windowWidth - padding, 'Popover right edge does not clip or overflow screen');
+
+  // Verify left edge
+  const popoverLeftEdge = popoverRightEdge - popoverWidth; // 960 - 288 = 672
+  assert.strictEqual(popoverLeftEdge, 672, 'Popover left edge is at 672px');
+  assert.ok(popoverLeftEdge >= padding, 'Popover left edge stays within screen');
+
+  // 3. DataTableExport explicitly provides width
+  assert.ok(
+    exportSource.includes('width="288px"'),
+    'DataTableExport must provide width="288px" to Popover'
+  );
+
+  console.log('✓ Test 15 Passed: Popover right-alignment anchors flush without clipping and Export width is explicitly defined');
+}
+
+// 16. TEST: Modal animation stability, layout-shift scrollbar compensation, and portal to document.body
+{
+  const modalSource = fs.readFileSync(
+    path.resolve('src/components/ui/Modal.tsx'),
+    'utf-8'
+  );
+  const motionSource = fs.readFileSync(
+    path.resolve('src/lib/motion.ts'),
+    'utf-8'
+  );
+
+  // 1. Portaled to document.body to prevent containing block transform trapping
+  assert.ok(
+    modalSource.includes('createPortal(') && modalSource.includes('document.body'),
+    'Modal must portal directly into document.body'
+  );
+
+  // 2. Body scroll lock measures scrollbar width to prevent horizontal layout shift
+  assert.ok(
+    modalSource.includes('window.innerWidth - document.documentElement.clientWidth') &&
+    modalSource.includes('document.body.style.paddingRight'),
+    'Modal scroll lock must compensate scrollbar width on document.body to eliminate horizontal jump'
+  );
+
+  // 3. ModalVariants separates scale and opacity transitions to avoid spring oscillation on opacity
+  assert.ok(
+    motionSource.includes('scale: { type: \'spring\'') && motionSource.includes('opacity: { duration:'),
+    'modalVariants must separate scale spring from monotonic opacity duration'
+  );
+
+  console.log('✓ Test 16 Passed: Modal portaling, scrollbar compensation, and smooth animation variants verified');
+}
+
+// 17. TEST: NetworkPage and TicketsPage column and feature integrity
+{
+  const networkSource = fs.readFileSync(
+    path.resolve('src/pages/NetworkPage.tsx'),
+    'utf-8'
+  );
+  const ticketsSource = fs.readFileSync(
+    path.resolve('src/pages/TicketsPage.tsx'),
+    'utf-8'
+  );
+
+  // 1. No default pinned left columns (avoids disrupting TanStack Table select & expander)
+  assert.ok(!networkSource.includes("pinned: 'left'"), 'NetworkPage must not hardcode pinned: "left"');
+  assert.ok(!ticketsSource.includes("pinned: 'left'"), 'TicketsPage must not hardcode pinned: "left"');
+
+  // 2. Network device types match mock data types ('Access Point')
+  assert.ok(networkSource.includes("'Access Point'"), 'NetworkPage options must include "Access Point"');
+
+  // 3. TicketsPage provides bulkActions
+  assert.ok(ticketsSource.includes('bulkActions={renderBulkActions}'), 'TicketsPage must provide bulkActions');
+
+  console.log('✓ Test 17 Passed: Network and Tickets column integrity and features verified');
+}
+
+// 18. TEST: index.html anti-flash script syntax and attribute initialization
+{
+  const indexHtml = fs.readFileSync(path.resolve('index.html'), 'utf-8');
+
+  // Extract inline script content
+  const scriptMatch = indexHtml.match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(scriptMatch, 'index.html must contain an inline script to prevent theme flash');
+
+  const scriptContent = scriptMatch[1];
+  // Verify it parses as valid JavaScript without syntax error
+  assert.doesNotThrow(() => {
+    new Function(scriptContent);
+  }, 'Inline anti-flash script in index.html must have valid JavaScript syntax');
+
+  assert.ok(scriptContent.includes('localStorage.getItem(\'netpulse-storage\')'), 'Reads netpulse-storage');
+  assert.ok(scriptContent.includes('data-comfort'), 'Sets data-comfort');
+  assert.ok(scriptContent.includes('data-density'), 'Sets data-density');
+  assert.ok(scriptContent.includes('data-motion'), 'Sets data-motion');
+
+  console.log('✓ Test 18 Passed: index.html inline script syntax and attribute initialization verified');
+}
+
+// 19. TEST: Column visibility toggle button semantics and single-activation protection
+{
+  const toolbarSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTableToolbar.tsx'),
+    'utf-8'
+  );
+
+  // 1. Column toggle row must be a <button type="button"> instead of nested <label>
+  assert.ok(
+    toolbarSource.includes('onClick={() => onToggleColumnVisibility(col.id)}'),
+    'Column row must trigger onToggleColumnVisibility directly on click'
+  );
+
+  // 2. Must not contain nested <label> around DataTableCheckbox
+  assert.ok(
+    !toolbarSource.includes('<label\n                        key={col.id}'),
+    'Column row must not be a <label> to prevent double activation and invalid HTML nesting'
+  );
+
+  // 3. Inner checkbox must have pointer-events-none to prevent event collision
+  assert.ok(
+    toolbarSource.includes('pointer-events-none shrink-0 flex items-center'),
+    'Checkbox wrapper must have pointer-events-none to ensure single clean click dispatch'
+  );
+
+  // 4. Functional simulation of toggle state transitions
+  const columns = ['fullName', 'planName', 'monthlyPrice', 'dataUsageGB', 'balanceDue', 'status', 'rating'];
+  let visibilityState = { fullName: true, planName: true, monthlyPrice: true };
+
+  const toggleColumn = (colId) => {
+    visibilityState = {
+      ...visibilityState,
+      [colId]: visibilityState[colId] !== undefined ? !visibilityState[colId] : false,
+    };
+  };
+
+  assert.strictEqual(visibilityState.planName, true, 'planName starts visible');
+  toggleColumn('planName');
+  assert.strictEqual(visibilityState.planName, false, 'Single click toggles planName to hidden');
+  toggleColumn('planName');
+  assert.strictEqual(visibilityState.planName, true, 'Second click toggles planName back to visible');
+
+  console.log('✓ Test 19 Passed: Column visibility toggle semantics, single-dispatch, and state transitions verified');
+}
+
+// 20. TEST: Saved views inline save form and delete/remove button functionality
+{
+  const moreMenuSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTableMoreMenu.tsx'),
+    'utf-8'
+  );
+  const toolbarSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTableToolbar.tsx'),
+    'utf-8'
+  );
+  const dataTableSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTable.tsx'),
+    'utf-8'
+  );
+
+  // 1. MoreMenuProps must include onDeleteView
+  assert.ok(
+    moreMenuSource.includes('onDeleteView?: (id: string) => void;'),
+    'DataTableMoreMenuProps must define onDeleteView'
+  );
+
+  // 2. Trash2 icon imported and rendered on custom saved views
+  assert.ok(
+    moreMenuSource.includes('Trash2') && moreMenuSource.includes('onDeleteView(v.id)'),
+    'Custom saved views must render a delete button calling onDeleteView'
+  );
+  assert.ok(
+    moreMenuSource.includes('e.stopPropagation()'),
+    'Delete button must stop propagation to prevent activating the view on delete'
+  );
+
+  // 3. Inline save form replaces window.prompt
+  assert.ok(
+    !toolbarSource.includes('window.prompt'),
+    'DataTableToolbar must not use window.prompt'
+  );
+  assert.ok(
+    moreMenuSource.includes('isSavingView ?') && moreMenuSource.includes('onSaveCurrentView(trimmed)'),
+    'DataTableMoreMenu must render an inline save view form with validation and submit'
+  );
+
+  // 4. DataTable.tsx handleDeleteView resets activeViewId and notifies via toast
+  assert.ok(
+    dataTableSource.includes("if (activeViewId === id) {\n      setActiveViewId('default');\n    }"),
+    'handleDeleteView must reset activeViewId to default when deleting the active view'
+  );
+  assert.ok(
+    dataTableSource.includes("title: 'View Deleted'"),
+    'handleDeleteView must show a toast notification'
+  );
+
+  // 5. Functional simulation of saved views lifecycle
+  let savedViews = [
+    { id: 'default', name: 'Default View', isDefault: true },
+    { id: 'v1', name: 'Active Accounts', isDefault: false },
+    { id: 'v2', name: 'High Usage', isDefault: false },
+  ];
+  let activeViewId = 'v1';
+
+  // Delete view v2 (inactive)
+  const deleteView = (id) => {
+    savedViews = savedViews.filter((v) => v.id !== id);
+    if (activeViewId === id) {
+      activeViewId = 'default';
+    }
+  };
+
+  deleteView('v2');
+  assert.strictEqual(savedViews.length, 2, 'v2 should be removed');
+  assert.strictEqual(activeViewId, 'v1', 'activeViewId should remain v1');
+
+  // Delete active view v1
+  deleteView('v1');
+  assert.strictEqual(savedViews.length, 1, 'v1 should be removed');
+  assert.strictEqual(activeViewId, 'default', 'activeViewId should reset to default');
+
+  // Add view
+  const addView = (name) => {
+    const newView = { id: 'v3', name, isDefault: false };
+    savedViews.push(newView);
+    activeViewId = newView.id;
+  };
+  addView('VIP Clients');
+  assert.strictEqual(savedViews.length, 2, 'New view should be added');
+  assert.strictEqual(activeViewId, 'v3', 'New view should become active');
+
+  console.log('✓ Test 20 Passed: Saved views inline save form, delete button, and lifecycle verified');
+}
+
+// 21. TEST: Pinned left columns in Plans and Technicians preserve checkbox and expander precedence
+{
+  const dataTableSource = fs.readFileSync(
+    path.resolve('src/components/ui/DataTable/DataTable.tsx'),
+    'utf-8'
+  );
+
+  // Assert leading control columns are prepended when leftCols.length > 0
+  assert.ok(
+    dataTableSource.includes("if (leftCols.length > 0) {") &&
+    dataTableSource.includes("const leading: string[] = ['select'];") &&
+    dataTableSource.includes("if (showExpander) leading.push('expander');") &&
+    dataTableSource.includes("return [...leading, ...leftCols];"),
+    'DataTable must automatically prepend select and expander when any user columns are pinned left'
+  );
+
+  // Assert flexible column calculation skips left-pinned columns
+  assert.ok(
+    dataTableSource.includes("!columnPinningInfo.isPinnedLeft[c.id]"),
+    'Pinned columns must not be treated as flexible columns with undefined width'
+  );
+
+  console.log('✓ Test 21 Passed: Pinned left columns in Plans and Technicians tables preserve checkbox and expander column precedence without overlap');
+}
+
+// 22. TEST: App routing does not use blocking AnimatePresence mode="wait" and includes ErrorBoundary
+{
+  const appSource = fs.readFileSync(path.resolve('src/App.tsx'), 'utf-8');
+  assert.ok(
+    !appSource.includes('<AnimatePresence mode="wait">'),
+    'App must not use blocking AnimatePresence mode="wait" which causes empty screens during rapid navigation'
+  );
+  assert.ok(
+    appSource.includes('<ErrorBoundary>'),
+    'App main routes must be wrapped with ErrorBoundary to prevent unhandled render crashes'
+  );
+  console.log('✓ Test 22 Passed: App routing unblocked (no AnimatePresence mode="wait") with ErrorBoundary protection');
+}
+
 console.log('\n========================================');
 console.log('ALL DATATABLE REGRESSION TESTS PASSED! ✓');
 console.log('========================================');

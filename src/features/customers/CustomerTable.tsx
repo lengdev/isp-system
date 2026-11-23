@@ -49,7 +49,59 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   const toggleStatistics = useStore((s) => s.toggleStatistics);
   const addToast = useStore((s) => s.addToast);
   const selectAllCustomers = useStore((s) => s.selectAllCustomers);
+  const setSelectedCustomerIds = useStore((s) => s.setSelectedCustomerIds);
   const clearSelectedCustomers = useStore((s) => s.clearSelectedCustomers);
+  const filters = useStore((s) => s.filters);
+
+  // Filter customers based on active store filters (StatusTabs, search, plan, city, etc.)
+  const filteredCustomers = useMemo(() => {
+    let result = customers;
+
+    if (filters.status && filters.status.length > 0) {
+      result = result.filter((c) => filters.status.includes(c.status));
+    }
+
+    if (filters.plan && filters.plan.length > 0) {
+      result = result.filter((c) => filters.plan.includes(c.planName));
+    }
+
+    if (filters.city && filters.city.length > 0) {
+      result = result.filter((c) => filters.city.includes(c.city));
+    }
+
+    if (filters.connectionType && filters.connectionType.length > 0) {
+      result = result.filter((c) => filters.connectionType.includes(c.connectionType));
+    }
+
+    if (filters.technician && filters.technician.length > 0) {
+      result = result.filter((c) => c.assignedTechnician && filters.technician.includes(c.assignedTechnician));
+    }
+
+    if (filters.minBalance !== undefined && filters.minBalance !== null) {
+      result = result.filter((c) => c.balanceDue >= filters.minBalance!);
+    }
+
+    if (filters.maxBalance !== undefined && filters.maxBalance !== null) {
+      result = result.filter((c) => c.balanceDue <= filters.maxBalance!);
+    }
+
+    if (filters.searchQuery && filters.searchQuery.trim()) {
+      const q = filters.searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (c) =>
+          c.fullName.toLowerCase().includes(q) ||
+          c.code.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q) ||
+          c.phone.toLowerCase().includes(q) ||
+          c.ipAddress.toLowerCase().includes(q) ||
+          c.macAddress.toLowerCase().includes(q) ||
+          c.planName.toLowerCase().includes(q) ||
+          c.city.toLowerCase().includes(q)
+      );
+    }
+
+    return result;
+  }, [customers, filters]);
 
   // Clear selection on load (0 rows selected on load)
   useEffect(() => {
@@ -90,7 +142,6 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
         width: 240,
         minWidth: 200,
         sortable: true,
-        pinned: 'left',
         priority: 1,
         filter: {
           type: 'text',
@@ -101,7 +152,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
           const c = row.original;
           return (
             <div
-              className="flex items-center gap-2 min-w-0 max-w-[240px] cursor-pointer"
+              className="flex items-center gap-2 min-w-0 w-full cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 openDrawer(c.id);
@@ -219,7 +270,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
             : Math.min(100, Math.round((c.dataUsageGB / 1000) * 100));
 
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <div className="w-[72px] bg-[var(--surface-subtle)] border border-[var(--border-subtle)] h-1.5 rounded-full overflow-hidden shrink-0">
                 <div
                   className={cn(
@@ -233,9 +284,8 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
-              <span className="text-[11px] text-[var(--text-secondary)] tabular-nums whitespace-nowrap">
-                {formatNumber(c.dataUsageGB)} GB
-                {c.dataCapGB ? ` / ${formatNumber(c.dataCapGB)}` : ''}
+              <span className="text-[10.5px] text-[var(--text-secondary)] tabular-nums whitespace-nowrap">
+                {formatNumber(c.dataUsageGB)}/{c.dataCapGB ? formatNumber(c.dataCapGB) : '1k'} GB
               </span>
             </div>
           );
@@ -324,8 +374,8 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
           const c = row.original;
           return (
             <div className="inline-flex items-center gap-1 font-medium text-amber-500 justify-end">
-              <Star className="w-3.5 h-3.5 fill-amber-400 stroke-amber-400" />
-              <span className="text-[12px] text-[var(--text)] tabular-nums font-semibold">
+              <Star className="w-3.5 h-3.5 fill-amber-400 stroke-amber-400 shrink-0" />
+              <span className="text-[12px] text-[var(--text)] tabular-nums font-semibold shrink-0">
                 {c.rating.toFixed(1)}
               </span>
             </div>
@@ -681,12 +731,12 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   return (
     <DataTable<Customer>
       columns={columns}
-      data={customers}
+      data={filteredCustomers}
       loading={loading}
       rowId={(c) => c.id}
       viewKey="customers_master_table"
       onRowClick={(c) => openDrawer(c.id)}
-      onSelectionChange={(selected) => selectAllCustomers(selected.map((c) => c.id))}
+      onSelectionChange={(selected) => setSelectedCustomerIds(selected.map((c) => c.id))}
       rowActions={getRowActions}
       renderExpanded={renderExpanded}
       renderCard={renderCard}

@@ -1,0 +1,1132 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. IDENTITY & RBAC
+// ==========================================
+
+enum UserRoleType {
+  SUPER_ADMIN
+  ADMINISTRATOR
+  MANAGER
+  ACCOUNTANT
+  CASHIER
+  BILLING_CASHIER
+  NETWORK_ENGINEER
+  TECHNICIAN
+  FIELD_TECHNICIAN
+  SUPPORT_AGENT
+  SALES_STAFF
+  WAREHOUSE_MANAGER
+  PROCUREMENT_OFFICER
+  CUSTOMER
+}
+
+model User {
+  id                     String        @id @default(uuid())
+  username               String        @unique
+  email                  String        @unique
+  passwordHash           String
+  fullName               String
+  phone                  String?
+  avatarUrl              String?
+  role                   UserRoleType  @default(SALES_STAFF)
+  isActive               Boolean       @default(true)
+  failedLoginAttempts    Int           @default(0)
+  lockedUntil            DateTime?
+  mustChangePassword     Boolean       @default(false)
+  resetPasswordTokenHash String?
+  resetPasswordExpiresAt DateTime?
+  lastLoginAt            DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  userRoles    UserRole[]
+  sessions     Session[]
+  auditLogs    AuditLog[]
+  technician   Technician?
+  customer     Customer?
+
+  @@index([email])
+  @@index([role])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  userRoles   UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  code        String           @unique // e.g. "customer.create", "invoice.view", "journal.post"
+  module      String           // e.g. "crm", "billing", "network", "accounting"
+  description String?
+  createdAt   DateTime         @default(now())
+
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  token            String?   @unique
+  refreshTokenHash String?   @unique
+  userAgent        String?
+  ipAddress        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([refreshTokenHash])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  userEmail  String?
+  action     String   // e.g. "CREATE", "UPDATE", "DELETE", "LOGIN_SUCCESS", "LOGIN_FAILURE", "LOGOUT", "LOCKOUT"
+  resource   String   // e.g. "Customer", "Invoice", "Auth", "User"
+  resourceId String?
+  details    String?  // JSON string or summary
+  ipAddress  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+// ==========================================
+// 2. CRM & CUSTOMERS
+// ==========================================
+
+enum CustomerType {
+  RESIDENTIAL
+  BUSINESS
+}
+
+enum CustomerStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+  DISCONNECTED
+  OVERDUE
+}
+
+model Customer {
+  id               String         @id @default(uuid())
+  code             String         @unique // e.g. "CUST-1001"
+  userId           String?        @unique
+  type             CustomerType   @default(RESIDENTIAL)
+  status           CustomerStatus @default(PENDING)
+  fullName         String
+  email            String         @unique
+  phone            String
+  nationalId       String?
+  companyName      String?
+  taxNumber        String?
+  avatarUrl        String?
+  rating           Decimal        @default(5.0) @db.Decimal(2, 1)
+  balanceDue       Decimal        @default(0.00) @db.Decimal(12, 2)
+  notes            String?
+  registrationDate DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  addresses        CustomerAddress[]
+  attachments      CustomerAttachment[]
+  activities       CustomerActivity[]
+  subscriptions    Subscription[]
+  invoices         Invoice[]
+  payments         Payment[]
+  tickets          SupportTicket[]
+  installations    Installation[]
+  assignedEquipments SerialNumber[]
+
+  @@index([status])
+  @@index([fullName])
+  @@index([phone])
+}
+
+model CustomerAddress {
+  id          String   @id @default(uuid())
+  customerId  String
+  addressLine String
+  city        String
+  district    String?
+  postalCode  String?
+  coordinates String?  // "lat,lng" e.g. "11.5564,104.9282"
+  isPrimary   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerAttachment {
+  id         String   @id @default(uuid())
+  customerId String
+  fileName   String
+  fileUrl    String
+  fileType   String?
+  fileSize   Int?
+  uploadedAt DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerActivity {
+  id         String   @id @default(uuid())
+  customerId String
+  action     String
+  details    String
+  actor      String
+  type       String   // "billing", "status", "support", "network", "profile"
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// 3. INTERNET SERVICES & PACKAGES
+// ==========================================
+
+enum TechnologyType {
+  FIBER
+  WIRELESS
+  DSL
+}
+
+model Package {
+  id               String         @id @default(uuid())
+  name             String         @unique
+  technology       TechnologyType @default(FIBER)
+  downloadSpeed    Int            // Mbps
+  uploadSpeed      Int            // Mbps
+  monthlyPrice     Decimal        @db.Decimal(10, 2)
+  installationFee  Decimal        @default(0.00) @db.Decimal(10, 2)
+  dataAllowanceGB  Int?           // null = Unlimited
+  pppoeProfileName String         @default("default")
+  description      String?
+  isPopular        Boolean        @default(false)
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  subscriptions    Subscription[]
+  invoiceItems     InvoiceItem[]
+}
+
+enum SubscriptionStatus {
+  PENDING
+  INSTALLATION
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  TERMINATED
+}
+
+model Subscription {
+  id               String             @id @default(uuid())
+  subscriptionNumber String           @unique // e.g. "SUB-2026-001"
+  customerId       String
+  packageId        String
+  routerId         String?
+  vlanId           String?
+  technology       TechnologyType     @default(FIBER)
+  status           SubscriptionStatus @default(PENDING)
+  billingCycle     String             @default("MONTHLY") // "MONTHLY", "30_DAYS", "PREPAID"
+  monthlyFee       Decimal            @db.Decimal(10, 2)
+  activationDate   DateTime?
+  nextBillingDate  DateTime?
+  expirationDate   DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  package          Package            @relation(fields: [packageId], references: [id])
+  router           Router?            @relation(fields: [routerId], references: [id], onDelete: SetNull)
+  vlan             VLAN?              @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  pppoeAccount     PPPoEAccount?
+  invoices         Invoice[]
+  history          SubscriptionHistory[]
+  installations    Installation[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model SubscriptionHistory {
+  id             String             @id @default(uuid())
+  subscriptionId String
+  action         String             // "UPGRADE", "DOWNGRADE", "SUSPEND", "RECONNECT", "RENEW"
+  previousStatus SubscriptionStatus?
+  newStatus      SubscriptionStatus
+  note           String?
+  actor          String
+  createdAt      DateTime           @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 4. NETWORK & MIKROTIK
+// ==========================================
+
+enum RouterStatus {
+  ONLINE
+  WARNING
+  OFFLINE
+}
+
+model Router {
+  id              String        @id @default(uuid())
+  name            String        @unique // e.g. "Core-CCR2004-East"
+  managementIp    String        @unique
+  apiPort         Int           @default(8728)
+  username        String
+  encryptedSecret String        // encrypted RouterOS API password
+  model           String?       // "MikroTik CCR2004-16G-2S+"
+  osVersion       String?       // "RouterOS v7.14.2"
+  location        String?
+  status          RouterStatus  @default(ONLINE)
+  cpuUsage        Int           @default(0)
+  memoryUsage     Int           @default(0)
+  uptimeSeconds   Int           @default(0)
+  lastSeenAt      DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  subscriptions   Subscription[]
+  pppoeAccounts   PPPoEAccount[]
+  vlans           VLAN[]
+  ipPools         IPPool[]
+  metrics         RouterMetric[]
+  provisionJobs   NetworkProvisionJob[]
+  networkDevices  NetworkDevice[]
+}
+
+model RouterMetric {
+  id            String   @id @default(uuid())
+  routerId      String
+  cpuPercent    Int
+  memoryPercent Int
+  activeClients Int
+  rxBps         BigInt   @default(0)
+  txBps         BigInt   @default(0)
+  timestamp     DateTime @default(now())
+
+  router Router @relation(fields: [routerId], references: [id], onDelete: Cascade)
+
+  @@index([routerId, timestamp])
+}
+
+model NetworkDevice {
+  id               String       @id @default(uuid())
+  routerId         String?
+  name             String
+  type             String       // "OLT", "ONT", "Core Router", "Switch", "Access Point"
+  ipAddress        String
+  location         String
+  status           RouterStatus @default(ONLINE)
+  uptimeDays       Int          @default(0)
+  cpuLoadPercent   Int          @default(0)
+  connectedClients Int          @default(0)
+  firmwareVersion  String?
+  lastPingMs       Int          @default(1)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  router Router? @relation(fields: [routerId], references: [id], onDelete: SetNull)
+}
+
+model PPPoEProfile {
+  id              String   @id @default(uuid())
+  name            String   @unique // e.g. "Fiber_100M_Profile"
+  downloadRateKbps Int
+  uploadRateKbps   Int
+  rateLimitString String   // "100M/100M"
+  localAddress    String?
+  remotePoolName  String?
+  sessionTimeout  Int?     @default(0)
+  idleTimeout     Int?     @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  accounts        PPPoEAccount[]
+}
+
+model PPPoEAccount {
+  id             String        @id @default(uuid())
+  username       String        @unique
+  passwordHash   String        // Securely encrypted/hashed secret
+  subscriptionId String        @unique
+  routerId       String
+  profileId      String?
+  ipAddress      String?
+  macAddress     String?
+  callerId       String?
+  serviceName    String?       @default("internet")
+  isActive       Boolean       @default(true)
+  isOnline       Boolean       @default(false)
+  lastLoginAt    DateTime?
+  lastLogoutAt   DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  router         Router        @relation(fields: [routerId], references: [id])
+  profile        PPPoEProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  sessions       PPPoESession[]
+
+  @@index([routerId])
+}
+
+model PPPoESession {
+  id             String    @id @default(uuid())
+  accountId      String
+  sessionId      String?   // RouterOS session acct id
+  ipAddress      String
+  callerId       String?   // MAC address
+  bytesIn        BigInt    @default(0)
+  bytesOut       BigInt    @default(0)
+  connectedAt    DateTime  @default(now())
+  disconnectedAt DateTime?
+  terminateCause String?
+
+  account PPPoEAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
+
+enum VLANType {
+  MANAGEMENT
+  FIBER_INTERNET
+  WIRELESS_INTERNET
+  TRANSPORT
+  CORPORATE
+  OTHER
+}
+
+model VLAN {
+  id          String   @id @default(uuid())
+  vlanId      Int      // e.g. 10, 20, 100, 200
+  name        String   // "VLAN20_Fiber_PhnomPenh"
+  description String?
+  purpose     VLANType @default(FIBER_INTERNET)
+  routerId    String
+  interface   String   // "sfp-sfpplus1", "ether2"
+  tagged      Boolean  @default(true)
+  subnet      String?  // "10.20.0.0/24"
+  gateway     String?  // "10.20.0.1"
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  router        Router         @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@unique([vlanId, routerId, interface])
+  @@index([routerId])
+}
+
+model IPPool {
+  id          String      @id @default(uuid())
+  name        String      @unique // "pppoe-pool-residential"
+  routerId    String
+  startIp     String
+  endIp       String
+  totalIps    Int
+  usedIps     Int         @default(0)
+  gateway     String?
+  dnsPrimary  String?     @default("1.1.1.1")
+  dnsSecondary String?    @default("8.8.8.8")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  router      Router      @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  addresses   IPAddress[]
+
+  @@index([routerId])
+}
+
+model IPAddress {
+  id         String    @id @default(uuid())
+  poolId     String
+  ipAddress  String    @unique
+  isStatic   Boolean   @default(false)
+  isAssigned Boolean   @default(false)
+  assignedTo String?   // customer ID or reference
+  assignedAt DateTime?
+
+  pool IPPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@index([poolId])
+}
+
+enum ProvisionJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model NetworkProvisionJob {
+  id             String             @id @default(uuid())
+  routerId       String
+  action         String             // "CREATE_PPPOE", "SUSPEND_PPPOE", "SET_RATE", "CREATE_VLAN"
+  payload        String             // JSON parameters
+  status         ProvisionJobStatus @default(PENDING)
+  result         String?
+  errorMessage   String?
+  retryCount     Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  router Router @relation(fields: [routerId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 5. BILLING & PAYMENTS
+// ==========================================
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  invoiceNumber  String        @unique // e.g. "INV-2026-0001"
+  customerId     String
+  subscriptionId String?
+  amount         Decimal       @db.Decimal(12, 2)
+  paidAmount     Decimal       @default(0.00) @db.Decimal(12, 2)
+  balanceDue     Decimal       @db.Decimal(12, 2)
+  status         InvoiceStatus @default(PENDING)
+  billingPeriod  String?       // "2026-11"
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime
+  paidAt         DateTime?
+  paymentMethod  String?
+  pdfUrl         String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  items          InvoiceItem[]
+  allocations    PaymentAllocation[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  packageId   String?
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  amount      Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  package Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  KHQR_BAKONG
+  GATEWAY_ONLINE
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  paymentNumber  String        @unique // e.g. "PAY-2026-001"
+  customerId     String
+  amount         Decimal       @db.Decimal(12, 2)
+  method         PaymentMethod @default(CASH)
+  status         PaymentStatus @default(SUCCESSFUL)
+  transactionRef String?       @unique // e.g. Bakong hash, bank ref
+  receiptNumber  String?
+  notes          String?
+  recordedBy     String?       // staff name or cashier
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  allocations    PaymentAllocation[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model PaymentAllocation {
+  id        String   @id @default(uuid())
+  paymentId String
+  invoiceId String
+  amount    Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, invoiceId])
+}
+
+model CreditNote {
+  id               String   @id @default(uuid())
+  creditNoteNumber String   @unique
+  customerId       String
+  amount           Decimal  @db.Decimal(12, 2)
+  reason           String
+  isApplied        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+}
+
+// ==========================================
+// 6. INVENTORY & WAREHOUSES
+// ==========================================
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+model ProductCategory {
+  id          String    @id @default(uuid())
+  name        String    @unique // "ONU/ONT", "MikroTik Routers", "Fiber Cables"
+  description String?
+  products    Product[]
+}
+
+model Product {
+  id            String          @id @default(uuid())
+  sku           String          @unique // e.g. "ONT-HG8245H5"
+  name          String
+  categoryId    String?
+  categoryName  String?         // Denormalized for rapid display
+  quantity      Int             @default(0)
+  minStockAlert Int             @default(10)
+  unitPrice     Decimal         @db.Decimal(10, 2)
+  costPrice     Decimal         @db.Decimal(10, 2)
+  status        StockStatus     @default(IN_STOCK)
+  supplier      String?
+  location      String?         // Shelf/Bin
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  category      ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  serialNumbers SerialNumber[]
+  stockBalances StockBalance[]
+  stockMovements StockMovement[]
+  poItems       PurchaseOrderItem[]
+  grnItems      GoodsReceivedItem[]
+
+  @@index([sku])
+  @@index([status])
+}
+
+model Warehouse {
+  id          String   @id @default(uuid())
+  name        String   @unique // "Main Warehouse Phnom Penh", "Siem Reap Branch"
+  code        String   @unique // "WH-01"
+  address     String?
+  managerName String?
+  phone       String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stockBalances  StockBalance[]
+  serialNumbers  SerialNumber[]
+  movementsFrom  StockMovement[] @relation("SourceWarehouse")
+  movementsTo    StockMovement[] @relation("DestWarehouse")
+}
+
+model StockBalance {
+  id          String   @id @default(uuid())
+  warehouseId String
+  productId   String
+  quantity    Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+}
+
+enum EquipmentStatus {
+  IN_STOCK
+  RESERVED
+  ASSIGNED
+  INSTALLED
+  RETURNED
+  UNDER_REPAIR
+  DAMAGED
+  LOST
+  DISPOSED
+}
+
+model SerialNumber {
+  id           String          @id @default(uuid())
+  serialNumber String          @unique // e.g. "SN-HUAWEI-98234"
+  macAddress   String?         @unique // "00:1B:44:11:3A:B7"
+  productId    String
+  warehouseId  String?
+  customerId   String?
+  technicianId String?
+  status       EquipmentStatus @default(IN_STOCK)
+  warrantyEnds DateTime?
+  installedAt  DateTime?
+  returnedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  product      Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  customer     Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  technician   Technician?     @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+
+  @@index([serialNumber])
+  @@index([macAddress])
+  @@index([status])
+}
+
+model StockMovement {
+  id            String   @id @default(uuid())
+  movementNumber String  @unique // e.g. "SM-2026-0001"
+  productId     String
+  fromWarehouseId String?
+  toWarehouseId   String?
+  type          String   // "STOCK_IN", "STOCK_OUT", "TRANSFER", "INSTALLATION_CONSUME", "ADJUSTMENT"
+  quantity      Int
+  unitCost      Decimal  @db.Decimal(10, 2)
+  totalCost     Decimal  @db.Decimal(10, 2)
+  actor         String
+  reference     String?  // PO number, Work order, RMA
+  note          String?
+  createdAt     DateTime @default(now())
+
+  product       Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fromWarehouse Warehouse? @relation("SourceWarehouse", fields: [fromWarehouseId], references: [id], onDelete: SetNull)
+  toWarehouse   Warehouse? @relation("DestWarehouse", fields: [toWarehouseId], references: [id], onDelete: SetNull)
+}
+
+// ==========================================
+// 7. PROCUREMENT & SUPPLIERS
+// ==========================================
+
+model Supplier {
+  id             String   @id @default(uuid())
+  name           String   @unique
+  code           String   @unique // e.g. "SUP-001"
+  contactPerson  String?
+  email          String?
+  phone          String?
+  address        String?
+  balancePayable Decimal  @default(0.00) @db.Decimal(12, 2)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+  invoices       SupplierInvoice[]
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id          String              @id @default(uuid())
+  poNumber    String              @unique // e.g. "PO-2026-001"
+  supplierId  String
+  status      PurchaseOrderStatus @default(DRAFT)
+  totalAmount Decimal             @db.Decimal(12, 2)
+  requestedBy String
+  approvedBy  String?
+  issuedDate  DateTime            @default(now())
+  expectedDate DateTime?
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  items       PurchaseOrderItem[]
+  grns        GoodsReceivedNote[]
+  invoices    SupplierInvoice[]
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(uuid())
+  purchaseOrderId String
+  productId       String
+  quantity        Int
+  receivedQuantity Int     @default(0)
+  unitPrice       Decimal  @db.Decimal(10, 2)
+  totalPrice      Decimal  @db.Decimal(10, 2)
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+}
+
+model GoodsReceivedNote {
+  id              String   @id @default(uuid())
+  grnNumber       String   @unique // e.g. "GRN-2026-001"
+  purchaseOrderId String
+  receivedBy      String
+  receivedDate    DateTime @default(now())
+  notes           String?
+
+  purchaseOrder   PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  items           GoodsReceivedItem[]
+}
+
+model GoodsReceivedItem {
+  id          String   @id @default(uuid())
+  grnId       String
+  productId   String
+  quantity    Int
+  unitCost    Decimal  @db.Decimal(10, 2)
+  inspectedOk Boolean  @default(true)
+
+  grn         GoodsReceivedNote @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  product     Product           @relation(fields: [productId], references: [id])
+}
+
+model SupplierInvoice {
+  id              String   @id @default(uuid())
+  invoiceNumber   String   @unique // Supplier bill number
+  supplierId      String
+  purchaseOrderId String?
+  amount          Decimal  @db.Decimal(12, 2)
+  paidAmount      Decimal  @default(0.00) @db.Decimal(12, 2)
+  status          String   @default("UNPAID") // "UNPAID", "PARTIALLY_PAID", "PAID"
+  issueDate       DateTime @default(now())
+  dueDate         DateTime
+  createdAt       DateTime @default(now())
+
+  supplier        Supplier       @relation(fields: [supplierId], references: [id])
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+}
+
+// ==========================================
+// 8. DOUBLE-ENTRY ACCOUNTING & FINANCE
+// ==========================================
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model Account {
+  id          String      @id @default(uuid())
+  code        String      @unique // e.g. "1010" Cash, "1100" AR, "4010" Fiber Revenue
+  name        String      // "Accounts Receivable - Fiber"
+  type        AccountType
+  description String?
+  isActive    Boolean     @default(true)
+  balance     Decimal     @default(0.00) @db.Decimal(14, 2) // Current Debit - Credit
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  journalLines JournalEntryLine[]
+
+  @@index([type])
+}
+
+model AccountingPeriod {
+  id          String    @id @default(uuid())
+  name        String    @unique // e.g. "2026-11", "FY-2026"
+  startDate   DateTime
+  endDate     DateTime
+  isClosed    Boolean   @default(false)
+  closedAt    DateTime?
+  closedBy    String?
+  createdAt   DateTime  @default(now())
+
+  journalEntries JournalEntry[]
+}
+
+model JournalEntry {
+  id             String    @id @default(uuid())
+  entryNumber    String    @unique // e.g. "JE-2026-00001"
+  periodId       String?
+  entryDate      DateTime  @default(now())
+  description    String    // Narrative of business transaction
+  reference      String?   // Source: "INV-2026-0001", "PAY-2026-001", "PO-2026-001"
+  isPosted       Boolean   @default(true)
+  isReversed     Boolean   @default(false)
+  reversalEntryId String?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+
+  period         AccountingPeriod?  @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  lines          JournalEntryLine[]
+
+  @@index([entryDate])
+  @@index([reference])
+}
+
+model JournalEntryLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  accountId      String
+  debit          Decimal      @default(0.00) @db.Decimal(14, 2)
+  credit         Decimal      @default(0.00) @db.Decimal(14, 2)
+  description    String?
+
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  expenseNumber String @unique // e.g. "EXP-2026-001"
+  category    String   // "Internet Transit", "Tower Rent", "Electricity", "Vehicle Fuel"
+  amount      Decimal  @db.Decimal(10, 2)
+  paidTo      String
+  approvedBy  String?
+  status      String   @default("APPROVED")
+  expenseDate DateTime @default(now())
+  receiptUrl  String?
+  notes       String?
+  createdAt   DateTime @default(now())
+}
+
+model FixedAsset {
+  id                  String   @id @default(uuid())
+  assetNumber         String   @unique // e.g. "AST-ROUTER-01"
+  name                String   // "MikroTik CCR2004 Core Router"
+  category            String   // "Network Equipment", "Towers", "Vehicles"
+  cost                Decimal  @db.Decimal(12, 2)
+  purchaseDate        DateTime
+  usefulLifeMonths    Int      @default(36)
+  accumulatedDepr     Decimal  @default(0.00) @db.Decimal(12, 2)
+  netBookValue        Decimal  @db.Decimal(12, 2)
+  location            String?
+  status              String   @default("ACTIVE") // "ACTIVE", "DISPOSED"
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// ==========================================
+// 9. OPERATIONS: INSTALLATIONS, TECHS & TICKETS
+// ==========================================
+
+enum InstallationStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
+}
+
+model Installation {
+  id             String             @id @default(uuid())
+  orderNumber    String             @unique // e.g. "INST-2026-001"
+  customerId     String
+  subscriptionId String?
+  technicianId   String?
+  scheduledDate  DateTime
+  timeSlot       String             // "09:00 - 11:00 AM"
+  status         InstallationStatus @default(SCHEDULED)
+  assignedOntSn  String?            // Assigned ONU/ONT Serial
+  opticalPowerDbm Decimal?          @db.Decimal(5, 2) // Optical rx level e.g. -19.50 dBm
+  notes          String?
+  completedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  customer       Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subscription   Subscription?      @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  technician     Technician?        @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([scheduledDate])
+}
+
+model Technician {
+  id             String         @id @default(uuid())
+  userId         String?        @unique
+  name           String
+  phone          String
+  email          String
+  avatar         String?
+  zone           String         // "North Zone / Toul Kork"
+  status         String         @default("Available") // "Available", "On Job", "Off Duty"
+  rating         Decimal        @default(4.9) @db.Decimal(2, 1)
+  completedToday Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  installations  Installation[]
+  tickets        SupportTicket[]
+  issuedEquipments SerialNumber[]
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model SupportTicket {
+  id                 String         @id @default(uuid())
+  ticketNumber       String         @unique // e.g. "TCK-1042"
+  customerId         String
+  technicianId       String?
+  title              String
+  description        String
+  priority           TicketPriority @default(MEDIUM)
+  status             TicketStatus   @default(OPEN)
+  category           String?        // "No Internet", "Slow Speed", "Fiber Cut"
+  resolvedAt         DateTime?
+  resolutionNotes    String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  customer           Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTechnician Technician?    @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  messages           TicketMessage[]
+
+  @@index([status])
+  @@index([customerId])
+}
+
+model TicketMessage {
+  id        String   @id @default(uuid())
+  ticketId  String
+  sender    String   // Staff name or "Customer"
+  isStaff   Boolean  @default(true)
+  message   String
+  createdAt DateTime @default(now())
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 10. NOTIFICATIONS, AUTOMATION & SETTINGS
+// ==========================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  type        String   // "alert", "invoice", "ticket", "system", "payment"
+  read        Boolean  @default(false)
+  link        String?
+  createdAt   DateTime @default(now())
+}
+
+model AutomationRule {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  triggerType String   // "OVERDUE_SUSPENSION", "AUTO_INVOICE", "SIGNAL_DEGRADATION", "ROUTER_BACKUP"
+  enabled     Boolean  @default(true)
+  configJson  String?  // Parameters e.g. { gracePeriodDays: 7 }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CompanySetting {
+  id              String   @id @default(uuid())
+  companyName     String   @default("NetPulse High-Speed Broadband LLC")
+  companyAddress  String   @default("Building 42, St. 214, Phnom Penh, Cambodia")
+  supportPhone    String   @default("+855 23 888 999")
+  supportEmail    String   @default("support@netpulse.net")
+  currency        String   @default("$")
+  timezone        String   @default("Asia/Phnom_Penh")
+  invoicePrefix   String   @default("INV")
+  customerPrefix  String   @default("CUST")
+  taxRatePercent  Decimal  @default(10.00) @db.Decimal(5, 2)
+  gracePeriodDays Int      @default(7)
+  language        String   @default("en")
+  updatedAt       DateTime @updatedAt
+}

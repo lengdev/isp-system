@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
   X,
   CreditCard,
@@ -43,6 +44,7 @@ import { useStore } from '../../store/useStore';
 import { Drawer } from '../../components/ui/Drawer';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
+import { Chip } from '../../components/ui/Chip';
 import { Tooltip as UiTooltip } from '../../components/ui/Tooltip';
 import { StatusChangePopover } from './StatusChangePopover';
 import { formatCurrency, formatDate, cn } from '../../lib/utils';
@@ -290,9 +292,9 @@ export const CustomerDetailDrawer: React.FC = () => {
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <Avatar
             name={customer.fullName}
-            size="md"
+            size="lg"
             online={customer.onlineStatus === 'online'}
-            className="w-12 h-12 text-[16px] font-bold shrink-0"
+            className="text-[16px] font-bold shrink-0"
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -452,7 +454,7 @@ export const CustomerDetailDrawer: React.FC = () => {
       }
     >
       <div className="px-6 py-5 space-y-5 text-[12px] max-sm:px-4">
-        {/* Navigation Tabs using indigo tokens for selected */}
+        {/* Navigation Tabs using indigo tokens for selected with smooth sliding layout indicator */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border)] overflow-x-auto scrollbar-none shrink-0">
           {tabs.map((tab) => {
             const isActive = activeDrawerTab === tab.id;
@@ -463,17 +465,24 @@ export const CustomerDetailDrawer: React.FC = () => {
                 data-drawer-tab={tab.id}
                 onClick={() => handleSelectTab(tab.id)}
                 className={cn(
-                  'px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-all duration-150 flex items-center gap-1.5',
+                  'relative px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-colors duration-150 flex items-center gap-1.5 cursor-pointer',
                   isActive
-                    ? 'bg-[var(--selected-bg)] text-[var(--selected-indicator)] font-semibold shadow-xs'
+                    ? 'text-[var(--selected-indicator)] font-semibold'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface)]'
                 )}
               >
-                <span>{tab.label}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="drawer-tab-indicator"
+                    className="absolute inset-0 bg-[var(--selected-bg)] border border-[var(--selected-border)] rounded-lg shadow-xs pointer-events-none"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35, mass: 0.5 }}
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
                 {tab.count !== undefined && (
                   <span
                     className={cn(
-                      'text-[10px] tabular-nums font-semibold px-1 rounded-full',
+                      'relative z-10 min-w-[18px] h-[18px] inline-flex items-center justify-center text-[10px] tabular-nums font-semibold px-1 rounded-full leading-none transition-colors',
                       isActive
                         ? 'bg-[var(--selected-indicator)] text-white'
                         : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)]'
@@ -683,16 +692,13 @@ export const CustomerDetailDrawer: React.FC = () => {
                         <div className="font-bold text-[13px] text-[var(--text)] tabular-nums">
                           {currency}{inv.amount.toFixed(2)}
                         </div>
-                        <span
-                          className={cn(
-                            'inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5',
-                            inv.status === 'Paid'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                              : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'
-                          )}
+                        <Chip
+                          size="sm"
+                          color={inv.status === 'Paid' ? 'success' : 'danger'}
+                          className="mt-0.5"
                         >
                           {inv.status}
-                        </span>
+                        </Chip>
                       </div>
                       <UiTooltip content="Download PDF">
                         <button
@@ -855,16 +861,12 @@ export const CustomerDetailDrawer: React.FC = () => {
                       <span className="font-semibold text-[13px] text-[var(--text)] font-mono">
                         {t.ticketNumber}
                       </span>
-                      <span
-                        className={cn(
-                          'px-2 py-0.5 rounded-full text-[10px] font-bold',
-                          t.status === 'Resolved' || t.status === 'Closed'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                        )}
+                      <Chip
+                        size="sm"
+                        color={t.status === 'Resolved' || t.status === 'Closed' ? 'success' : 'warning'}
                       >
                         {t.status}
-                      </span>
+                      </Chip>
                     </div>
                     <div className="font-medium text-[12px] text-[var(--text)]">
                       {t.title}
@@ -938,7 +940,7 @@ export const CustomerDetailDrawer: React.FC = () => {
               value={notesText}
               onChange={(e) => handleNotesChange(e.target.value)}
               placeholder="Add technician handover notes, fiber optic color code, lockbox combination, special access codes..."
-              className="w-full p-3.5 text-[12px] rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] shadow-xs transition-colors resize-none"
+              className="w-full p-3.5 text-[13px] rounded-xl border border-transparent bg-zinc-100/70 hover:bg-zinc-100/90 dark:bg-white/[0.05] dark:hover:bg-white/[0.08] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#006FEE] focus:ring-2 focus:ring-[#006FEE]/20 focus:bg-[var(--surface)] dark:focus:bg-[#18181b] transition-all duration-150 ease-out resize-none caret-[#006FEE]"
             />
 
             <div className="flex justify-end">

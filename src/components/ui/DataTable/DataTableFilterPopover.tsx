@@ -9,6 +9,7 @@ import {
   Search,
   DollarSign,
   ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { DataTableColumnDef } from './types';
 import { Button } from '../Button';
@@ -323,14 +324,14 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
                 }
           }
           className={cn(
-            'pointer-events-auto flex flex-col bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)] text-[12px] text-[var(--text)] overflow-hidden',
+            'pointer-events-auto flex flex-col bg-white/95 dark:bg-[#18181b]/95 backdrop-blur-md border border-zinc-200/80 dark:border-white/10 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.14),0_4px_12px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_36px_-6px_rgba(0,0,0,0.65)] text-[12px] text-[var(--text)] overflow-hidden',
             isMobile
               ? 'fixed inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl z-50'
               : 'rounded-2xl z-50'
           )}
         >
           {/* Header */}
-          <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0 bg-[var(--surface)]">
+          <div className="px-4 py-3 border-b border-zinc-100 dark:border-white/[0.08] flex items-center justify-between shrink-0 bg-white/50 dark:bg-white/[0.02]">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-[var(--brand)]" />
               <h3 className="font-semibold text-[13px] text-[var(--text)]">
@@ -467,15 +468,25 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
                 </div>
                 {/* Search city */}
                 {cityOptions.length > 5 && (
-                  <div className="relative mb-1.5">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-muted)] pointer-events-none" />
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 pointer-events-none" />
                     <input
                       type="text"
                       value={citySearch}
                       onChange={(e) => setCitySearch(e.target.value)}
                       placeholder="Search city…"
-                      className="w-full h-7 pl-7 pr-2 text-[11px] rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+                      className="w-full h-8 pl-[32px] pr-8 text-[12px] rounded-xl border border-transparent hover:border-transparent bg-zinc-100/70 dark:bg-white/[0.05] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#006FEE] focus:ring-2 focus:ring-[#006FEE]/20 transition-all caret-[#006FEE] shadow-xs"
                     />
+                    {citySearch && (
+                      <button
+                        type="button"
+                        aria-label="Clear city search"
+                        onClick={() => setCitySearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-zinc-400 hover:text-[var(--text)] rounded-full hover:bg-zinc-200/60 dark:hover:bg-white/10 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto scrollbar-thin p-0.5">
@@ -548,7 +559,7 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
                 Balance Due Range ($)
               </label>
               <div className="grid grid-cols-2 gap-2">
-                <div>
+                <div className="relative flex items-center group">
                   <input
                     type="number"
                     min={0}
@@ -563,10 +574,45 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
                         },
                       }))
                     }
-                    className="w-full h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+                    className="w-full h-8 pl-3 pr-7 rounded-full border border-transparent hover:border-zinc-300/80 dark:hover:border-white/20 bg-zinc-100/90 dark:bg-white/[0.06] text-[var(--text)] text-xs focus:outline-none focus:border-[#006FEE] focus:ring-1 focus:ring-[#006FEE]/20 transition-all caret-[#006FEE]"
                   />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center justify-center">
+                    <button
+                      type="button"
+                      aria-label="Increase minimum balance"
+                      onClick={() =>
+                        setDraftFilters((prev) => {
+                          const current = prev['balanceDue']?.min ?? 0;
+                          return {
+                            ...prev,
+                            balanceDue: { ...prev['balanceDue'], min: current + 10 },
+                          };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronUp className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Decrease minimum balance"
+                      onClick={() =>
+                        setDraftFilters((prev) => {
+                          const current = prev['balanceDue']?.min ?? 0;
+                          const next = Math.max(0, current - 10);
+                          return {
+                            ...prev,
+                            balanceDue: { ...prev['balanceDue'], min: next === 0 ? undefined : next },
+                          };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronDown className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                  </div>
                 </div>
-                <div>
+                <div className="relative flex items-center group">
                   <input
                     type="number"
                     min={0}
@@ -581,15 +627,50 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
                         },
                       }))
                     }
-                    className="w-full h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+                    className="w-full h-8 pl-3 pr-7 rounded-full border border-transparent hover:border-zinc-300/80 dark:hover:border-white/20 bg-zinc-100/90 dark:bg-white/[0.06] text-[var(--text)] text-xs focus:outline-none focus:border-[#006FEE] focus:ring-1 focus:ring-[#006FEE]/20 transition-all caret-[#006FEE]"
                   />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center justify-center">
+                    <button
+                      type="button"
+                      aria-label="Increase maximum balance"
+                      onClick={() =>
+                        setDraftFilters((prev) => {
+                          const current = prev['balanceDue']?.max ?? 0;
+                          return {
+                            ...prev,
+                            balanceDue: { ...prev['balanceDue'], max: current + 10 },
+                          };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronUp className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Decrease maximum balance"
+                      onClick={() =>
+                        setDraftFilters((prev) => {
+                          const current = prev['balanceDue']?.max ?? 0;
+                          const next = Math.max(0, current - 10);
+                          return {
+                            ...prev,
+                            balanceDue: { ...prev['balanceDue'], max: next === 0 ? undefined : next },
+                          };
+                        })
+                      }
+                      className="w-4 h-3 flex items-center justify-center rounded-xs text-zinc-400 hover:text-[#006FEE] dark:hover:text-[#006FEE] hover:bg-zinc-200/70 dark:hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <ChevronDown className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Footer Actions */}
-          <div className="p-3 border-t border-[var(--border-subtle)] bg-[var(--surface)] flex items-center justify-between gap-2 shrink-0">
+          <div className="p-3 border-t border-zinc-100 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.02] flex items-center justify-between gap-2 shrink-0">
             <button
               type="button"
               onClick={handleReset}

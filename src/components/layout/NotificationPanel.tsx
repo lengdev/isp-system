@@ -339,7 +339,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               )}
             </div>
 
-            {/* Pill Tabs: Neutral outline with subtle indigo active state */}
+            {/* Pill Tabs: Neutral outline with subtle indigo active state with smooth sliding transition */}
             <div className="flex items-center gap-1.5 px-3.5 py-2 bg-[var(--surface-raised)] border-b border-[var(--border-subtle)] shrink-0">
               {[
                 { id: 'all', label: 'All', count: notifications.length },
@@ -354,19 +354,26 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                     data-notif-tab={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
                     className={cn(
-                      'px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5 border',
+                      'relative h-7 px-3 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5 cursor-pointer select-none',
                       isCurrent
-                        ? 'text-[var(--selected-indicator)] bg-[var(--selected-bg)] border-[var(--selected-border)] font-semibold'
-                        : 'text-[var(--text-muted)] border-[var(--border-subtle)] hover:text-[var(--text)] hover:border-[var(--border)]'
+                        ? 'text-[var(--text)] font-semibold border-[var(--selected-border)]'
+                        : 'text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] hover:border-[var(--border)]'
                     )}
                   >
-                    <span>{tab.label}</span>
+                    {isCurrent && (
+                      <motion.div
+                        layoutId="notif-tab-indicator"
+                        className="absolute inset-0 bg-[var(--selected-bg)] border border-[var(--selected-border)] rounded-full pointer-events-none"
+                        transition={{ type: 'spring', stiffness: 500, damping: 35, mass: 0.5 }}
+                      />
+                    )}
+                    <span className="relative z-10">{tab.label}</span>
                     <span
                       className={cn(
-                        'text-[10px] font-semibold px-1 rounded-full',
+                        'relative z-10 min-w-[18px] h-[18px] inline-flex items-center justify-center leading-none text-[10px] tabular-nums font-semibold px-1.5 rounded-full transition-colors',
                         isCurrent
                           ? 'bg-[var(--selected-indicator)] text-white'
-                          : 'bg-[var(--surface-subtle)] text-[var(--text-muted)]'
+                          : 'bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)]'
                       )}
                     >
                       {tab.count}

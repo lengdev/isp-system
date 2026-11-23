@@ -1,0 +1,27 @@
+# Production Backend Dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY prisma ./prisma/
+RUN npx prisma generate
+
+COPY server ./server/
+RUN npx tsc -p server/tsconfig.json
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package*.json ./
+RUN npm ci --only=production --no-audit --no-fund
+
+COPY prisma ./prisma/
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/dist-server ./dist-server/
+
+EXPOSE 5000
+CMD ["node", "dist-server/server.js"]

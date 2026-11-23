@@ -16,6 +16,7 @@ import {
 import { useStore } from '../store/useStore';
 import { Technician, InstallationSchedule } from '../types';
 import { Avatar } from '../components/ui/Avatar';
+import { Chip } from '../components/ui/Chip';
 import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
 
 export const TechniciansPage: React.FC = () => {
@@ -126,17 +127,11 @@ export const TechniciansPage: React.FC = () => {
         },
         cell: ({ row }) => {
           const st = row.original.status;
+          const color = st === 'Completed' ? 'success' : st === 'In Progress' ? 'accent' : 'warning';
           return (
-            <span
-              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${st === 'Completed'
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60'
-                : st === 'In Progress'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60'
-                }`}
-            >
+            <Chip size="sm" color={color}>
               {st}
-            </span>
+            </Chip>
           );
         },
       },
@@ -224,16 +219,12 @@ export const TechniciansPage: React.FC = () => {
           <Clock className="w-3.5 h-3.5 text-[#F26B3A]" />
           <span>{sch.timeSlot}</span>
         </div>
-        <span
-          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${sch.status === 'Completed'
-            ? 'bg-emerald-100 text-emerald-700'
-            : sch.status === 'In Progress'
-              ? 'bg-blue-100 text-blue-700'
-              : 'bg-amber-100 text-amber-700'
-            }`}
+        <Chip
+          size="sm"
+          color={sch.status === 'Completed' ? 'success' : sch.status === 'In Progress' ? 'accent' : 'warning'}
         >
           {sch.status}
-        </span>
+        </Chip>
       </div>
 
       <div>
@@ -299,17 +290,11 @@ export const TechniciansPage: React.FC = () => {
         },
         cell: ({ row }) => {
           const st = row.original.status;
+          const color = st === 'Available' ? 'success' : st === 'On Job' ? 'accent' : 'default';
           return (
-            <span
-              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${st === 'Available'
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60'
-                : st === 'On Job'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60'
-                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800'
-                }`}
-            >
+            <Chip size="sm" color={color}>
               {st}
-            </span>
+            </Chip>
           );
         },
       },
@@ -398,16 +383,12 @@ export const TechniciansPage: React.FC = () => {
           <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">
             {tech.name}
           </h4>
-          <span
-            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${tech.status === 'Available'
-              ? 'bg-emerald-100 text-emerald-700'
-              : tech.status === 'On Job'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-700'
-              }`}
+          <Chip
+            size="sm"
+            color={tech.status === 'Available' ? 'success' : tech.status === 'On Job' ? 'accent' : 'default'}
           >
             {tech.status}
-          </span>
+          </Chip>
         </div>
       </div>
 

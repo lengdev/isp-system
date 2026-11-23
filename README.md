@@ -91,3 +91,57 @@ npm run preview
 - **Warm Background**: `#FAF7F5`
 - **Dark Mode Surface**: `#141416` / `#1C1C1F`
 - **Typography**: Plus Jakarta Sans / Inter
+
+---
+
+## 🔐 Authentication, RBAC & Security Architecture
+
+NetPulse features a complete, enterprise-grade authentication system end-to-end:
+
+### 1. Token Lifetimes & Storage
+- **Access Tokens (JWT)**: Valid for **15 minutes**. Held in-memory only inside the client-side Zustand `authStore` (never stored in `localStorage` or `sessionStorage` to mitigate XSS attacks).
+- **Refresh Tokens**: Cryptographically random 256-bit entropy tokens, stored SHA-256 hashed in PostgreSQL (`Session` table) and issued to clients exclusively via `httpOnly`, `Secure`, `SameSite=Strict` cookies.
+  - **Standard session**: 7-day expiration.
+  - **"Remember Me"**: 30-day sliding window expiration.
+- **Silent Refresh & Interceptor**: On page reloads or token expiration, the Axios/Fetch client automatically requests `/api/v1/auth/refresh`. When a 401 occurs on any protected API call, the interceptor refreshes the access token once and transparently retries the in-flight request.
+- **Token Rotation & Family Reuse Detection**: Every refresh operation invalidates the previous refresh token and issues a new pair. If an expired or already-rotated token is reused (indicating token theft), the entire session family for that user is immediately revoked and an audit event (`REFRESH_REUSE_DETECTED`) is logged.
+
+### 2. Brute-Force & Lockout Controls
+- **Rate Limiting**: Sliding rate limit of **5 failed login attempts per 15 minutes** per IP and username.
+- **Account Lockout**: After 5 consecutive failed attempts on an existing account, the user account is automatically locked for 15 minutes (`lockedUntil`), and an `ACCOUNT_LOCKED` security event is written to `AuditLog`.
+- **Constant-Time Timing Attack Mitigation**: Non-existent usernames trigger a dummy bcrypt comparison against a pre-computed hash to prevent username enumeration timing side-channels.
+- **Security Headers**: Standard HTTP security headers powered by `helmet`, strict origin CORS with credentials, and Zod input validation on all request bodies.
+
+### 3. Role-Based Access Control (RBAC) Matrix
+The system enforces granular RBAC permissions across Express middleware (`authenticate`, `authorize`, `requireRole`) and React router guards (`<ProtectedRoute>`, `<RequirePermission>`):
+
+| Role | Responsibilities | Key Access Permissions |
+|---|---|---|
+| `SUPER_ADMIN` | Unrestricted ISP Administrator | Wildcard (`*`) access across all modules, user administration, and system settings |
+| `NETWORK_ENGINEER` | NOC & Infrastructure Operations | `network:*`, `router:*`, `pppoe:*`, `vlan:*`, `ipam:*`, `ticket:*`, customer views |
+| `BILLING_CASHIER` | Cashier, Invoicing & Counter Payments | `billing:*`, `payment:*`, `invoice:*`, accounting views, customer views |
+| `FIELD_TECHNICIAN` | On-site Installations & Repairs | `installation:*`, `ticket:*`, `equipment:assign`, inventory views |
+| `SUPPORT_AGENT` | Customer Service & Desk Help | `ticket:*`, `customer:view`, `message:*` |
+
+### 4. Database Seeding & Admin Setup
+Super Admin credentials are populated from environment variables (never hardcoded in source control):
+
+```bash
+# Seed initial Super Admin and demo accounts for each role
+npm run db:seed
+```
+
+Environment variables configured in `.env`:
+```ini
+ADMIN_USERNAME="admin"
+ADMIN_EMAIL="admin@netpulse.net"
+ADMIN_PASSWORD="StrongSuperAdminPassword2026!"
+```
+
+### 5. Authentication Test Suite
+Run the full test suite (DataTable regressions, backend service tests, and frontend authentication schemas):
+
+```bash
+npm test
+```
+

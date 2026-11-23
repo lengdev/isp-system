@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Keyboard,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { TableDensity, SavedTableView } from './types';
 import { cn } from '../../../lib/utils';
@@ -26,7 +27,8 @@ export interface DataTableMoreMenuProps {
   savedViews: SavedTableView[];
   activeViewId: string | null;
   onSelectView: (v: SavedTableView) => void;
-  onSaveCurrentView: () => void;
+  onSaveCurrentView: (name: string) => void;
+  onDeleteView?: (id: string) => void;
   onRefresh?: () => void;
   lastUpdatedSeconds?: number;
   onOpenShortcuts: () => void;
@@ -53,6 +55,7 @@ export const DataTableMoreMenu: React.FC<DataTableMoreMenuProps> = ({
   activeViewId,
   onSelectView,
   onSaveCurrentView,
+  onDeleteView,
   onRefresh,
   lastUpdatedSeconds = 0,
   onOpenShortcuts,
@@ -60,9 +63,28 @@ export const DataTableMoreMenu: React.FC<DataTableMoreMenuProps> = ({
   viewMode,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const submenuRef = useRef<HTMLDivElement>(null);
   const groupByTriggerRef = useRef<HTMLButtonElement>(null);
   const [groupByOpen, setGroupByOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'main' | 'group-by'>('main');
+
+  const [isSavingView, setIsSavingView] = useState(false);
+  const [newViewName, setNewViewName] = useState('');
+  const saveInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsSavingView(false);
+      setNewViewName('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isSavingView) {
+      const timer = setTimeout(() => saveInputRef.current?.focus(), 60);
+      return () => clearTimeout(timer);
+    }
+  }, [isSavingView]);
 
   // Positioning state
   const [menuCoords, setMenuCoords] = useState<{
@@ -151,7 +173,8 @@ export const DataTableMoreMenu: React.FC<DataTableMoreMenuProps> = ({
       const target = e.target as Node;
       if (
         triggerRef.current?.contains(target) ||
-        menuRef.current?.contains(target)
+        menuRef.current?.contains(target) ||
+        submenuRef.current?.contains(target)
       ) {
         return;
       }
@@ -302,7 +325,10 @@ export const DataTableMoreMenu: React.FC<DataTableMoreMenuProps> = ({
                 )}
 
                 {/* 2. Density / Row height */}
-                <div className="px-1.5 pt-1.5 pb-0.5 flex flex-col gap-[2px]">
+                <div
+                  onMouseEnter={() => setGroupByOpen(false)}
+                  className="px-1.5 pt-1.5 pb-0.5 flex flex-col gap-[2px]"
+                >
                   <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
                     Density
                   </div>
@@ -347,38 +373,111 @@ export const DataTableMoreMenu: React.FC<DataTableMoreMenuProps> = ({
                   <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
                     Saved views
                   </div>
-                  {savedViews.map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => {
-                        onSelectView(v);
-                        onClose();
+                  {savedViews.map((v) => {
+                    const isDefault = v.id === 'default' || v.isDefault;
+                    return (
+                      <div
+                        key={v.id}
+                        className={cn(
+                          'group/view w-full flex items-center justify-between px-3 h-8 rounded-[8px] text-left transition-colors duration-[120ms] font-medium border text-[13px]',
+                          activeViewId === v.id
+                            ? 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] border-[var(--option-selected-border)] hover:bg-[var(--option-selected-hover-bg)]'
+                            : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)]'
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectView(v);
+                            onClose();
+                          }}
+                          className="flex-1 flex items-center min-w-0 h-full text-left cursor-pointer"
+                        >
+                          <span className="truncate">{v.name}</span>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          {activeViewId === v.id && (
+                            <Check className="w-4 h-4 text-[var(--option-selected-icon)] stroke-[2]" />
+                          )}
+                          {!isDefault && onDeleteView && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteView(v.id);
+                              }}
+                              title={`Delete ${v.name}`}
+                              aria-label={`Delete ${v.name}`}
+                              className="p-1 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--danger-text,#ef4444)] hover:bg-[var(--danger-soft,rgba(239,68,68,0.1))] transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Inline Save View Form or Trigger Button */}
+                  {isSavingView ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const trimmed = newViewName.trim();
+                        if (trimmed) {
+                          onSaveCurrentView(trimmed);
+                          setIsSavingView(false);
+                          setNewViewName('');
+                          onClose();
+                        }
                       }}
-                      className={cn(
-                        'w-full flex items-center justify-between px-3 h-8 rounded-[8px] text-left transition-colors duration-[120ms] font-medium border',
-                        activeViewId === v.id
-                          ? 'bg-[var(--option-selected-bg)] text-[var(--option-selected-text)] border-[var(--option-selected-border)] hover:bg-[var(--option-selected-hover-bg)]'
-                          : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)]'
-                      )}
+                      className="px-2 py-1.5 flex flex-col gap-1.5 bg-[var(--surface-subtle)] rounded-[8px] border border-[var(--border)] mt-1"
                     >
-                      <span className="truncate">{v.name}</span>
-                      {activeViewId === v.id && (
-                        <Check className="w-4 h-4 text-[var(--option-selected-icon)] stroke-[2] shrink-0" />
-                      )}
+                      <input
+                        ref={saveInputRef}
+                        type="text"
+                        value={newViewName}
+                        onChange={(e) => setNewViewName(e.target.value)}
+                        placeholder="View name..."
+                        className="w-full px-2.5 py-1 text-[12px] bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-[6px] outline-none focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            setIsSavingView(false);
+                            setNewViewName('');
+                          }
+                        }}
+                      />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSavingView(false);
+                            setNewViewName('');
+                          }}
+                          className="px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] rounded transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={!newViewName.trim()}
+                          className="px-2.5 py-0.5 text-[11px] font-medium bg-[var(--brand)] text-[var(--brand-foreground,white)] rounded hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsSavingView(true)}
+                      className="w-full flex items-center gap-1.5 px-3 h-8 rounded-[8px] text-left text-[var(--brand)] hover:bg-[var(--brand-soft)] transition-colors font-medium text-[11px] cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Save current view…</span>
                     </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSaveCurrentView();
-                      onClose();
-                    }}
-                    className="w-full flex items-center gap-1.5 px-3 h-8 rounded-[8px] text-left text-[var(--brand)] hover:bg-[var(--brand-soft)] transition-colors font-medium text-[11px]"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Save current view…</span>
-                  </button>
+                  )}
                 </div>
 
                 {/* 4. Live Refresh (if enabled) */}
@@ -445,6 +544,7 @@ export const DataTableMoreMenu: React.FC<DataTableMoreMenuProps> = ({
       {!isMobile && groupByOpen && groupableColumns.length > 0 && (
         <AnimatePresence>
           <motion.div
+            ref={submenuRef}
             initial={{ opacity: 0, x: subCoords.flipLeft ? 6 : -6 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: subCoords.flipLeft ? 6 : -6 }}

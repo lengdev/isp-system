@@ -1,7 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, MoreHorizontal } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  TrendingUp,
+  TrendingDown,
+  MoreHorizontal,
+  RefreshCw,
+  BarChart2,
+  Copy,
+  Download,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
+import { Popover } from './Popover';
+import { useStore } from '../../store/useStore';
 
 interface StatCardProps {
   label: string;
@@ -31,12 +42,17 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon,
   iconBgColor = 'bg-[var(--brand-soft)]',
   iconTextColor = 'text-[var(--brand)]',
+  onRefresh,
+  onViewReport,
   className,
 }) => {
+  const navigate = useNavigate();
+  const addToast = useStore((s) => s.addToast);
+
   // Animated count-up simulation for numbers
   const [displayValue, setDisplayValue] = useState<string | number>(value);
 
-  useEffect(() => {
+  const runAnimation = () => {
     if (typeof value === 'number') {
       let start = 0;
       const end = value;
@@ -59,6 +75,10 @@ export const StatCard: React.FC<StatCardProps> = ({
     } else {
       setDisplayValue(value);
     }
+  };
+
+  useEffect(() => {
+    runAnimation();
   }, [value]);
 
   const formattedDisplay = () => {
@@ -80,7 +100,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         className
       )}
     >
-      {/* 1. Header Row: 32px Icon Tile + 12px Muted Label + "..." menu */}
+      {/* 1. Header Row: 32px Icon Tile + 12px Muted Label + Popover Menu */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <div
@@ -100,13 +120,80 @@ export const StatCard: React.FC<StatCardProps> = ({
             {label}
           </span>
         </div>
-        <button
-          type="button"
-          aria-label="Stat options"
-          className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors opacity-60 hover:opacity-100"
-        >
-          <MoreHorizontal className="w-3.5 h-3.5" />
-        </button>
+
+        <Popover
+          align="right"
+          trigger={
+            <button
+              type="button"
+              aria-label={`Options for ${label}`}
+              className="p-1 rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+          }
+          content={({ close }) => (
+            <div className="w-48 p-1 select-none text-xs">
+              <div className="px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-white/[0.08] mb-0.5">
+                {label}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  if (onViewReport) {
+                    onViewReport();
+                  } else {
+                    navigate('/reports');
+                  }
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+              >
+                <BarChart2 className="w-3.5 h-3.5 text-zinc-400" />
+                <span>View Analytics</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  if (onRefresh) {
+                    onRefresh();
+                  } else {
+                    runAnimation();
+                    addToast({
+                      type: 'info',
+                      title: 'Metric Updated',
+                      message: `Real-time synchronization for ${label} completed.`,
+                    });
+                  }
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Refresh Metric</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  navigator.clipboard?.writeText(formattedDisplay());
+                  addToast({
+                    type: 'success',
+                    title: 'Copied to Clipboard',
+                    message: `${label}: ${formattedDisplay()}`,
+                  });
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copy Value</span>
+              </button>
+            </div>
+          )}
+        />
       </div>
 
       {/* 2. Value Row: 22px / 600 Tabular-nums */}

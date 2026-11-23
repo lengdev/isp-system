@@ -183,3 +183,41 @@ export type ComfortMode = 'soft' | 'standard' | 'high-contrast';
 export type DensityMode = 'compact' | 'comfortable';
 export type AnimationMode = 'system' | 'on' | 'reduced';
 
+// ==========================================
+// INVENTORY & PRODUCT TYPES
+// ==========================================
+
+export type ProductStatus = 'In Stock' | 'Low Stock' | 'Out of Stock' | 'Discontinued';
+
+export interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  quantity: number;
+  minStockAlert: number;
+  unitPrice: number;
+  costPrice: number;
+  status: ProductStatus;
+  supplier: string;
+  location: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductLog {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  action: 'Created' | 'Stock In' | 'Stock Out' | 'Price Changed' | 'Status Changed' | 'Updated' | 'Deleted';
+  change?: string;
+  previousQuantity?: number;
+  newQuantity?: number;
+  actor: string;
+  reason?: string;
+  timestamp: string;
+}
+
+

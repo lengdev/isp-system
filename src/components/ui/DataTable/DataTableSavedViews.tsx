@@ -141,7 +141,7 @@ export const DataTableSavedViews: React.FC<DataTableSavedViewsProps> = ({
                 value={newViewName}
                 onChange={(e) => setNewViewName(e.target.value)}
                 placeholder="Name this view..."
-                className="w-full h-8 px-2.5 rounded-[10px] border border-gray-200 dark:border-gray-700 text-xs bg-white dark:bg-[#1C1C1F] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#F26B3A]/30 focus:border-[#F26B3A]"
+                className="w-full h-8 px-3 rounded-full border border-transparent hover:border-zinc-300/80 dark:hover:border-white/20 text-xs bg-zinc-100/90 dark:bg-white/[0.06] text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[#006FEE] focus:ring-1 focus:ring-[#006FEE]/20 transition-all caret-[#006FEE]"
                 autoFocus
               />
               <div className="flex justify-end gap-1.5">

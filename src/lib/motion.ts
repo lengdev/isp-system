@@ -29,15 +29,18 @@ export const transitions = {
 
 // Modal animation variants
 export const modalVariants = {
-  hidden: { opacity: 0, scale: 0.96 },
+  hidden: { opacity: 0, scale: 0.97 },
   visible: {
     opacity: 1,
     scale: 1,
-    transition: transitions.springSoft,
+    transition: {
+      scale: { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 },
+      opacity: { duration: 0.16, ease: EASE_OUT },
+    },
   },
   exit: {
     opacity: 0,
-    scale: 0.96,
+    scale: 0.97,
     transition: { duration: DURATION_FAST, ease: EASE_OUT },
   },
 };

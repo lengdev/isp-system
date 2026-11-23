@@ -4,40 +4,32 @@ import {
   Mail,
   Wifi,
   Download,
-  CheckCircle,
-  Power,
-  MoreHorizontal,
   Trash2,
   X,
-  Loader2,
-  User,
-  Bell,
-  Tag,
-  KeyRound,
+  Power,
+  CheckCircle,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { downloadCSV } from '../../lib/utils';
-import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
-import { Tooltip } from '../../components/ui/Tooltip';
+import { Combobox } from '../../components/ui/Combobox';
+import { downloadCSV, cn } from '../../lib/utils';
 import { SPRING_SOFT } from '../../lib/motion';
-import { cn } from '../../lib/utils';
 
 export const BulkActionBar: React.FC = () => {
   const selectedIds = useStore((s) => s.selectedCustomerIds);
-  const selectAll = useStore((s) => s.selectAllCustomers);
   const clearSelected = useStore((s) => s.clearSelectedCustomers);
+  const selectAll = useStore((s) => s.setSelectedCustomerIds);
   const customers = useStore((s) => s.customers);
+  const totalCount = customers.length;
   const plans = useStore((s) => s.plans);
-  const technicians = useStore((s) => s.technicians);
   const updateCustomer = useStore((s) => s.updateCustomer);
-  const openModal = useStore((s) => s.openModal);
   const bulkSetCustomerStatus = useStore((s) => s.bulkSetCustomerStatus);
+  const openModal = useStore((s) => s.openModal);
   const addToast = useStore((s) => s.addToast);
+  const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
 
-  const [activeAction, setActiveAction] = useState<string | null>(null);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [activeAction, setActiveAction] = useState<'plan' | null>(null);
 
-  // Esc key clears selection
+  // Keyboard shortcut: Esc to clear selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && selectedIds.length > 0) {
@@ -50,10 +42,9 @@ export const BulkActionBar: React.FC = () => {
 
   if (selectedIds.length === 0) return null;
 
-  const totalCount = customers.length;
   const isAllSelected = selectedIds.length === totalCount;
 
-  const planOptions: ComboboxOption[] = plans.map((p) => ({
+  const planOptions = plans.map((p) => ({
     value: p.id,
     label: p.name,
     description: `${p.speedMbps} Mbps • $${p.monthlyPrice}/mo`,
@@ -62,7 +53,7 @@ export const BulkActionBar: React.FC = () => {
   const handleBulkAssignPlan = async (planId: string) => {
     const chosenPlan = plans.find((p) => p.id === planId);
     if (!chosenPlan) return;
-    setActiveAction('assignPlan');
+
     for (const id of selectedIds) {
       await updateCustomer(id, {
         planId: chosenPlan.id,
@@ -71,30 +62,31 @@ export const BulkActionBar: React.FC = () => {
         dataCapGB: chosenPlan.dataCapGB,
       });
     }
-    setActiveAction(null);
+
     addToast({
       type: 'success',
-      title: 'Plan Assigned',
+      title: 'Plans Assigned',
       message: `Updated plan to ${chosenPlan.name} for ${selectedIds.length} subscribers.`,
     });
+    setActiveAction(null);
   };
 
   const handleExportSelected = () => {
     const selectedCustomers = customers.filter((c) => selectedIds.includes(c.id));
     const headers = [
-      'Customer ID',
-      'Code',
-      'Name',
+      'ID',
+      'Account Code',
+      'Full Name',
       'Email',
       'Phone',
       'Address',
       'City',
       'Plan',
-      'Price',
+      'Monthly Price',
       'Status',
       'IP Address',
       'MAC Address',
-      'Usage (GB)',
+      'Data Usage (GB)',
       'Balance Due',
     ];
     const rows = selectedCustomers.map((c) => [
@@ -123,17 +115,23 @@ export const BulkActionBar: React.FC = () => {
 
   return (
     <AnimatePresence>
-      <motion.div
-        role="toolbar"
-        aria-label="Bulk actions toolbar"
-        initial={{ y: 80, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 80, opacity: 0 }}
-        transition={SPRING_SOFT}
-        className="fixed bottom-6 inset-x-0 mx-auto z-40 max-w-3xl w-[94%] sm:w-auto h-14 px-4 rounded-2xl bg-[#1A1C20] text-[#E7E9EE] shadow-2xl border border-white/10 flex items-center justify-between gap-3 select-none flex-nowrap"
+      <div
+        className={cn(
+          'fixed bottom-6 z-40 flex justify-center pointer-events-none transition-[left] duration-200',
+          sidebarCollapsed ? 'left-0 md:left-16 right-0' : 'left-0 md:left-[232px] right-0'
+        )}
       >
+        <motion.div
+          role="toolbar"
+          aria-label="Bulk actions toolbar"
+          initial={{ y: 80, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 80, opacity: 0 }}
+          transition={SPRING_SOFT}
+          className="pointer-events-auto max-w-[calc(100vw-32px)] w-max h-14 pl-4 pr-3.5 rounded-2xl bg-[#1A1C20] text-[#E7E9EE] shadow-2xl border border-white/10 flex items-center justify-between gap-2.5 sm:gap-4 select-none flex-nowrap"
+        >
         {/* Left Count + Select All / Clear */}
-        <div className="flex items-center gap-2.5 shrink-0" aria-live="polite">
+        <div className="flex items-center gap-2 shrink-0" aria-live="polite">
           <span className="flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-[var(--brand)] text-white text-[11px] font-bold tabular-nums">
             {selectedIds.length}
           </span>
@@ -145,7 +143,7 @@ export const BulkActionBar: React.FC = () => {
             <button
               type="button"
               onClick={() => selectAll(customers.map((c) => c.id))}
-              className="text-[12px] font-medium text-[var(--brand)] hover:underline ml-1"
+              className="text-[12px] font-medium text-[var(--brand)] hover:underline ml-1 cursor-pointer"
             >
               Select all {totalCount}
             </button>
@@ -153,23 +151,24 @@ export const BulkActionBar: React.FC = () => {
             <button
               type="button"
               onClick={clearSelected}
-              className="text-[12px] font-medium text-[var(--brand)] hover:underline ml-1"
+              className="text-[12px] font-medium text-[#8B92A0] hover:text-white hover:underline ml-1 cursor-pointer"
             >
               All {totalCount} selected — Clear
             </button>
           )}
         </div>
 
-        {/* Center Ghost Actions */}
+        {/* Center Actions */}
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           {/* Message */}
           <button
             type="button"
             onClick={() => openModal('sendMessage', { isBulk: true })}
-            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors"
+            title="Send bulk message"
+            className="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors cursor-pointer"
           >
             <Mail className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden sm:inline">Message</span>
+            <span className="hidden md:inline">Message</span>
           </button>
 
           {/* Assign Plan Combobox or Button */}
@@ -188,10 +187,11 @@ export const BulkActionBar: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveAction('plan')}
-              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors"
+              title="Assign plan to selected"
+              className="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors cursor-pointer"
             >
               <Wifi className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Assign plan</span>
+              <span className="hidden md:inline">Assign plan</span>
             </button>
           )}
 
@@ -199,22 +199,23 @@ export const BulkActionBar: React.FC = () => {
           <button
             type="button"
             onClick={handleExportSelected}
-            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors"
+            title="Export selected as CSV"
+            className="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-lg text-[#D4D8E2] hover:text-white hover:bg-white/10 text-[12px] font-medium transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">Export</span>
+            <span className="hidden md:inline">Export</span>
           </button>
 
-          {/* Segmented Activate / Suspend group (icon colors only, hover tint) */}
+          {/* Segmented Activate / Suspend group */}
           <div className="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5">
             <button
               type="button"
               title="Activate selected"
               onClick={() => bulkSetCustomerStatus(selectedIds, 'Active')}
-              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer"
             >
               <CheckCircle className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Activate</span>
+              <span className="hidden lg:inline">Activate</span>
             </button>
             <button
               type="button"
@@ -225,13 +226,16 @@ export const BulkActionBar: React.FC = () => {
                   targetStatus: 'Suspended',
                 })
               }
-              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
             >
               <Power className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Suspend</span>
+              <span className="hidden lg:inline">Suspend</span>
             </button>
           </div>
+        </div>
 
+        {/* Right End: Delete + Divider + Close X */}
+        <div className="flex items-center gap-1 shrink-0">
           {/* Delete Action (red ghost) */}
           <button
             type="button"
@@ -241,24 +245,28 @@ export const BulkActionBar: React.FC = () => {
                 isBulk: true,
               })
             }
-            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 text-[12px] font-medium transition-colors"
+            title="Delete selected subscribers"
+            className="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 text-[12px] font-medium transition-colors cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Delete</span>
+            <span className="hidden md:inline">Delete</span>
+          </button>
+
+          <div className="h-5 w-px bg-white/15 shrink-0 mx-0.5 sm:mx-1" />
+
+          {/* Close X (Esc clears) */}
+          <button
+            type="button"
+            onClick={clearSelected}
+            title="Clear selection (Esc)"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8B92A0] hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Close X (Esc clears) */}
-        <button
-          type="button"
-          onClick={clearSelected}
-          title="Clear selection (Esc)"
-          className="p-1.5 rounded-lg text-[#8B92A0] hover:text-white hover:bg-white/10 transition-colors shrink-0 ml-1"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </motion.div>
-    </AnimatePresence>
+    </div>
+  </AnimatePresence>
   );
 };
 export default BulkActionBar;

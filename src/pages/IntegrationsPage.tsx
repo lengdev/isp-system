@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Layers, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
 import { useStore } from '../store/useStore';
 
 export const IntegrationsPage: React.FC = () => {
@@ -87,14 +88,12 @@ export const IntegrationsPage: React.FC = () => {
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   {item.category}
                 </span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${item.connected
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60'
-                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800'
-                    }`}
+                <Chip
+                  size="sm"
+                  color={item.connected ? 'success' : 'default'}
                 >
                   {item.connected ? `Connected (${item.ping})` : 'Disconnected'}
-                </span>
+                </Chip>
               </div>
 
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mt-2">{item.name}</h3>

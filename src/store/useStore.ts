@@ -16,6 +16,8 @@ import {
   FilterState,
   SortState,
   ToastItem,
+  Product,
+  ProductLog,
 } from '../types';
 import {
   INITIAL_PLANS,
@@ -28,6 +30,8 @@ import {
   INITIAL_SCHEDULES,
   INITIAL_NOTIFICATIONS,
   INITIAL_ACTIVITIES,
+  INITIAL_PRODUCTS,
+  INITIAL_PRODUCT_LOGS,
 } from '../data/mockData';
 
 interface AppStore {
@@ -41,6 +45,9 @@ interface AppStore {
   schedules: InstallationSchedule[];
   activities: ActivityLog[];
   notifications: NotificationItem[];
+  products: Product[];
+  productLogs: ProductLog[];
+  showProductStats: boolean;
 
   // Selection & Detail
   selectedCustomerIds: string[];
@@ -81,6 +88,9 @@ interface AppStore {
     speedTest: { isOpen: boolean; customerId?: string };
     customizeView: { isOpen: boolean };
     addEditPlan: { isOpen: boolean; planId?: string };
+    addEditProduct: { isOpen: boolean; productId?: string };
+    deleteProduct: { isOpen: boolean; productId?: string };
+    productLog: { isOpen: boolean; productId?: string };
   };
 
   // Actions
@@ -93,6 +103,7 @@ interface AppStore {
   toggleColumn: (columnId: string) => void;
   reorderColumns: (columns: ColumnSetting[]) => void;
   toggleStatistics: () => void;
+  toggleProductStats: () => void;
   toggleDarkMode: () => void;
   setDarkMode: (enabled: boolean) => void;
   setThemeMode: (mode: 'light' | 'dark' | 'system') => void;
@@ -107,6 +118,7 @@ interface AppStore {
   // Selection actions
   toggleSelectCustomer: (id: string) => void;
   selectAllCustomers: (ids: string[]) => void;
+  setSelectedCustomerIds: (ids: string[]) => void;
   clearSelectedCustomers: () => void;
 
   // Drawer
@@ -138,6 +150,13 @@ interface AppStore {
   addPlan: (plan: Omit<Plan, 'id'>) => void;
   updatePlan: (id: string, plan: Partial<Plan>) => void;
   deletePlan: (id: string) => void;
+
+  // Products & Inventory CRUD
+  addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateProduct: (id: string, updates: Partial<Product>) => void;
+  deleteProduct: (id: string) => void;
+  bulkDeleteProducts: (ids: string[]) => void;
+  addProductLog: (log: Omit<ProductLog, 'id' | 'timestamp'>) => void;
 
   // Invoices & Billing
   recordPayment: (customerId: string, amount: number, method: string, reference?: string) => Promise<void>;
@@ -188,6 +207,9 @@ export const useStore = create<AppStore>()(
       schedules: INITIAL_SCHEDULES,
       activities: INITIAL_ACTIVITIES,
       notifications: INITIAL_NOTIFICATIONS,
+      products: INITIAL_PRODUCTS,
+      productLogs: INITIAL_PRODUCT_LOGS,
+      showProductStats: true,
 
       selectedCustomerIds: [],
       activeCustomerId: null,
@@ -233,6 +255,9 @@ export const useStore = create<AppStore>()(
         speedTest: { isOpen: false },
         customizeView: { isOpen: false },
         addEditPlan: { isOpen: false },
+        addEditProduct: { isOpen: false },
+        deleteProduct: { isOpen: false },
+        productLog: { isOpen: false },
       },
 
       // Latency simulator (300ms - 500ms)
@@ -285,6 +310,7 @@ export const useStore = create<AppStore>()(
       reorderColumns: (columns) => set({ columns }),
 
       toggleStatistics: () => set((state) => ({ showStatistics: !state.showStatistics })),
+      toggleProductStats: () => set((state) => ({ showProductStats: !state.showProductStats })),
 
       toggleDarkMode: () => {
         const nextDark = !get().darkMode;
@@ -380,6 +406,7 @@ export const useStore = create<AppStore>()(
           };
         });
       },
+      setSelectedCustomerIds: (ids) => set({ selectedCustomerIds: ids }),
       clearSelectedCustomers: () => set({ selectedCustomerIds: [] }),
 
       // Drawer
@@ -611,6 +638,138 @@ export const useStore = create<AppStore>()(
         });
       },
 
+      // Products & Inventory
+      addProduct: (productData) => {
+        const id = 'prod-' + Date.now();
+        const now = new Date().toISOString().split('T')[0];
+        const newProduct: Product = {
+          ...productData,
+          id,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const logItem: ProductLog = {
+          id: 'plog-' + Date.now(),
+          productId: id,
+          productName: newProduct.name,
+          sku: newProduct.sku,
+          action: 'Created',
+          change: `Initial stock: ${newProduct.quantity} units`,
+          previousQuantity: 0,
+          newQuantity: newProduct.quantity,
+          actor: 'Admin (Hariharan B)',
+          reason: 'Product created via Inventory Manager',
+          timestamp: 'Just now',
+        };
+        set((state) => ({
+          products: [newProduct, ...state.products],
+          productLogs: [logItem, ...state.productLogs],
+        }));
+        get().addToast({
+          type: 'success',
+          title: 'Product Created',
+          message: `${newProduct.name} (${newProduct.sku}) added to inventory.`,
+        });
+      },
+
+      updateProduct: (id, updates) => {
+        const now = new Date().toISOString().split('T')[0];
+        const existing = get().products.find((p) => p.id === id);
+        if (!existing) return;
+
+        let changeNote = 'Product details updated';
+        let action: ProductLog['action'] = 'Updated';
+
+        if (updates.quantity !== undefined && updates.quantity !== existing.quantity) {
+          const diff = updates.quantity - existing.quantity;
+          action = diff > 0 ? 'Stock In' : 'Stock Out';
+          changeNote = `${diff > 0 ? '+' : ''}${diff} units (${existing.quantity} -> ${updates.quantity})`;
+        } else if (updates.unitPrice !== undefined && updates.unitPrice !== existing.unitPrice) {
+          action = 'Price Changed';
+          changeNote = `$${existing.unitPrice.toFixed(2)} -> $${updates.unitPrice.toFixed(2)}`;
+        } else if (updates.status !== undefined && updates.status !== existing.status) {
+          action = 'Status Changed';
+          changeNote = `${existing.status} -> ${updates.status}`;
+        }
+
+        const logItem: ProductLog = {
+          id: 'plog-' + Date.now(),
+          productId: id,
+          productName: updates.name || existing.name,
+          sku: updates.sku || existing.sku,
+          action,
+          change: changeNote,
+          previousQuantity: existing.quantity,
+          newQuantity: updates.quantity !== undefined ? updates.quantity : existing.quantity,
+          actor: 'Admin (Hariharan B)',
+          reason: 'Inventory record modified',
+          timestamp: 'Just now',
+        };
+
+        set((state) => ({
+          products: state.products.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: now } : p)),
+          productLogs: [logItem, ...state.productLogs],
+        }));
+
+        get().addToast({
+          type: 'success',
+          title: 'Product Updated',
+          message: `${existing.name} has been updated.`,
+        });
+      },
+
+      deleteProduct: (id) => {
+        const existing = get().products.find((p) => p.id === id);
+        if (!existing) return;
+
+        const logItem: ProductLog = {
+          id: 'plog-' + Date.now(),
+          productId: id,
+          productName: existing.name,
+          sku: existing.sku,
+          action: 'Deleted',
+          change: `Removed ${existing.quantity} units from catalog`,
+          previousQuantity: existing.quantity,
+          newQuantity: 0,
+          actor: 'Admin (Hariharan B)',
+          reason: 'Product deleted from inventory',
+          timestamp: 'Just now',
+        };
+
+        set((state) => ({
+          products: state.products.filter((p) => p.id !== id),
+          productLogs: [logItem, ...state.productLogs],
+        }));
+
+        get().addToast({
+          type: 'info',
+          title: 'Product Deleted',
+          message: `${existing.name} removed from inventory.`,
+        });
+      },
+
+      bulkDeleteProducts: (ids) => {
+        set((state) => ({
+          products: state.products.filter((p) => !ids.includes(p.id)),
+        }));
+        get().addToast({
+          type: 'info',
+          title: 'Products Deleted',
+          message: `${ids.length} products removed from inventory.`,
+        });
+      },
+
+      addProductLog: (log) => {
+        const newLog: ProductLog = {
+          ...log,
+          id: 'plog-' + Date.now(),
+          timestamp: 'Just now',
+        };
+        set((state) => ({
+          productLogs: [newLog, ...state.productLogs],
+        }));
+      },
+
       // Billing & Invoices
       recordPayment: async (customerId, amount, method, reference) => {
         await get().simulateLatency();
@@ -802,6 +961,9 @@ export const useStore = create<AppStore>()(
           schedules: INITIAL_SCHEDULES,
           activities: INITIAL_ACTIVITIES,
           notifications: INITIAL_NOTIFICATIONS,
+          products: INITIAL_PRODUCTS,
+          productLogs: INITIAL_PRODUCT_LOGS,
+          showProductStats: true,
           selectedCustomerIds: [],
           activeCustomerId: null,
           isDrawerOpen: false,
@@ -823,6 +985,9 @@ export const useStore = create<AppStore>()(
         invoices: state.invoices,
         tickets: state.tickets,
         devices: state.devices,
+        products: state.products,
+        productLogs: state.productLogs,
+        showProductStats: state.showProductStats,
         columns: state.columns,
         showStatistics: state.showStatistics,
         darkMode: state.darkMode,

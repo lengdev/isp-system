@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { DataTable, DataTableColumnDef } from '../components/ui/DataTable';
-import { Badge } from '../components/ui/Badge';
+import { Chip } from '../components/ui/Chip';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Zap, Play, RotateCcw, AlertTriangle, Eye, Edit2, Trash2 } from 'lucide-react';
@@ -129,7 +129,7 @@ export const DevTablePage: React.FC = () => {
         ],
       },
       cell: ({ getValue }) => (
-        <Badge status={getValue() as any} />
+        <Chip status={getValue() as any} size="sm" />
       ),
     },
     {

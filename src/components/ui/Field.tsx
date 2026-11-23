@@ -106,6 +106,31 @@ export const Field: React.FC<FieldProps> = ({
 };
 
 // ==========================================
+// Shared Form Field Style Tokens
+// (Combobox trigger, Input, Textarea)
+// ==========================================
+
+export const FIELD_BASE_STYLES =
+  'relative w-full rounded-[10px] border border-zinc-200 dark:border-zinc-700/80 bg-zinc-100/70 hover:bg-zinc-100/90 dark:bg-white/[0.05] dark:hover:bg-white/[0.08] hover:border-zinc-300 dark:hover:border-zinc-600 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 transition-[border-color,box-shadow,background-color] duration-150 ease-out outline-none';
+
+export const FIELD_FOCUS_STYLES =
+  'focus:border-[#006FEE] focus:[box-shadow:inset_0_0_0_1px_#006FEE] focus:outline-none focus:bg-[var(--surface)] dark:focus:bg-[#18181b] focus-visible:border-[#006FEE] focus-visible:[box-shadow:inset_0_0_0_1px_#006FEE] focus-visible:outline-none focus-within:border-[#006FEE] focus-within:[box-shadow:inset_0_0_0_1px_#006FEE] focus-within:outline-none focus-within:bg-[var(--surface)] dark:focus-within:bg-[#18181b]';
+
+export const FIELD_ERROR_STYLES =
+  '!border-red-500 ![box-shadow:inset_0_0_0_1px_#ef4444] animate-shake';
+
+export const FIELD_DISABLED_STYLES =
+  'opacity-60 cursor-not-allowed bg-[var(--surface-subtle)] pointer-events-none';
+
+export const SEARCH_BOX_STYLES =
+  'search-control relative flex items-center rounded-[10px] border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-[#18181b] hover:border-zinc-300 dark:hover:border-zinc-600 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus-within:border-[#006FEE] focus-within:[box-shadow:inset_0_0_0_1px_#006FEE] focus-within:outline-none transition-all duration-150 ease-out';
+
+export const SHARED_FIELD_CLASSES = cn(
+  FIELD_BASE_STYLES,
+  FIELD_FOCUS_STYLES
+);
+
+// ==========================================
 // Text / Number Input (<Input>)
 // ==========================================
 
@@ -156,17 +181,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div
         className={cn(
-          'relative flex items-center w-full h-[40px] max-sm:h-[44px] rounded-[10px] border bg-[var(--surface)] transition-colors',
-          'focus-within:border-neutral-900 dark:focus-within:border-neutral-100 focus-within:ring-1 focus-within:ring-neutral-950/10 dark:focus-within:ring-white/10',
-          hasError
-            ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
-            : 'border-[var(--border)] hover:border-[var(--border-strong)]',
-          props.disabled && 'opacity-60 cursor-not-allowed bg-[var(--surface-subtle)]',
+          'field-control',
+          FIELD_BASE_STYLES,
+          FIELD_FOCUS_STYLES,
+          'flex items-center h-[40px] min-h-[40px]',
+          hasError && FIELD_ERROR_STYLES,
+          props.disabled && FIELD_DISABLED_STYLES,
           className
         )}
       >
         {hasLeading && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-[var(--text-muted)] pointer-events-none select-none text-[13px] font-medium [&>svg]:w-4 [&>svg]:h-4">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-400 dark:text-zinc-500 pointer-events-none select-none text-[13px] font-medium [&>svg]:w-4 [&>svg]:h-4">
             {leadingAdornment}
           </div>
         )}
@@ -178,16 +203,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           defaultValue={defaultValue}
           onBlur={handleBlur}
           className={cn(
-            'w-full h-full text-[14px] max-sm:text-[16px] leading-[20px] max-sm:leading-[24px] text-[var(--text)] bg-transparent focus:outline-none tabular-nums font-normal',
-            hasLeading ? 'pl-10' : 'pl-3',
-            hasTrailing ? 'pr-10' : 'pr-3',
+            'w-full h-full text-[13px] sm:text-[14px] leading-[20px] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 bg-transparent focus:outline-none tabular-nums font-normal caret-[#006FEE] transition-colors duration-150',
+            hasLeading ? 'pl-10' : 'pl-3.5',
+            hasTrailing ? 'pr-10' : 'pr-3.5',
             props.disabled && 'cursor-not-allowed'
           )}
           {...props}
         />
 
         {hasTrailing && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-[var(--text-muted)] pointer-events-none select-none text-[13px] font-normal [&>svg]:w-4 [&>svg]:h-4">
+          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-400 dark:text-zinc-500 pointer-events-none select-none text-[13px] font-normal [&>svg]:w-4 [&>svg]:h-4">
             {trailingAdornment}
           </div>
         )}
@@ -220,12 +245,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div
         className={cn(
-          'relative w-full rounded-[10px] border bg-[var(--surface)] transition-colors overflow-hidden',
-          'focus-within:border-neutral-900 dark:focus-within:border-neutral-100 focus-within:ring-1 focus-within:ring-neutral-950/10 dark:focus-within:ring-white/10',
-          hasError
-            ? 'border-red-500 ring-2 ring-red-500/20 animate-shake'
-            : 'border-[var(--border)] hover:border-[var(--border-strong)]',
-          props.disabled && 'opacity-60 cursor-not-allowed bg-[var(--surface-subtle)]',
+          'field-control',
+          FIELD_BASE_STYLES,
+          FIELD_FOCUS_STYLES,
+          'min-h-[80px]',
+          hasError && FIELD_ERROR_STYLES,
+          props.disabled && FIELD_DISABLED_STYLES,
           className
         )}
       >
@@ -235,15 +260,15 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           maxLength={maxLength}
           onChange={handleChange}
           className={cn(
-            'w-full min-h-[96px] max-h-[220px] px-3 py-2.5 text-[14px] max-sm:text-[16px] leading-[20px] max-sm:leading-[24px] text-[var(--text)] bg-transparent focus:outline-none resize-none font-normal',
+            'w-full min-h-[80px] px-3.5 py-2.5 text-[13px] sm:text-[14px] leading-[20px] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 bg-transparent focus:outline-none resize-y font-normal caret-[#006FEE] transition-colors duration-150',
             props.disabled && 'cursor-not-allowed'
           )}
           {...props}
         />
 
         {maxLength !== undefined && (
-          <div className="px-3 pb-2 flex justify-end">
-            <span className="text-[11px] text-[var(--text-muted)] tabular-nums">
+          <div className="px-4 pb-2 flex justify-end">
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-200/60 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 tabular-nums font-medium">
               {charCount} / {maxLength}
             </span>
           </div>

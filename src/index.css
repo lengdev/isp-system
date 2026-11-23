@@ -2,11 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================
+   DESIGN SYSTEM — GLOBAL TOKENS
+========================================================= */
+
 @layer base {
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
 
-    /* Shared Toolbar Control Tokens (32px / 12px / 8px radius / 14px icon) */
+    /* Toolbar */
     --toolbar-h: 32px;
     --toolbar-fs: 12px;
     --toolbar-px: 12px;
@@ -14,19 +18,21 @@
     --toolbar-icon: 14px;
     --table-fs: 12px;
 
-    /* Focus Ring Token */
-    --focus-ring: #4F46E5;
+    /* Focus */
+    --focus-ring: #006FEE;
+    --heroui-primary: #006FEE;
+    --heroui-primary-ring: rgba(0, 111, 238, 0.20);
 
-    /* Shared Form Input Control Tokens (40px / 14px / 10px radius / 13px placeholder) */
+    /* Form Inputs */
     --input-h: 40px;
     --input-fs: 14px;
     --input-lh: 20px;
-    --input-px: 12px;
-    --input-py: 9px;
-    --input-radius: 10px;
+    --input-px: 14px;
+    --input-py: 8px;
+    --input-radius: 12px;
     --input-placeholder-fs: 13px;
 
-    /* Density Tokens (Compact = Default) */
+    /* Density */
     --density-page-px: 24px;
     --density-page-py: 20px;
     --density-topbar-h: 56px;
@@ -34,11 +40,13 @@
     --density-stat-card-h: 112px;
     --density-table-row-h: 48px;
     --density-tab-h: 28px;
+
     --card-radius: 12px;
 
-    /* LIGHT THEME TOKENS — Spec: #F7F7F5, #FBFBFA, #FFFFFF (or #FFFEFC in Soft), #1F2430, #6B7280, #9AA0AB */
+    /* Light Theme */
     --bg-app: #F7F7F5;
     --bg-sidebar: #FBFBFA;
+
     --surface: #FFFFFF;
     --surface-raised: #FFFFFF;
     --surface-subtle: #F8F7F4;
@@ -52,49 +60,65 @@
     --text-muted: #6B7280;
     --text-subtle: #9AA0AB;
 
-    /* Brand Orange (#EA6A3C, hover #D95A2C, soft #FDEFE8) ONLY for: primary btn, focus ring, links, active nav item */
+    /* Brand */
     --brand: #EA6A3C;
     --brand-hover: #D95A2C;
     --brand-soft: #FDEFE8;
     --brand-ring: rgba(234, 106, 60, 0.20);
 
-    /* Semantic Soft Tints (~8-10% tint, darker text) */
+    /* Semantic Colors */
     --success-text: #16794C;
     --success-bg: #E8F5EE;
+
     --warning-text: #9A6200;
     --warning-bg: #FDF3DC;
+
     --danger-text: #B42318;
     --danger-bg: #FDECEA;
+
     --info-text: #2F5BD9;
     --info-bg: #EAF0FE;
 
-    /* Selected / Active (Indigo tokens: bg #EEF2FF, icon #4F46E5, text stays --text) */
+    /* Selected */
     --selected-text: var(--text);
     --selected-bg: #EEF2FF;
     --selected-border: #C7D2FE;
     --selected-indicator: #4F46E5;
 
-    /* Option & Menu Tokens */
+    /* Options */
     --option-selected-bg: #EEF2FF;
     --option-selected-text: var(--text);
     --option-selected-icon: #4F46E5;
     --option-selected-border: #C7D2FE;
+
     --option-hover-bg: #F4F4F5;
     --option-selected-hover-bg: #E0E7FF;
 
-    /* Elevation & Soft Shadows (Spec 3.3) */
+    /* Shadows */
     --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
-    --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.03);
-    --shadow-md: 0 8px 20px -6px rgba(16, 24, 40, 0.10);
-    --shadow-lg: 0 20px 48px -12px rgba(16, 24, 40, 0.16);
+
+    --shadow-sm:
+      0 1px 3px rgba(16, 24, 40, 0.05),
+      0 1px 2px rgba(16, 24, 40, 0.03);
+
+    --shadow-md:
+      0 8px 20px -6px rgba(16, 24, 40, 0.10);
+
+    --shadow-lg:
+      0 20px 48px -12px rgba(16, 24, 40, 0.16);
+
     --shadow-card: var(--shadow-sm);
     --shadow-popover: var(--shadow-md);
     --shadow-modal: var(--shadow-lg);
+
     --backdrop: rgba(20, 22, 28, 0.45);
     --page-gradient: none;
   }
 
-  /* Light Soft Comfort (Default in settings: #FFFEFC surface) */
+  /* =======================================================
+     LIGHT COMFORT MODES
+  ======================================================= */
+
   [data-comfort="soft"]:not(.dark),
   :root[data-comfort="soft"]:not(.dark) {
     --surface: #FFFEFC;
@@ -102,7 +126,6 @@
     --surface-subtle: #FAF9F6;
   }
 
-  /* Light Standard Comfort */
   [data-comfort="standard"]:not(.dark),
   :root[data-comfort="standard"]:not(.dark) {
     --bg-app: #F7F7F5;
@@ -110,25 +133,34 @@
     --page-gradient: none;
   }
 
-  /* Light High Contrast Comfort (AAA) */
   [data-comfort="high-contrast"]:not(.dark),
   :root[data-comfort="high-contrast"]:not(.dark) {
     --bg-app: #EDECE8;
+
     --surface: #FFFFFF;
+
     --border: #C2BCB0;
     --border-subtle: #D6D0C5;
     --border-strong: #9E9789;
+
     --text: #0F1218;
     --text-secondary: #2C3342;
     --text-muted: #4B5262;
     --text-subtle: #6B7280;
+
     --page-gradient: none;
   }
 
-  /* DARK THEME TOKENS — Spec: #111214, #1A1C20, #212429, rgba(255,255,255,.08), #E7E9EE (never #FFF) */
+  /* =======================================================
+     DARK THEME
+  ======================================================= */
+
   .dark {
+    color-scheme: dark;
+
     --bg-app: #111214;
     --bg-sidebar: #16181D;
+
     --surface: #1A1C20;
     --surface-raised: #212429;
     --surface-subtle: #18191D;
@@ -137,7 +169,9 @@
     --border-subtle: rgba(255, 255, 255, 0.06);
     --border-strong: rgba(255, 255, 255, 0.16);
 
-    --focus-ring: #818CF8;
+    --focus-ring: #006FEE;
+    --heroui-primary: #006FEE;
+    --heroui-primary-ring: rgba(0, 111, 238, 0.25);
 
     --text: #E7E9EE;
     --text-secondary: #B4B9C4;
@@ -149,38 +183,51 @@
     --brand-soft: rgba(234, 106, 60, 0.14);
     --brand-ring: rgba(234, 106, 60, 0.25);
 
-    /* Semantic Tints (~14% alpha, lighter text) */
+    /* Semantic */
     --success-text: #4ADE80;
     --success-bg: rgba(22, 121, 76, 0.14);
+
     --warning-text: #FBBF24;
     --warning-bg: rgba(154, 98, 0, 0.14);
+
     --danger-text: #F87171;
     --danger-bg: rgba(180, 35, 24, 0.14);
+
     --info-text: #60A5FA;
     --info-bg: rgba(47, 91, 217, 0.14);
 
-    /* Selected / Active (Dark Indigo tokens: bg rgba(99,102,241,.16), icon #A5B4FC, text stays --text) */
+    /* Selected */
     --selected-text: var(--text);
     --selected-bg: rgba(99, 102, 241, 0.16);
     --selected-border: rgba(165, 180, 252, 0.28);
     --selected-indicator: #6366F1;
 
-    /* Option & Menu Tokens */
+    /* Options */
     --option-selected-bg: rgba(99, 102, 241, 0.16);
     --option-selected-text: var(--text);
     --option-selected-icon: #A5B4FC;
     --option-selected-border: rgba(165, 180, 252, 0.28);
+
     --option-hover-bg: rgba(255, 255, 255, 0.06);
     --option-selected-hover-bg: rgba(99, 102, 241, 0.22);
 
-    /* Soft Shadows (Dark: Spec 3.3) */
+    /* Shadows */
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.20);
-    --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.38);
-    --shadow-lg: 0 20px 48px -12px rgba(0, 0, 0, 0.45);
+
+    --shadow-sm:
+      0 1px 3px rgba(0, 0, 0, 0.28),
+      0 1px 2px rgba(0, 0, 0, 0.20);
+
+    --shadow-md:
+      0 8px 20px -6px rgba(0, 0, 0, 0.38);
+
+    --shadow-lg:
+      0 20px 48px -12px rgba(0, 0, 0, 0.45);
+
     --shadow-card: var(--shadow-sm);
     --shadow-popover: var(--shadow-md);
     --shadow-modal: var(--shadow-lg);
+
     --backdrop: rgba(0, 0, 0, 0.65);
     --page-gradient: none;
   }
@@ -190,17 +237,23 @@
   [data-comfort="high-contrast"].dark {
     --bg-app: #0A0B0D;
     --surface: #14161B;
+
     --border: rgba(255, 255, 255, 0.22);
     --border-subtle: rgba(255, 255, 255, 0.14);
     --border-strong: rgba(255, 255, 255, 0.35);
+
     --text: #F3F4F6;
     --text-secondary: #D4D8E2;
     --text-muted: #B4B9C4;
     --text-subtle: #8B92A0;
+
     --page-gradient: none;
   }
 
-  /* Comfortable Density */
+  /* =======================================================
+     DENSITY
+  ======================================================= */
+
   [data-density="comfortable"],
   :root[data-density="comfortable"] {
     --density-page-px: 32px;
@@ -212,44 +265,392 @@
     --density-tab-h: 32px;
   }
 
+  /* =======================================================
+     BASE DOCUMENT
+  ======================================================= */
+
   html {
     scroll-padding: 24px;
     scrollbar-gutter: stable;
   }
 
   body {
-    font-family: 'Inter', 'Noto Sans Khmer', 'Kantumruy Pro', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family:
+      'Inter',
+      'Noto Sans Khmer',
+      'Kantumruy Pro',
+      'Plus Jakarta Sans',
+      system-ui,
+      -apple-system,
+      sans-serif;
+
     letter-spacing: -0.01em;
+
     background-color: var(--bg-app);
     color: var(--text);
   }
 
-  /* Global Focus System (Spec 3.2: No black flash, one clean focus mechanism) */
-  *:focus {
-    outline: none;
-  }
+  /* =======================================================
+     GLOBAL FOCUS SYSTEM
+     One consistent focus mechanism
+  ======================================================= */
+
   * {
     -webkit-tap-highlight-color: transparent;
   }
+
+  *:focus {
+    outline: none;
+  }
+
+  /* Keyboard navigation focus */
   *:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
+
+  /* Form controls manage their own focus ring */
+  input:focus,
   input:focus-visible,
+  textarea:focus,
   textarea:focus-visible,
+  select:focus,
+  select:focus-visible,
+  .field-control,
+  .field-control *,
+  .search-control,
+  .search-control *,
   [data-combobox-trigger]:focus-visible {
-    outline: none;
+    outline: none !important;
   }
 
-  /* Khmer text support */
-  :lang(km), [lang="km"], .font-khmer {
-    font-family: 'Noto Sans Khmer', 'Kantumruy Pro', 'Inter', system-ui, sans-serif;
+  /* =======================================================
+     KHMER FONT SUPPORT
+  ======================================================= */
+
+  :lang(km),
+  [lang="km"],
+  .font-khmer {
+    font-family:
+      'Noto Sans Khmer',
+      'Kantumruy Pro',
+      'Inter',
+      system-ui,
+      sans-serif;
+
     line-height: 1.6;
   }
 }
 
-/* Reduced Motion: removes only transform/layout/slide motion, keeps short opacity/color fades (never blanket transition: none) */
+/* =========================================================
+   GLOBAL LAYOUT
+========================================================= */
+
+html,
+body {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+/* =========================================================
+   SHARED TRANSITIONS
+========================================================= */
+
+.t-base {
+  transition-property:
+    background-color,
+    border-color,
+    color,
+    box-shadow,
+    opacity,
+    transform;
+
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* =========================================================
+   CUSTOM SCROLLBARS
+========================================================= */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.45);
+}
+
+/* Hide Scrollbar */
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* =========================================================
+   MOBILE INPUT TOKENS
+========================================================= */
+
+@media (max-width: 639px) {
+  :root {
+    --input-h: 44px;
+    --input-fs: 16px;
+    --input-lh: 24px;
+    --input-placeholder-fs: 14px;
+  }
+}
+
+/* =========================================================
+   INPUT PLACEHOLDERS
+========================================================= */
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-subtle) !important;
+  font-size: var(--input-placeholder-fs, 13px) !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  opacity: 1;
+
+  transition: opacity 150ms ease-in-out;
+}
+
+input:focus::placeholder,
+textarea:focus::placeholder {
+  opacity: 0.6;
+}
+
+/* =========================================================
+   INPUT AUTOFILL
+========================================================= */
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--focus-ring);
+
+  transition: background-color 9999s ease-out 0s;
+}
+
+/* =========================================================
+   NUMBER INPUTS
+========================================================= */
+
+/* Remove native browser number spinners */
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* =========================================================
+   FORM ERROR SHAKE
+========================================================= */
+
+@keyframes input-shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.animate-shake {
+  animation: input-shake 0.35s ease-in-out 1;
+}
+
+/* =========================================================
+   HEROUI INPUT & TEXTAREA & SHARED FIELD SYSTEM
+========================================================= */
+
+@layer components {
+
+  /* Reusable class for form field controls */
+  .field-control {
+    position: relative;
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid #E4E4E7;
+    background-color: rgba(244, 244, 245, 0.7);
+    color: var(--text);
+    outline: none !important;
+    transition: border-color 150ms ease-out, box-shadow 150ms ease-out, background-color 150ms ease-out;
+  }
+
+  .field-control:hover:not(:disabled):not([data-disabled="true"]):not([data-state="open"]) {
+    border-color: #D4D4D8;
+    background-color: rgba(244, 244, 245, 0.9);
+  }
+
+  .dark .field-control {
+    border-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .dark .field-control:hover:not(:disabled):not([data-disabled="true"]):not([data-state="open"]) {
+    border-color: rgba(255, 255, 255, 0.22);
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Reusable class for search controls (Global Search & Page Search) */
+  .search-control {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-radius: 10px;
+    border: 1px solid #E4E4E7;
+    background-color: #FFFFFF;
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    outline: none !important;
+    transition: border-color 150ms ease-out, box-shadow 150ms ease-out, width 200ms ease-out, background-color 150ms ease-out;
+  }
+
+  .search-control:hover:not(:focus-within) {
+    border-color: #D4D4D8;
+  }
+
+  .dark .search-control {
+    border-color: rgba(255, 255, 255, 0.12);
+    background-color: #18181b;
+    box-shadow: none;
+  }
+
+  .dark .search-control:hover:not(:focus-within) {
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+
+  .search-control:focus-within {
+    border-color: #006FEE !important;
+    box-shadow: inset 0 0 0 1px #006FEE !important;
+    outline: none !important;
+  }
+
+  /* Single 1px primary border plus inset ring, no outer glow, no browser outline, no stacked borders */
+  .field-control:focus,
+  .field-control:focus-visible,
+  .field-control:focus-within,
+  .field-control[data-state="open"],
+  .field-focus {
+    border-color: #006FEE !important;
+    box-shadow: inset 0 0 0 1px #006FEE !important;
+    outline: none !important;
+    background-color: var(--surface) !important;
+  }
+
+  .dark .field-control:focus,
+  .dark .field-control:focus-visible,
+  .dark .field-control:focus-within,
+  .dark .field-control[data-state="open"],
+  .dark .field-focus {
+    background-color: #18181b !important;
+  }
+
+  /* Error: red border with a red inset ring */
+  .field-control[data-invalid="true"],
+  .field-control-error,
+  .field-error {
+    border-color: #EF4444 !important;
+    box-shadow: inset 0 0 0 1px #EF4444 !important;
+    outline: none !important;
+  }
+
+  /* Disabled: reduced opacity, no pointer events */
+  .field-control:disabled,
+  .field-control[data-disabled="true"],
+  .field-disabled {
+    opacity: 0.6 !important;
+    pointer-events: none !important;
+    cursor: not-allowed !important;
+    background-color: var(--surface-subtle) !important;
+  }
+
+  .input,
+  .textarea {
+    @apply rounded-[10px] border border-zinc-200 dark:border-zinc-700/80 bg-zinc-100/70 hover:bg-zinc-100/90 dark:bg-white/[0.05] dark:hover:bg-white/[0.08] hover:border-zinc-300 dark:hover:border-zinc-600 px-3.5 py-2 text-[13px] sm:text-[14px] shadow-none outline-none;
+
+    transition:
+      background-color 150ms ease-out,
+      border-color 150ms ease-out,
+      box-shadow 150ms ease-out,
+      color 150ms ease-out;
+
+    /* Hover */
+    &:hover,
+    &[data-hovered="true"] {
+      @apply border-zinc-300 dark:border-zinc-600 bg-zinc-100/90 dark:bg-white/[0.08];
+    }
+
+    /* Focus */
+    &:focus,
+    &:focus-visible,
+    &:focus-within,
+    &[data-focus-visible="true"] {
+      border-color: #006FEE !important;
+      box-shadow: inset 0 0 0 1px #006FEE !important;
+      outline: none !important;
+      @apply bg-[var(--surface)] dark:bg-[#18181b];
+    }
+
+    /* Invalid */
+    &[data-invalid="true"] {
+      border-color: #EF4444 !important;
+      box-shadow: inset 0 0 0 1px #EF4444 !important;
+      outline: none !important;
+      @apply text-red-600;
+    }
+
+    /* Disabled */
+    &:disabled,
+    &[data-disabled="true"] {
+      @apply opacity-60 cursor-not-allowed pointer-events-none;
+    }
+  }
+}
+
+/* =========================================================
+   REDUCED MOTION
+   Preserve short color and opacity transitions
+========================================================= */
+
 @media (prefers-reduced-motion: reduce) {
+
   :root:not([data-motion="on"]) *,
   :root:not([data-motion="on"]) *::before,
   :root:not([data-motion="on"]) *::after {
@@ -265,78 +666,4 @@
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transform: none !important;
-}
-
-html, body {
-  overflow-x: hidden;
-  max-width: 100vw;
-}
-
-/* Shared .t-base transition class on all interactive elements */
-.t-base {
-  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
-  transition-duration: 200ms;
-  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-/* Custom thin scrollbars */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.25);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.45);
-}
-
-/* Hide scrollbar utility */
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-none {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* Mobile input tokens (<640px) */
-@media (max-width: 639px) {
-  :root {
-    --input-h: 44px;
-    --input-fs: 16px;
-    --input-lh: 24px;
-    --input-placeholder-fs: 14px;
-  }
-}
-
-/* Shared Form Input Placeholder Styles & Focus Transition */
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-subtle) !important;
-  font-size: var(--input-placeholder-fs, 13px) !important;
-  font-weight: 400 !important;
-  font-style: normal !important;
-  opacity: 1 !important;
-  transition: opacity 150ms ease-in-out !important;
-}
-
-input:focus::placeholder,
-textarea:focus::placeholder {
-  opacity: 0.6 !important;
-}
-
-/* Form Error Shake Animation */
-@keyframes input-shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-4px); }
-  40%, 80% { transform: translateX(4px); }
-}
-
-.animate-shake {
-  animation: input-shake 0.35s ease-in-out 1;
 }

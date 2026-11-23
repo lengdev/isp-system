@@ -15,6 +15,7 @@ import {
   Check,
   ChevronRight,
   Plus,
+  Loader2,
 } from 'lucide-react';
 import { Popover } from '../Popover';
 import { Toggle } from '../Toggle';
@@ -67,17 +68,18 @@ export interface DataTableToolbarProps<T> {
   onRefresh?: () => void;
   lastUpdatedSeconds?: number;
   toolbarExtras?: React.ReactNode;
+  searchPlaceholder?: string;
   onToast: (toast: { type: 'success' | 'info' | 'error'; title: string; message: string }) => void;
 }
 
-// Shared toolbar token classes (32px / 12px / 8px radius / 14px icons)
+// Shared toolbar token classes (32px / 12px / 12px radius / 14px icons)
 const TB_BTN =
-  'h-8 flex items-center gap-1.5 px-3 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)] text-[12px] font-medium transition-colors shadow-xs select-none whitespace-nowrap';
+  'h-8 flex items-center gap-1.5 px-3 rounded-[8px] border border-[var(--border)] dark:border-white/10 bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)] text-[12px] font-medium transition-colors shadow-xs select-none whitespace-nowrap';
 const TB_ICON_BTN =
-  'h-8 w-8 flex items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors shadow-xs select-none';
+  'h-8 w-8 flex items-center justify-center rounded-[8px] border border-[var(--border)] dark:border-white/10 bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors shadow-xs select-none';
 const TB_ICON = 'w-3.5 h-3.5 stroke-[1.75] shrink-0';
 
-export const DataTableToolbar = <T extends Record<string, any>>({
+export function DataTableToolbar<T extends Record<string, any>>({
   searchQuery,
   onSearchChange,
   filteredCount,
@@ -118,12 +120,15 @@ export const DataTableToolbar = <T extends Record<string, any>>({
   onRefresh,
   lastUpdatedSeconds = 0,
   toolbarExtras,
+  searchPlaceholder,
   onToast,
-}: DataTableToolbarProps<T>) => {
+}: DataTableToolbarProps<T>) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery);
+  const [isFocused, setIsFocused] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [groupBySubmenu, setGroupBySubmenu] = useState(false);
@@ -131,9 +136,15 @@ export const DataTableToolbar = <T extends Record<string, any>>({
 
   // Debounced search (250ms)
   useEffect(() => {
-    const handler = setTimeout(() => { onSearchChange(localSearch); }, 250);
+    if (localSearch !== searchQuery) {
+      setIsSearching(true);
+    }
+    const handler = setTimeout(() => {
+      onSearchChange(localSearch);
+      setIsSearching(false);
+    }, 250);
     return () => clearTimeout(handler);
-  }, [localSearch, onSearchChange]);
+  }, [localSearch, searchQuery, onSearchChange]);
 
   // Sync external search query
   useEffect(() => { setLocalSearch(searchQuery); }, [searchQuery]);
@@ -172,6 +183,11 @@ export const DataTableToolbar = <T extends Record<string, any>>({
   const hideableColumns = columns.filter((c) => c.hideable !== false);
   const groupableColumns = columns.filter((c) => c.filter?.type === 'select' || c.filter?.type === 'multi');
 
+  const activeGroupCol = groupBy ? columns.find((c) => c.id === groupBy) : undefined;
+  const activeGroupLabel = activeGroupCol
+    ? (typeof activeGroupCol.header === 'string' ? activeGroupCol.header : activeGroupCol.id)
+    : (groupBy || '');
+
   const densityOptions: { id: TableDensity; label: string; desc: string }[] = [
     { id: 'comfortable', label: 'Comfortable', desc: '60px' },
     { id: 'default', label: 'Default', desc: '52px' },
@@ -182,33 +198,60 @@ export const DataTableToolbar = <T extends Record<string, any>>({
     <div className="space-y-2 select-none">
       {/* Controls Row (32px / 12px unified tokens) */}
       <div className="flex items-center gap-2 flex-nowrap">
-        {/* LEFT: Search */}
-        <div className="relative min-w-[240px] flex-1 max-w-[360px] shrink-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 stroke-[1.75] text-gray-400 pointer-events-none" />
+        {/* LEFT: Search - HeroUI clean styling */}
+        <div className="search-control relative flex items-center h-[40px] w-full sm:w-[320px] focus-within:sm:w-[400px] shrink-0 transition-all duration-200 ease-out rounded-[10px] border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-[#18181b] hover:border-zinc-300 dark:hover:border-zinc-600 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus-within:border-[#006FEE] focus-within:[box-shadow:inset_0_0_0_1px_#006FEE] focus-within:outline-none">
+          {isSearching ? (
+            <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#006FEE] pointer-events-none" />
+          ) : (
+            <Search
+              className={cn(
+                'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 stroke-[2] transition-colors duration-150 pointer-events-none',
+                isFocused ? 'text-[#006FEE]' : 'text-zinc-400 dark:text-zinc-500'
+              )}
+            />
+          )}
           <input
             ref={searchInputRef}
             type="text"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            placeholder="Search customers…"
-            className="w-full h-8 pl-8 pr-12 text-[12px] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--border-strong)] rounded-[8px] text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-950/10 dark:focus:ring-white/10 transition-[border-color,box-shadow] duration-120 ease-out shadow-xs"
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                if (localSearch) {
+                  setLocalSearch('');
+                  onSearchChange('');
+                } else {
+                  searchInputRef.current?.blur();
+                }
+              }
+            }}
+            placeholder={searchPlaceholder || 'Search…'}
+            className="w-full h-full pl-[38px] pr-10 text-[14px] bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 placeholder:text-[14px] font-normal select-text caret-[#006FEE]"
           />
-          {localSearch && (
+          {localSearch ? (
             <button
               type="button"
-              onClick={() => { setLocalSearch(''); onSearchChange(''); }}
-              className="absolute right-7 top-1/2 -translate-y-1/2 p-0.5 text-[var(--text-muted)] hover:text-[var(--text)] rounded"
+              aria-label="Clear search"
+              onClick={() => {
+                setLocalSearch('');
+                onSearchChange('');
+                searchInputRef.current?.focus();
+              }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-[var(--text)] rounded-full hover:bg-zinc-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
             >
-              <X className="w-3 h-3" />
+              <X className="w-3.5 h-3.5" />
             </button>
-          )}
-          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1 py-0.5 text-[10px] font-mono font-semibold text-[var(--text-muted)] bg-[var(--surface-subtle)] rounded border border-[var(--border-subtle)] pointer-events-none">
-            /
-          </kbd>
+          ) : !isFocused ? (
+            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[11px] font-mono font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-white/10 rounded-[6px] border border-zinc-200 dark:border-zinc-700/80 pointer-events-none select-none">
+              /
+            </kbd>
+          ) : null}
         </div>
 
-        {/* Result count — hidden under 900px */}
-        <span className="text-[12px] text-[var(--text-muted)] whitespace-nowrap font-medium tabular-nums shrink-0 hidden min-[900px]:inline">
+        {/* Result count beside it */}
+        <span className="text-[13px] text-[var(--text-muted)] font-normal whitespace-nowrap tabular-nums shrink-0 ml-3">
           {filteredCount} results
         </span>
 
@@ -227,7 +270,7 @@ export const DataTableToolbar = <T extends Record<string, any>>({
             className={cn(
               TB_BTN,
               activeFilterKeys.length > 0 &&
-              'border-[var(--selected-border)] text-[var(--selected-indicator)] bg-[var(--selected-bg)] font-semibold'
+              'border-[var(--selected-border)] dark:border-indigo-500/40 text-[var(--selected-indicator)] bg-[var(--selected-bg)] dark:bg-indigo-500/15 font-semibold'
             )}
             title="Filter records"
           >
@@ -266,7 +309,7 @@ export const DataTableToolbar = <T extends Record<string, any>>({
           />
 
           {/* View mode: segmented icon buttons */}
-          <div className="flex items-center rounded-[8px] border border-[var(--border)] shadow-xs overflow-hidden shrink-0">
+          <div className="flex h-8 items-center rounded-[8px] border border-[var(--border)] dark:border-white/10 shadow-xs overflow-hidden shrink-0">
             {(
               [
                 { mode: 'table' as const, icon: <TableIcon className={TB_ICON} />, title: 'Table view' },
@@ -293,6 +336,7 @@ export const DataTableToolbar = <T extends Record<string, any>>({
           {/* Columns */}
           <Popover
             align="right"
+            width="224px"
             trigger={
               <button type="button" className={TB_BTN} title="Column visibility">
                 <ColumnsIcon className={TB_ICON} />
@@ -310,25 +354,35 @@ export const DataTableToolbar = <T extends Record<string, any>>({
                 <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                   {hideableColumns.map((col) => {
                     const isVisible = visibleColumnIds.includes(col.id);
+                    const label = typeof col.header === 'string' ? col.header : col.id;
+
                     return (
-                      <label
+                      <button
+                        type="button"
                         key={col.id}
+                        role="checkbox"
+                        aria-checked={isVisible}
+                        data-testid={`column-toggle-${col.id}`}
+                        onClick={() => onToggleColumnVisibility(col.id)}
                         className={cn(
-                          'flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer select-none text-[12px] transition-colors',
+                          'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer select-none text-[12px] transition-colors text-left focus:outline-none focus-visible:bg-[var(--surface-subtle)]',
                           isVisible
                             ? 'text-[var(--text)] hover:bg-[var(--surface-subtle)]'
                             : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-secondary)]'
                         )}
                       >
-                        <DataTableCheckbox
-                          checked={isVisible}
-                          onChange={() => onToggleColumnVisibility(col.id)}
-                          ariaLabel={`Toggle ${typeof col.header === 'string' ? col.header : col.id}`}
-                        />
-                        <span className="truncate font-medium">
-                          {typeof col.header === 'string' ? col.header : col.id}
+                        <div className="pointer-events-none shrink-0 flex items-center">
+                          <DataTableCheckbox
+                            checked={isVisible}
+                            onChange={() => {}}
+                            tabIndex={-1}
+                            ariaLabel={`Toggle ${label}`}
+                          />
+                        </div>
+                        <span className="truncate font-medium flex-1">
+                          {label}
                         </span>
-                      </label>
+                      </button>
                     );
                   })}
                 </div>
@@ -353,8 +407,11 @@ export const DataTableToolbar = <T extends Record<string, any>>({
               ref={moreButtonRef}
               type="button"
               onClick={() => setMoreOpen((o) => !o)}
-              className={cn(TB_ICON_BTN, moreOpen && 'bg-[var(--surface-subtle)] border-[var(--border-strong)]')}
-              title="More options"
+              className={cn(
+                TB_ICON_BTN,
+                (moreOpen || groupBy) && 'bg-[var(--surface-subtle)] border-[var(--border-strong)] text-[var(--text)]'
+              )}
+              title={groupBy ? `More options (Grouped by ${activeGroupLabel})` : 'More options'}
             >
               <MoreHorizontal className={TB_ICON} />
             </button>
@@ -374,12 +431,8 @@ export const DataTableToolbar = <T extends Record<string, any>>({
               savedViews={savedViews}
               activeViewId={activeViewId}
               onSelectView={onSelectView}
-              onSaveCurrentView={() => {
-                const name = window.prompt('Name this view:');
-                if (name?.trim()) {
-                  onSaveCurrentView(name.trim());
-                }
-              }}
+              onSaveCurrentView={onSaveCurrentView}
+              onDeleteView={onDeleteView}
               onRefresh={onRefresh}
               lastUpdatedSeconds={lastUpdatedSeconds}
               onOpenShortcuts={onOpenShortcuts}
@@ -415,12 +468,21 @@ export const DataTableToolbar = <T extends Record<string, any>>({
             exit={{ opacity: 0, height: 0 }}
             className="flex items-center gap-2 flex-wrap pt-1 overflow-hidden"
           >
-            <span className="text-[12px] text-[var(--text-muted)] font-medium">Active filters:</span>
+            <span className="text-[12px]  text-[var(--text-muted)] font-medium">Active filters:</span>
 
             {searchQuery.trim() && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--brand-soft)] text-[var(--brand)] text-[11px] font-medium border border-[var(--brand)]/20">
                 Search: &ldquo;{searchQuery}&rdquo;
                 <button type="button" onClick={() => { setLocalSearch(''); onSearchChange(''); }} className="hover:text-red-600">
+                  <X className="w-3 h-3 stroke-[2.5]" />
+                </button>
+              </span>
+            )}
+
+            {groupBy && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--brand-soft)] text-[var(--brand)] text-[11px] font-medium border border-[var(--brand)]/20">
+                Group: {activeGroupLabel}
+                <button type="button" onClick={() => onGroupByChange('')} className="hover:text-red-600">
                   <X className="w-3 h-3 stroke-[2.5]" />
                 </button>
               </span>
@@ -436,7 +498,7 @@ export const DataTableToolbar = <T extends Record<string, any>>({
                   ? `${val.min ?? 0} - ${val.max ?? 'max'}`
                   : String(val);
               return (
-                <span key={k} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--brand-soft)] text-[var(--brand)] text-[11px] font-medium border border-[var(--brand)]/20">
+                <span key={k} className="inline-flex items-center gap-1 px-2.5 py-0.5 border[var(--border)] dark:border-white/10 rounded-full bg-[var(--brand-soft)] text-[var(--brand)] text-[11px] font-medium border border-[var(--brand)]/20">
                   {colTitle}: {displayVal}
                   <button type="button" onClick={() => onClearFilter(k)} className="hover:text-red-600">
                     <X className="w-3 h-3 stroke-[2.5]" />
@@ -445,7 +507,7 @@ export const DataTableToolbar = <T extends Record<string, any>>({
               );
             })}
 
-            <button type="button" onClick={onClearAllFilters} className="text-[12px] text-[var(--text-muted)] hover:text-[var(--brand)] hover:underline font-medium ml-1">
+            <button type="button" onClick={() => { onClearAllFilters(); onGroupByChange(''); }} className="text-[12px] text-[var(--text-muted)] hover:text-[var(--brand)] hover:underline font-medium ml-1">
               Clear all
             </button>
           </motion.div>
@@ -453,4 +515,4 @@ export const DataTableToolbar = <T extends Record<string, any>>({
       </AnimatePresence>
     </div>
   );
-};
+}

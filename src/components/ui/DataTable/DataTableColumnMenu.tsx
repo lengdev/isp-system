@@ -45,7 +45,7 @@ export const DataTableColumnMenu: React.FC<DataTableColumnMenuProps> = ({
       trigger={
         <button
           type="button"
-          className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+          className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
           title={`Column options for ${columnTitle}`}
         >
           <MoreHorizontal className="w-3.5 h-3.5" />
@@ -54,9 +54,9 @@ export const DataTableColumnMenu: React.FC<DataTableColumnMenuProps> = ({
       content={
         <div
           onClick={(e) => e.stopPropagation()}
-          className="w-48 p-1.5 flex flex-col gap-[2px] select-none text-xs rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] shadow-[var(--shadow-popover)]"
+          className="w-48 p-1.5 flex flex-col gap-[2px] select-none text-xs"
         >
-          <div className="px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] text-gray-400 border-b border-gray-100 dark:border-gray-800 mb-0.5">
+          <div className="px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-white/[0.08] mb-0.5">
             {columnTitle}
           </div>
 
