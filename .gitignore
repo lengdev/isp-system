@@ -1,12 +1,43 @@
-node_modules
-dist
-dist-server
-dist-ssr
-*.local
-.vscode
-.DS_Store
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production builds
+dist/
+dist-server/
+dist-ssr/
+build/
+
+# Build caches & TypeScript artifacts
 *.tsbuildinfo
+.tmp/
+
+# Testing & Coverage
 test-results/
 playwright-report/
+coverage/
+
+# Environment & Secrets
 .env
+.env*.local
+!.env.example
 .sessions-cache.json
+
+# Logs & Debug
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Editor & System Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
