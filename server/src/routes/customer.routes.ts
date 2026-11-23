@@ -67,9 +67,9 @@ router.post('/:id/status', async (req, res) => {
 });
 
 // POST /api/v1/customers/:id/speedtest
-router.post('/:id/speedtest', (req, res) => {
+router.post('/:id/speedtest', async (req, res) => {
   try {
-    const result = CustomerService.runSpeedTest(req.params.id);
+    const result = await CustomerService.runSpeedTest(req.params.id);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

@@ -35,9 +35,9 @@ router.post('/login', (req, res) => {
 });
 
 // Customer Portal Dashboard
-router.get('/dashboard/:customerId', (req, res) => {
+router.get('/dashboard/:customerId', async (req, res) => {
   try {
-    const profile = CustomerService.getCustomerProfile(req.params.customerId);
+    const profile = await CustomerService.getCustomerProfile(req.params.customerId);
     res.json(profile);
   } catch (err: any) {
     res.status(404).json({ error: err.message });
