@@ -289,7 +289,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
     setSearchQuery('');
   };
 
-  const handleRemoveChip = (e: React.MouseEvent, optVal: string) => {
+  const handleRemoveChip = (e: React.MouseEvent | React.KeyboardEvent, optVal: string) => {
     e.stopPropagation();
     onChange(selectedValues.filter((v) => v !== optVal));
   };
@@ -463,14 +463,21 @@ export const Combobox: React.FC<ComboboxProps> = ({
                     className="inline-flex items-center gap-1.5 px-2.5 h-6 text-[12px] font-medium rounded-full bg-zinc-200/90 dark:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 border border-zinc-300/40 dark:border-white/10 shrink-0 shadow-2xs"
                   >
                     <span className="truncate max-w-[140px]">{opt.shortLabel || opt.label}</span>
-                    <button
-                      type="button"
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => handleRemoveChip(e, opt.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleRemoveChip(e, opt.value);
+                        }
+                      }}
                       className="w-3.5 h-3.5 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-300/60 dark:hover:bg-zinc-600 transition-colors cursor-pointer"
                       title="Remove"
                     >
                       <X className="w-3 h-3 stroke-[2.5]" />
-                    </button>
+                    </span>
                   </span>
                 ))}
                 {hiddenCount > 0 && (
