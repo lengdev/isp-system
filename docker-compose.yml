@@ -14,7 +14,6 @@ services:
       - '5432:5432'
     volumes:
       - netpulse_pgdata:/var/lib/postgresql/data
-      - ./prisma/migrations/20261123000000_init/migration.sql:/docker-entrypoint-initdb.d/01_init.sql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U netpulse -d netpulse']
       interval: 5s

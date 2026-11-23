@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { api } from '../lib/api';
 import {
   Customer,
   CustomerStatus,
+  ConnectionType,
   Plan,
   Invoice,
   SupportTicket,
@@ -34,9 +36,66 @@ import {
   INITIAL_PRODUCT_LOGS,
 } from '../data/mockData';
 
+export function normalizeApiCustomer(raw: any): Customer {
+  const statusLower = String(raw.status || 'Active').toLowerCase();
+  let status: CustomerStatus = 'Active';
+  if (statusLower === 'active') status = 'Active';
+  else if (statusLower === 'suspended') status = 'Suspended';
+  else if (statusLower === 'pending') status = 'Pending';
+  else if (statusLower === 'disconnected') status = 'Disconnected';
+  else if (statusLower === 'overdue') status = 'Overdue';
+
+  const typeLower = String(raw.connectionType || 'Fiber').toLowerCase();
+  let connectionType: ConnectionType = 'Fiber';
+  if (typeLower === 'wireless') connectionType = 'Wireless';
+  else if (typeLower === 'dsl') connectionType = 'DSL';
+
+  const fullName = raw.fullName || 'Unknown Customer';
+  const nameParts = fullName.trim().split(/\s+/);
+  const initials =
+    raw.initials ||
+    (nameParts.length === 1
+      ? nameParts[0].slice(0, 2).toUpperCase()
+      : (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase());
+
+  return {
+    id: String(raw.id),
+    code: raw.code || `CUST-${raw.id}`,
+    avatarUrl: raw.avatarUrl,
+    initials,
+    fullName,
+    email: raw.email || '',
+    phone: raw.phone || '',
+    address: raw.address || '',
+    city: raw.city || 'Phnom Penh',
+    planId: raw.planId || 'pkg-2',
+    planName: raw.planName || 'Fiber Ultra 300M',
+    monthlyPrice: Number(raw.monthlyPrice) || 55,
+    connectionType,
+    ipAddress: raw.ipAddress || '10.20.1.42',
+    macAddress: raw.macAddress || '48:8F:5A:12:44:01',
+    installationDate: raw.installationDate || (raw.registrationDate ? String(raw.registrationDate).slice(0, 10) : '2026-01-15'),
+    dueDate: raw.dueDate || '15th of month',
+    dataUsageGB: typeof raw.dataUsageGB === 'number' ? raw.dataUsageGB : 120,
+    dataCapGB: raw.dataCapGB ?? null,
+    balanceDue: Number(raw.balanceDue) || 0,
+    status,
+    rating: Number(raw.rating) || 5.0,
+    notes: raw.notes,
+    onlineStatus: raw.onlineStatus || (status === 'Active' ? 'online' : 'offline'),
+    lastPingMs: typeof raw.lastPingMs === 'number' ? raw.lastPingMs : 14,
+    assignedTechnician: raw.assignedTechnician || 'Sok Chea',
+    tags: Array.isArray(raw.tags) ? raw.tags : ['Fiber', 'Residential'],
+    pppoeUsername: raw.pppoeUsername || '',
+    routerModel: raw.routerModel || 'Huawei HG8245H5 ONT',
+    coordinates: raw.coordinates || '11.5564° N, 104.9282° E',
+  };
+}
+
 interface AppStore {
   // Data
   customers: Customer[];
+  isCustomersLoading: boolean;
   plans: Plan[];
   invoices: Invoice[];
   tickets: SupportTicket[];
@@ -138,6 +197,8 @@ interface AppStore {
   closeModal: (modal: keyof AppStore['modalState']) => void;
 
   // Customers CRUD
+  fetchCustomers: () => Promise<void>;
+  setCustomers: (customers: Customer[]) => void;
   addCustomer: (customerData: Omit<Customer, 'id' | 'code'>) => Promise<void>;
   updateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
@@ -199,6 +260,7 @@ export const useStore = create<AppStore>()(
     (set, get) => ({
       // Seed data
       customers: generateSeedCustomers(),
+      isCustomersLoading: false,
       plans: INITIAL_PLANS,
       invoices: INITIAL_INVOICES,
       tickets: INITIAL_TICKETS,
@@ -455,8 +517,69 @@ export const useStore = create<AppStore>()(
       },
 
       // Customer CRUD
+      fetchCustomers: async () => {
+        set({ isCustomersLoading: true });
+        try {
+          const res = await api.customers.list();
+          if (Array.isArray(res) && res.length > 0) {
+            const normalized = res.map(normalizeApiCustomer);
+            set({ customers: normalized });
+          }
+        } catch (err: any) {
+          console.error('Failed to fetch customers from API:', err);
+        } finally {
+          set({ isCustomersLoading: false });
+        }
+      },
+
+      setCustomers: (customers) => set({ customers }),
+
       addCustomer: async (customerData) => {
         await get().simulateLatency();
+        try {
+          const res = await api.customers.create({
+            fullName: customerData.fullName,
+            email: customerData.email,
+            phone: customerData.phone,
+            address: customerData.address,
+            city: customerData.city,
+            planId: customerData.planId,
+            planName: customerData.planName,
+            monthlyPrice: customerData.monthlyPrice,
+            connectionType: (customerData.connectionType || 'Fiber').toUpperCase(),
+            status: (customerData.status || 'Pending').toUpperCase(),
+            ipAddress: customerData.ipAddress,
+            macAddress: customerData.macAddress,
+            routerModel: customerData.routerModel,
+          });
+          if (res) {
+            const normalized = normalizeApiCustomer(res);
+            set((state) => ({
+              customers: [normalized, ...state.customers.filter((c) => c.id !== normalized.id)],
+              activities: [
+                {
+                  id: 'act-' + Date.now(),
+                  customerId: normalized.id,
+                  action: 'Customer Onboarded',
+                  details: `Added new subscriber ${normalized.fullName} with ${normalized.planName}`,
+                  actor: 'Admin',
+                  timestamp: 'Just now',
+                  type: 'profile',
+                },
+                ...state.activities,
+              ],
+            }));
+            get().addToast({
+              type: 'success',
+              title: 'Customer Created',
+              message: `${normalized.fullName} (${normalized.code}) added successfully.`,
+            });
+            return;
+          }
+        } catch (err) {
+          console.warn('API createCustomer failed, persisting locally:', err);
+        }
+
         const nextId = 'cust-' + (get().customers.length + 1);
         const nextCode = `CUST-${1000 + get().customers.length + 1}`;
         const newCustomer: Customer = {
@@ -488,6 +611,16 @@ export const useStore = create<AppStore>()(
 
       updateCustomer: async (id, updates) => {
         await get().simulateLatency();
+        try {
+          await api.customers.update(id, {
+            ...updates,
+            status: updates.status ? updates.status.toUpperCase() : undefined,
+            connectionType: updates.connectionType ? updates.connectionType.toUpperCase() : undefined,
+          });
+        } catch (err) {
+          console.warn('API updateCustomer failed, applying locally:', err);
+        }
+
         set((state) => ({
           customers: state.customers.map((c) => (c.id === id ? { ...c, ...updates } : c)),
           activities: [
@@ -515,6 +648,12 @@ export const useStore = create<AppStore>()(
         if (!customer) return;
 
         await get().simulateLatency();
+        try {
+          await api.customers.delete(id);
+        } catch (err) {
+          console.warn('API deleteCustomer failed, applying locally:', err);
+        }
+
         set((state) => ({
           customers: state.customers.filter((c) => c.id !== id),
           selectedCustomerIds: state.selectedCustomerIds.filter((cid) => cid !== id),
@@ -535,6 +674,12 @@ export const useStore = create<AppStore>()(
       bulkDeleteCustomers: async (ids) => {
         const deleted = get().customers.filter((c) => ids.includes(c.id));
         await get().simulateLatency();
+        try {
+          await Promise.all(ids.map((id) => api.customers.delete(id).catch(() => null)));
+        } catch (err) {
+          console.warn('API bulk delete failed:', err);
+        }
+
         set((state) => ({
           customers: state.customers.filter((c) => !ids.includes(c.id)),
           selectedCustomerIds: [],
@@ -566,8 +711,22 @@ export const useStore = create<AppStore>()(
 
       setCustomerStatus: async (id, status, reason) => {
         await get().simulateLatency();
+        try {
+          await api.customers.setStatus(id, status.toUpperCase(), reason);
+        } catch (err) {
+          console.warn('API setCustomerStatus failed, applying locally:', err);
+        }
+
         set((state) => ({
-          customers: state.customers.map((c) => (c.id === id ? { ...c, status } : c)),
+          customers: state.customers.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  status,
+                  onlineStatus: status === 'Active' ? 'online' : 'offline',
+                }
+              : c
+          ),
           activities: [
             {
               id: 'act-' + Date.now(),
@@ -590,8 +749,24 @@ export const useStore = create<AppStore>()(
 
       bulkSetCustomerStatus: async (ids, status, reason) => {
         await get().simulateLatency();
+        try {
+          await Promise.all(
+            ids.map((id) => api.customers.setStatus(id, status.toUpperCase(), reason).catch(() => null))
+          );
+        } catch (err) {
+          console.warn('API bulk set status failed:', err);
+        }
+
         set((state) => ({
-          customers: state.customers.map((c) => (ids.includes(c.id) ? { ...c, status } : c)),
+          customers: state.customers.map((c) =>
+            ids.includes(c.id)
+              ? {
+                  ...c,
+                  status,
+                  onlineStatus: status === 'Active' ? 'online' : 'offline',
+                }
+              : c
+          ),
           selectedCustomerIds: [],
         }));
         get().addToast({

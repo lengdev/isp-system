@@ -1,36 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const SESSIONS_CACHE_FILE = path.join(__dirname, '.sessions-cache.json');
-
-function loadCachedSessions(): any[] {
-  try {
-    if (fs.existsSync(SESSIONS_CACHE_FILE)) {
-      const raw = fs.readFileSync(SESSIONS_CACHE_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        // Filter out expired sessions (> 30 days old)
-        const now = Date.now();
-        return parsed.filter((s) => s.expiresAt && new Date(s.expiresAt).getTime() > now);
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return [];
-}
-
-function saveCachedSessions(sessions: any[]) {
-  try {
-    fs.writeFileSync(SESSIONS_CACHE_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
-  } catch {
-    // ignore
-  }
-}
 import {
   SEED_USERS,
   SEED_ROUTERS,
@@ -56,15 +24,11 @@ export const prisma = new PrismaClient({
 // Database state tracker
 let isPostgresConnected = false;
 
-export async function initDatabaseConnection() {
-  try {
-    await prisma.$connect();
-    isPostgresConnected = true;
-    console.log('✓ Successfully connected to PostgreSQL via Prisma ORM');
-  } catch (err: any) {
-    isPostgresConnected = false;
-    console.log('ℹ PostgreSQL daemon offline or sandbox restricted. Operating in high-performance memory-store mode.');
-  }
+export async function initDatabaseConnection(): Promise<void> {
+  await prisma.$connect();
+  await prisma.$queryRaw`SELECT 1`;
+  isPostgresConnected = true;
+  console.log('✓ Successfully connected to PostgreSQL via Prisma ORM');
 }
 
 export function isUsingPostgres(): boolean {
@@ -94,7 +58,6 @@ class NetPulseDataStore {
   payments: any[] = [];
   tickets = [...SEED_TICKETS];
   ticketMessages: any[] = [];
-  sessions: any[] = loadCachedSessions();
   auditLogs: any[] = [];
   notifications: any[] = [
     {
@@ -276,10 +239,6 @@ class NetPulseDataStore {
     };
     this.auditLogs.unshift(entry);
     return entry;
-  }
-
-  saveSessions() {
-    saveCachedSessions(this.sessions);
   }
 }
 

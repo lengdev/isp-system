@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AuthService, ROLE_PERMISSIONS } from '../services/auth.service.js';
 import {
   authenticate,
+  requireRole,
   validateBody,
   loginSchema,
   forgotPasswordSchema,
@@ -21,18 +22,20 @@ function getClientIp(req: any): string {
 }
 
 // Cookie configuration helper
-function setRefreshCookie(res: any, refreshToken: string, expiresAt: Date) {
+function setRefreshCookie(res: any, refreshToken: string, expiresAt: Date, rememberMe: boolean = false) {
   const isProduction = process.env.NODE_ENV === 'production';
-  const isSecure = process.env.COOKIE_SECURE === 'true' || isProduction;
-  const maxAge = Math.max(0, expiresAt.getTime() - Date.now());
-
-  res.cookie('refreshToken', refreshToken, {
+  const cookieOptions: any = {
     httpOnly: true,
-    secure: isSecure,
-    sameSite: isProduction ? 'strict' : 'lax',
-    path: '/',
-    maxAge,
-  });
+    sameSite: 'strict',
+    secure: isProduction,
+    path: '/api/v1/auth',
+  };
+
+  if (rememberMe) {
+    cookieOptions.maxAge = Math.max(0, expiresAt.getTime() - Date.now());
+  }
+
+  res.cookie('refresh_token', refreshToken, cookieOptions);
 }
 
 // POST /api/v1/auth/login
@@ -45,12 +48,11 @@ router.post('/login', validateBody(loginSchema), async (req, res) => {
     const result = await AuthService.login(username, password, rememberMe, ip, userAgent);
 
     // Set HTTP-Only Refresh Cookie
-    setRefreshCookie(res, result.refreshToken, result.refreshTokenExpires);
+    setRefreshCookie(res, result.refreshToken, result.refreshTokenExpires, rememberMe);
 
     res.json({
       accessToken: result.accessToken,
       token: result.accessToken, // Backward compatibility
-      refreshToken: result.refreshToken,
       user: result.user,
     });
   } catch (err: any) {
@@ -62,7 +64,7 @@ router.post('/login', validateBody(loginSchema), async (req, res) => {
 // POST /api/v1/auth/refresh
 router.post('/refresh', async (req, res) => {
   try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    const refreshToken = req.cookies?.refresh_token || req.cookies?.refreshToken || req.body?.refreshToken;
     if (!refreshToken) {
       return res.status(401).json({ error: 'No refresh token provided' });
     }
@@ -72,22 +74,22 @@ router.post('/refresh', async (req, res) => {
 
     const result = await AuthService.refresh(refreshToken, ip, userAgent);
 
-    // Set rotated refresh cookie
-    setRefreshCookie(res, result.refreshToken, result.refreshTokenExpires);
+    // Set rotated refresh cookie (preserve rememberMe if session lifetime indicates extended duration)
+    const isRemembered = result.refreshTokenExpires.getTime() - Date.now() > 8 * 24 * 60 * 60 * 1000;
+    setRefreshCookie(res, result.refreshToken, result.refreshTokenExpires, isRemembered);
 
     res.json({
       accessToken: result.accessToken,
       token: result.accessToken,
-      refreshToken: result.refreshToken,
       user: result.user,
     });
   } catch (err: any) {
     // Clear cookie on refresh failure
-    res.clearCookie('refreshToken', {
+    res.clearCookie('refresh_token', {
       httpOnly: true,
-      secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/api/v1/auth',
     });
     res.status(401).json({ error: err.message });
   }
@@ -96,7 +98,7 @@ router.post('/refresh', async (req, res) => {
 // POST /api/v1/auth/logout
 router.post('/logout', async (req, res) => {
   try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    const refreshToken = req.cookies?.refresh_token || req.cookies?.refreshToken || req.body?.refreshToken;
     const ip = getClientIp(req);
     let actorId: string | undefined;
 
@@ -114,10 +116,16 @@ router.post('/logout', async (req, res) => {
     await AuthService.logout(refreshToken, ip, actorId);
 
     // Clear refresh cookie
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/api/v1/auth',
+    });
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
       path: '/',
     });
 
@@ -180,12 +188,17 @@ router.post('/change-password', authenticate, validateBody(changePasswordSchema)
 });
 
 // GET /api/v1/auth/users
-router.get('/users', (_req, res) => {
-  res.json(AuthService.listUsers());
+router.get('/users', authenticate, requireRole('SUPER_ADMIN'), async (_req, res) => {
+  try {
+    const users = await AuthService.listUsers();
+    res.json(users);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/auth/users
-router.post('/users', async (req, res) => {
+router.post('/users', authenticate, requireRole('SUPER_ADMIN'), async (req, res) => {
   try {
     const user = await AuthService.createUser(req.body);
     res.status(201).json(user);

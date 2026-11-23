@@ -233,7 +233,18 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
       parseDateSafe(defaultValue)
     );
     const isControlled = controlledValue !== undefined;
-    const selectedDate = isControlled ? parseDateSafe(controlledValue) : internalDate;
+
+    // Stable selectedDate memoized by primitive value / timestamp
+    const controlledValKey =
+      controlledValue instanceof Date
+        ? controlledValue.getTime()
+        : controlledValue ?? null;
+
+    const selectedDate = useMemo(() => {
+      return isControlled ? parseDateSafe(controlledValue) : internalDate;
+    }, [isControlled, controlledValKey, internalDate]);
+
+    const selectedTimestamp = selectedDate ? selectedDate.getTime() : null;
 
     // Input text state (allows direct typing)
     const [inputValue, setInputValue] = useState<string>(() =>
@@ -244,9 +255,10 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
     // Keep input text in sync when external selectedDate changes
     useEffect(() => {
       if (!isTyping) {
-        setInputValue(selectedDate ? format(selectedDate, displayFormat) : '');
+        const nextValue = selectedDate ? format(selectedDate, displayFormat) : '';
+        setInputValue((prev) => (prev !== nextValue ? nextValue : prev));
       }
-    }, [selectedDate, displayFormat, isTyping]);
+    }, [selectedTimestamp, displayFormat, isTyping]);
 
     // Calendar popover state
     const [isOpen, setIsOpen] = useState(false);
@@ -260,9 +272,18 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
     // Keep currentMonth synced when selectedDate changes and popover is closed
     useEffect(() => {
       if (selectedDate && !isOpen) {
-        setCurrentMonth(selectedDate);
+        setCurrentMonth((prev) => {
+          if (
+            prev &&
+            prev.getFullYear() === selectedDate.getFullYear() &&
+            prev.getMonth() === selectedDate.getMonth()
+          ) {
+            return prev;
+          }
+          return selectedDate;
+        });
       }
-    }, [selectedDate, isOpen]);
+    }, [selectedTimestamp, isOpen]);
 
     // DOM refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -333,7 +354,7 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
         setInputValue('');
       }
       onBlur?.();
-    }, [onBlur, selectedDate, displayFormat]);
+    }, [onBlur, selectedTimestamp, displayFormat]);
 
     // Handle outside clicks and window events
     useEffect(() => {

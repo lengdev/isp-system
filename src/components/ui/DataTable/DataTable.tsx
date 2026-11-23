@@ -847,9 +847,24 @@ export const DataTable = <T extends Record<string, any>>({
     getExpandedRowModel: getExpandedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     paginateExpandedRows: false,
+    autoResetPageIndex: false,
+    autoResetExpanded: false,
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
   });
+
+  // Go back to page 1 when the query changes
+  useEffect(() => {
+    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+  }, [globalFilter, columnFilters, sorting]);
+
+  // Keep the page in range when the data shrinks
+  const pageCount = table.getPageCount();
+  useEffect(() => {
+    if (pageIndex > 0 && pageIndex >= pageCount) {
+      setPagination((p) => ({ ...p, pageIndex: Math.max(0, pageCount - 1) }));
+    }
+  }, [pageCount, pageIndex]);
 
   // Notify parent of row selection changes
   const onSelectionChangeRef = useRef(onSelectionChange);

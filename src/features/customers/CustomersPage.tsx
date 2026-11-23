@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
@@ -6,6 +6,7 @@ import {
   Wifi,
   HardDrive,
   Plus,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { StatCard } from '../../components/ui/StatCard';
@@ -19,6 +20,13 @@ export const CustomersPage: React.FC = () => {
   const showStatistics = useStore((s) => s.showStatistics);
   const openModal = useStore((s) => s.openModal);
   const currency = useStore((s) => s.currency);
+  const fetchCustomers = useStore((s) => s.fetchCustomers);
+  const isCustomersLoading = useStore((s) => s.isCustomersLoading);
+
+  // Synchronize customers with backend API on mount
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
 
   // Live recalculate stats
   const totalCustomers = customers.length;
@@ -28,7 +36,7 @@ export const CustomersPage: React.FC = () => {
   );
   const activeCount = customers.filter((c) => c.status === 'Active').length;
   const avgUsage = Math.round(
-    customers.reduce((sum, c) => sum + c.dataUsageGB, 0) / (customers.length || 1)
+    customers.reduce((sum, c) => sum + (c.dataUsageGB || 0), 0) / (customers.length || 1)
   );
 
   return (
@@ -45,6 +53,18 @@ export const CustomersPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchCustomers()}
+            disabled={isCustomersLoading}
+            className="h-8 px-3 text-[12px] font-semibold gap-1.5 shrink-0"
+            title="Refresh Customers from Server"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isCustomersLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden min-[480px]:inline">Refresh</span>
+          </Button>
+
           <Button
             variant="primary"
             size="sm"

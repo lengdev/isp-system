@@ -108,6 +108,7 @@ model Session {
   userId           String
   token            String?   @unique
   refreshTokenHash String?   @unique
+  familyId         String?
   userAgent        String?
   ipAddress        String?
   ip               String?
@@ -118,6 +119,7 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([refreshTokenHash])
+  @@index([familyId])
 }
 
 model AuditLog {

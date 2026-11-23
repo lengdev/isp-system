@@ -23,6 +23,9 @@ coverage/
 .env*.local
 !.env.example
 .sessions-cache.json
+*.sql
+!prisma/migrations/**/*.sql
+backup*.sql
 
 # Logs & Debug
 logs/

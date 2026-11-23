@@ -1,9 +1,87 @@
-import { dbStore } from '../db/store.js';
+import { dbStore, prisma, isUsingPostgres } from '../db/store.js';
 import { MikroTikService } from './mikrotik.service.js';
 
 export class CustomerService {
   // 1. List Customers with filters & pagination
   static listCustomers(filters: any = {}) {
+    if (isUsingPostgres()) {
+      return (async () => {
+        const customers = await prisma.customer.findMany({
+          include: {
+            addresses: true,
+            subscriptions: {
+              include: {
+                package: true,
+                pppoeAccount: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        let result = customers.map((c) => {
+          const primaryAddr = c.addresses.find((a) => a.isPrimary) || c.addresses[0];
+          const sub = c.subscriptions[0];
+          return {
+            id: c.id,
+            code: c.code,
+            type: c.type,
+            status: c.status,
+            fullName: c.fullName,
+            email: c.email,
+            phone: c.phone,
+            address: primaryAddr?.addressLine || 'N/A',
+            city: primaryAddr?.city || 'Phnom Penh',
+            balanceDue: Number(c.balanceDue),
+            rating: Number(c.rating),
+            planId: sub?.packageId || 'pkg-2',
+            planName: sub?.package?.name || 'Fiber Ultra 300M',
+            monthlyPrice: Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 55.0),
+            connectionType: sub?.technology || 'FIBER',
+            ipAddress: sub?.pppoeAccount?.ipAddress || '10.20.1.42',
+            macAddress: sub?.pppoeAccount?.macAddress || '48:8F:5A:12:44:01',
+            pppoeUsername: sub?.pppoeAccount?.username || '',
+            registrationDate: c.registrationDate?.toISOString() || c.createdAt.toISOString(),
+          };
+        });
+
+        if (filters.status && filters.status.length > 0) {
+          const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
+          result = result.filter((c) => statuses.map((s: string) => s.toUpperCase()).includes(c.status.toUpperCase()));
+        }
+
+        if (filters.plan && filters.plan.length > 0) {
+          const plans = Array.isArray(filters.plan) ? filters.plan : [filters.plan];
+          result = result.filter((c) => plans.includes(c.planName));
+        }
+
+        if (filters.city && filters.city.length > 0) {
+          const cities = Array.isArray(filters.city) ? filters.city : [filters.city];
+          result = result.filter((c) => cities.includes(c.city));
+        }
+
+        if (filters.connectionType && filters.connectionType.length > 0) {
+          const types = Array.isArray(filters.connectionType) ? filters.connectionType : [filters.connectionType];
+          result = result.filter((c) => types.map((t: string) => t.toUpperCase()).includes(c.connectionType.toUpperCase()));
+        }
+
+        if (filters.searchQuery) {
+          const q = filters.searchQuery.toLowerCase();
+          result = result.filter(
+            (c) =>
+              c.fullName.toLowerCase().includes(q) ||
+              c.code.toLowerCase().includes(q) ||
+              c.email.toLowerCase().includes(q) ||
+              c.phone.toLowerCase().includes(q) ||
+              (c.ipAddress && c.ipAddress.includes(q)) ||
+              (c.macAddress && c.macAddress.toLowerCase().includes(q))
+          );
+        }
+
+        return result;
+      })();
+    }
+
     let result = [...dbStore.customers];
 
     if (filters.status && filters.status.length > 0) {
@@ -44,6 +122,82 @@ export class CustomerService {
 
   // 2. Get Full Customer 360 Profile
   static getCustomerProfile(id: string) {
+    if (isUsingPostgres()) {
+      return (async () => {
+        const customer = await prisma.customer.findFirst({
+          where: {
+            OR: [{ id }, { code: id }],
+          },
+          include: {
+            addresses: true,
+            subscriptions: {
+              include: {
+                package: true,
+                pppoeAccount: true,
+              },
+            },
+            invoices: true,
+            payments: true,
+            tickets: true,
+            installations: true,
+            assignedEquipments: true,
+          },
+        });
+
+        if (!customer) throw new Error('Customer not found');
+
+        const primaryAddr = customer.addresses.find((a) => a.isPrimary) || customer.addresses[0];
+        const sub = customer.subscriptions[0];
+        const formattedCust = {
+          id: customer.id,
+          code: customer.code,
+          type: customer.type,
+          status: customer.status,
+          fullName: customer.fullName,
+          email: customer.email,
+          phone: customer.phone,
+          address: primaryAddr?.addressLine || 'N/A',
+          city: primaryAddr?.city || 'Phnom Penh',
+          balanceDue: Number(customer.balanceDue),
+          rating: Number(customer.rating),
+          planId: sub?.packageId || 'pkg-2',
+          planName: sub?.package?.name || 'Fiber Ultra 300M',
+          monthlyPrice: Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 55.0),
+          connectionType: sub?.technology || 'FIBER',
+          ipAddress: sub?.pppoeAccount?.ipAddress || '10.20.1.42',
+          macAddress: sub?.pppoeAccount?.macAddress || '48:8F:5A:12:44:01',
+          pppoeUsername: sub?.pppoeAccount?.username || '',
+          registrationDate: customer.registrationDate?.toISOString() || customer.createdAt.toISOString(),
+        };
+
+        const networkInfo = {
+          connectionType: formattedCust.connectionType,
+          pppoeUsername: formattedCust.pppoeUsername || `${formattedCust.fullName.toLowerCase().replace(/\s+/g, '_')}_pppoe`,
+          assignedRouter: 'Core-CCR2004-East (Phnom Penh POP)',
+          routerId: 'rtr-core-1',
+          vlanId: formattedCust.connectionType === 'WIRELESS' ? 30 : 20,
+          vlanName: formattedCust.connectionType === 'WIRELESS' ? 'VLAN30_WISP_Subscribers' : 'VLAN20_Fiber_PP_Residential',
+          ipAddress: formattedCust.ipAddress || '10.20.1.42',
+          ipPool: formattedCust.connectionType === 'WIRELESS' ? 'pool-wireless-subscribers' : 'pool-fiber-residential',
+          macAddress: formattedCust.macAddress || '48:8F:5A:12:44:01',
+          connectionStatus: formattedCust.status === 'ACTIVE' ? 'Online' : 'Offline',
+          lastLogin: '2026-11-22T08:14:00Z',
+          assignedSpeed: formattedCust.planName,
+          opticalPowerDbm: -19.4,
+        };
+
+        return {
+          customer: formattedCust,
+          networkInfo,
+          invoices: customer.invoices,
+          payments: customer.payments,
+          tickets: customer.tickets,
+          installations: customer.installations,
+          equipments: customer.assignedEquipments,
+        };
+      })();
+    }
+
     const customer = dbStore.customers.find((c) => c.id === id || c.code === id);
     if (!customer) throw new Error('Customer not found');
 
@@ -93,13 +247,13 @@ export class CustomerService {
       address: data.address,
       city: data.city || 'Phnom Penh',
       type: data.type || 'RESIDENTIAL',
-      status: data.status || 'PENDING',
+      status: (data.status || 'PENDING').toUpperCase(),
       rating: 5.0,
       balanceDue: 0.0,
       planId: data.planId || 'pkg-2',
       planName: data.planName || 'Fiber Ultra 300M',
       monthlyPrice: Number(data.monthlyPrice) || 55.0,
-      connectionType: data.connectionType || 'FIBER',
+      connectionType: (data.connectionType || 'FIBER').toUpperCase(),
       ipAddress: data.ipAddress || `10.20.1.${Math.floor(Math.random() * 200) + 10}`,
       macAddress: data.macAddress || '48:8F:5A:12:44:' + Math.floor(Math.random() * 90 + 10),
       pppoeUsername: `${data.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`,
@@ -110,53 +264,140 @@ export class CustomerService {
     dbStore.customers.unshift(newCustomer);
     dbStore.logAudit('CREATE_CUSTOMER', 'Customer', newCustomer.code, `Registered customer ${newCustomer.fullName}`);
 
+    if (isUsingPostgres()) {
+      return (async () => {
+        try {
+          await prisma.customer.create({
+            data: {
+              id: newCustomer.id,
+              code: newCustomer.code,
+              fullName: newCustomer.fullName,
+              email: newCustomer.email,
+              phone: newCustomer.phone,
+              type: (newCustomer.type as any) || 'RESIDENTIAL',
+              status: (newCustomer.status as any) || 'PENDING',
+              addresses: {
+                create: {
+                  addressLine: newCustomer.address,
+                  city: newCustomer.city,
+                  isPrimary: true,
+                },
+              },
+              subscriptions: {
+                create: {
+                  subscriptionNumber: `SUB-${Date.now()}`,
+                  packageId: newCustomer.planId,
+                  technology: (newCustomer.connectionType as any) || 'FIBER',
+                  monthlyFee: newCustomer.monthlyPrice,
+                },
+              },
+            },
+          });
+        } catch (e) {
+          console.error('Error creating customer in Postgres:', e);
+        }
+        return newCustomer;
+      })();
+    }
+
     return newCustomer;
   }
 
   // 4. Update Customer
   static updateCustomer(id: string, updates: any) {
     const cust = dbStore.customers.find((c) => c.id === id);
-    if (!cust) throw new Error('Customer not found');
+    if (!cust && !isUsingPostgres()) throw new Error('Customer not found');
 
-    Object.assign(cust, updates);
-    dbStore.logAudit('UPDATE_CUSTOMER', 'Customer', cust.code, `Updated customer ${cust.fullName}`);
+    if (cust) {
+      Object.assign(cust, updates);
+      dbStore.logAudit('UPDATE_CUSTOMER', 'Customer', cust.code, `Updated customer ${cust.fullName}`);
+    }
+
+    if (isUsingPostgres()) {
+      return (async () => {
+        try {
+          const prismaData: any = {};
+          if (updates.fullName) prismaData.fullName = updates.fullName;
+          if (updates.email) prismaData.email = updates.email;
+          if (updates.phone) prismaData.phone = updates.phone;
+          if (updates.status) prismaData.status = updates.status.toUpperCase();
+          if (Object.keys(prismaData).length > 0) {
+            await prisma.customer.updateMany({
+              where: { OR: [{ id }, { code: id }] },
+              data: prismaData,
+            });
+          }
+        } catch (e) {
+          console.error('Error updating customer in Postgres:', e);
+        }
+        return cust || updates;
+      })();
+    }
+
     return cust;
   }
 
   // 5. Delete Customer
   static deleteCustomer(id: string) {
     const idx = dbStore.customers.findIndex((c) => c.id === id);
-    if (idx === -1) throw new Error('Customer not found');
+    let deleted = null;
+    if (idx !== -1) {
+      [deleted] = dbStore.customers.splice(idx, 1);
+      dbStore.logAudit('DELETE_CUSTOMER', 'Customer', deleted.code, `Deleted customer ${deleted.fullName}`);
+    }
 
-    const [deleted] = dbStore.customers.splice(idx, 1);
-    dbStore.logAudit('DELETE_CUSTOMER', 'Customer', deleted.code, `Deleted customer ${deleted.fullName}`);
+    if (isUsingPostgres()) {
+      return (async () => {
+        try {
+          await prisma.customer.deleteMany({
+            where: { OR: [{ id }, { code: id }] },
+          });
+        } catch (e) {
+          console.error('Error deleting customer in Postgres:', e);
+        }
+        return deleted || { id };
+      })();
+    }
+
+    if (!deleted) throw new Error('Customer not found');
     return deleted;
   }
 
   // 6. Set Customer Status (Triggers Network Suspension / Reconnection)
   static async setStatus(id: string, status: string, reason?: string) {
     const cust = dbStore.customers.find((c) => c.id === id);
-    if (!cust) throw new Error('Customer not found');
+    const prevStatus = cust?.status || 'UNKNOWN';
+    if (cust) {
+      cust.status = status as any;
+    }
 
-    const prevStatus = cust.status;
-    cust.status = status as any;
-
-    if (cust.pppoeUsername) {
-      if (status === 'SUSPENDED' || status === 'DISCONNECTED') {
+    if (cust?.pppoeUsername) {
+      if (status.toUpperCase() === 'SUSPENDED' || status.toUpperCase() === 'DISCONNECTED') {
         await MikroTikService.suspendSubscriber('rtr-core-1', cust.pppoeUsername, reason || 'Administrative suspension');
-      } else if (status === 'ACTIVE' && (prevStatus === 'SUSPENDED' || prevStatus === 'DISCONNECTED')) {
+      } else if (status.toUpperCase() === 'ACTIVE' && (prevStatus === 'SUSPENDED' || prevStatus === 'DISCONNECTED')) {
         await MikroTikService.reconnectSubscriber('rtr-core-1', cust.pppoeUsername);
+      }
+    }
+
+    if (isUsingPostgres()) {
+      try {
+        await prisma.customer.updateMany({
+          where: { OR: [{ id }, { code: id }] },
+          data: { status: status.toUpperCase() as any },
+        });
+      } catch (e) {
+        console.error('Error updating customer status in Postgres:', e);
       }
     }
 
     dbStore.logAudit(
       'STATUS_CHANGE',
       'Customer',
-      cust.code,
+      cust?.code || id,
       `Changed status from ${prevStatus} to ${status}. Reason: ${reason || 'N/A'}`
     );
 
-    return cust;
+    return cust || { id, status };
   }
 
   // 7. Diagnostic Speed Test

@@ -4,10 +4,10 @@ import { CustomerService } from '../services/customer.service.js';
 const router = Router();
 
 // GET /api/v1/customers
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const filters = req.query;
-    const customers = CustomerService.listCustomers(filters);
+    const customers = await CustomerService.listCustomers(filters);
     res.json(customers);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -15,9 +15,9 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/v1/customers/:id
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const profile = CustomerService.getCustomerProfile(req.params.id);
+    const profile = await CustomerService.getCustomerProfile(req.params.id);
     res.json(profile);
   } catch (err: any) {
     res.status(404).json({ error: err.message });
@@ -25,9 +25,9 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/v1/customers
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const customer = CustomerService.createCustomer(req.body);
+    const customer = await CustomerService.createCustomer(req.body);
     res.status(201).json(customer);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -35,9 +35,9 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/v1/customers/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const updated = CustomerService.updateCustomer(req.params.id, req.body);
+    const updated = await CustomerService.updateCustomer(req.params.id, req.body);
     res.json(updated);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -45,9 +45,9 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/v1/customers/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const deleted = CustomerService.deleteCustomer(req.params.id);
+    const deleted = await CustomerService.deleteCustomer(req.params.id);
     res.json({ message: 'Customer archived/deleted successfully', customer: deleted });
   } catch (err: any) {
     res.status(400).json({ error: err.message });

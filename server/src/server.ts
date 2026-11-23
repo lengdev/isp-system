@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
-import { initDatabaseConnection } from './db/store.js';
+import { initDatabaseConnection, prisma } from './db/store.js';
 import { openApiSpec } from './docs/openapi.js';
 import { authenticate, requireRole } from './middleware/auth.middleware.js';
 
@@ -246,30 +246,79 @@ app.use(
 
 // Centralized error handling
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[NetPulse Error]:', err);
+  // Map Prisma connection errors (P1001, P1002, P1017) to HTTP 503
+  if (
+    err.code === 'P1001' ||
+    err.code === 'P1002' ||
+    err.code === 'P1017' ||
+    err.name === 'PrismaClientInitializationError'
+  ) {
+    console.error('[NetPulse Error]: Database connection error (503)');
+    return res.status(503).json({
+      error: 'Service temporarily unavailable',
+    });
+  }
+
+  console.error('[NetPulse Error]:', err.message || err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
   });
 });
 
+let server: any = null;
+
+const shutdown = async (signal: string) => {
+  console.log(`\n[NetPulse] Received ${signal}. Shutting down gracefully...`);
+  if (server) {
+    server.close(async () => {
+      console.log('[NetPulse] HTTP server closed.');
+      try {
+        await prisma.$disconnect();
+        console.log('[NetPulse] Database disconnected.');
+      } catch (err) {
+        console.error('[NetPulse] Error during database disconnect:', err);
+      }
+      process.exit(0);
+    });
+  } else {
+    try {
+      await prisma.$disconnect();
+    } catch {}
+    process.exit(0);
+  }
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+async function startServer() {
+  try {
+    await initDatabaseConnection();
+  } catch (err: any) {
+    console.error('[NetPulse FATAL]: Database connection failed. Aborting startup.');
+    process.exit(1);
+  }
+
+  server = app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`=======================================================`);
+    console.log(`🚀 NetPulse ISP ERP Backend running on port ${PORT}`);
+    console.log(`📡 REST API Gateway: http://localhost:${PORT}/api/v1`);
+    console.log(`📚 Swagger Docs:    http://localhost:${PORT}/api/docs`);
+    console.log(`=======================================================`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\x1b[31m[NetPulse Fatal]: Port ${PORT} is already in use by another process!\x1b[0m`);
+      console.error(`To free port ${PORT}, run: kill -9 $(lsof -t -i:${PORT})\n`);
+    } else {
+      console.error('[NetPulse Server Listen Error]:', err);
+    }
+    process.exit(1);
+  });
+}
+
 // Start Server if directly executed
 if (process.env.NODE_ENV !== 'test') {
-  initDatabaseConnection().then(() => {
-    const s = app.listen(Number(PORT), '0.0.0.0', () => {
-      console.log(`=======================================================`);
-      console.log(`🚀 NetPulse ISP ERP Backend running on port ${PORT}`);
-      console.log(`📡 REST API Gateway: http://localhost:${PORT}/api/v1`);
-      console.log(`📚 Swagger Docs:    http://localhost:${PORT}/api/docs`);
-      console.log(`=======================================================`);
-    });
-    s.on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        console.error(`\x1b[31m[NetPulse Fatal]: Port ${PORT} is already in use by another process!\x1b[0m`);
-        console.error(`To free port ${PORT}, run: kill -9 $(lsof -t -i:${PORT})\n`);
-      } else {
-        console.error('[NetPulse Server Listen Error]:', err);
-      }
-      process.exit(1);
-    });
-  });
+  startServer();
 }
