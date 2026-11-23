@@ -36,6 +36,8 @@ export default [
   {
     ignores: [
       'dist/**',
+      'dist-server/**',
+      'build/**',
       'node_modules/**',
       '*.tsbuildinfo',
       '**/*.d.ts',

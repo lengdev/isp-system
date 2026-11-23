@@ -94,7 +94,7 @@ async function main() {
             email: du.email,
             fullName: du.fullName,
             passwordHash: hash,
-            role: du.role as any,
+            role: du.role,
             isActive: true,
             failedLoginAttempts: 0,
             lockedUntil: null,
@@ -104,7 +104,7 @@ async function main() {
             email: du.email,
             fullName: du.fullName,
             passwordHash: hash,
-            role: du.role as any,
+            role: du.role,
             isActive: true,
           },
         });

@@ -1046,7 +1046,6 @@ export const DataTable = <T extends Record<string, any>>({
     if (initialColFilters.length > 0) {
       table.setColumnFilters(initialColFilters);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // MultiSort rules
