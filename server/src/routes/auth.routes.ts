@@ -29,8 +29,8 @@ function setRefreshCookie(res: any, refreshToken: string, expiresAt: Date) {
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: isSecure,
-    sameSite: 'strict',
-    path: '/api/v1/auth',
+    sameSite: isProduction ? 'strict' : 'lax',
+    path: '/',
     maxAge,
   });
 }
@@ -44,12 +44,13 @@ router.post('/login', validateBody(loginSchema), async (req, res) => {
 
     const result = await AuthService.login(username, password, rememberMe, ip, userAgent);
 
-    // Set HTTP-Only Strict Refresh Cookie
+    // Set HTTP-Only Refresh Cookie
     setRefreshCookie(res, result.refreshToken, result.refreshTokenExpires);
 
     res.json({
       accessToken: result.accessToken,
       token: result.accessToken, // Backward compatibility
+      refreshToken: result.refreshToken,
       user: result.user,
     });
   } catch (err: any) {
@@ -77,6 +78,7 @@ router.post('/refresh', async (req, res) => {
     res.json({
       accessToken: result.accessToken,
       token: result.accessToken,
+      refreshToken: result.refreshToken,
       user: result.user,
     });
   } catch (err: any) {
@@ -84,8 +86,8 @@ router.post('/refresh', async (req, res) => {
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/api/v1/auth',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/',
     });
     res.status(401).json({ error: err.message });
   }
@@ -115,8 +117,8 @@ router.post('/logout', async (req, res) => {
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/api/v1/auth',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/',
     });
 
     res.json({ message: 'Logged out successfully' });

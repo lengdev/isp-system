@@ -98,23 +98,46 @@ export const AppContent: React.FC = () => {
     document.documentElement.setAttribute('data-motion', animations || 'system');
   }, [darkMode, themeMode, comfort, density, animations]);
 
-  // Silently restore session on mount via refresh token cookie
+  // Silently restore session on mount via refresh token
   useEffect(() => {
     let isMounted = true;
     const restoreSession = async () => {
+      const isAuthPage =
+        typeof window !== 'undefined' &&
+        (window.location.pathname.startsWith('/login') ||
+          window.location.pathname.startsWith('/forgot-password') ||
+          window.location.pathname.startsWith('/reset-password'));
+
+      let hasStoredToken = false;
+      try {
+        hasStoredToken = Boolean(
+          sessionStorage.getItem('netpulse_refresh_token') ||
+          localStorage.getItem('netpulse_refresh_token')
+        );
+      } catch {
+        // ignore
+      }
+
+      // If on auth page and no stored token, skip refresh call to avoid 401 in console
+      if (isAuthPage && !hasStoredToken) {
+        setStatus('unauthenticated');
+        return;
+      }
+
       try {
         setStatus('loading');
         const refreshRes = await api.auth.refresh();
         if (refreshRes && refreshRes.accessToken) {
+          if (isMounted) {
+            setAuth(refreshRes.accessToken, refreshRes.user);
+          }
           try {
             const meRes = await api.auth.me();
-            if (isMounted) {
-              setAuth(refreshRes.accessToken, meRes.user || refreshRes.user);
+            if (isMounted && meRes?.user) {
+              setAuth(refreshRes.accessToken, meRes.user);
             }
           } catch {
-            if (isMounted) {
-              setAuth(refreshRes.accessToken, refreshRes.user);
-            }
+            // Background profile refresh fallback
           }
         } else {
           if (isMounted) clearAuth();
@@ -512,7 +535,12 @@ export const AppContent: React.FC = () => {
 
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <AppContent />
     </BrowserRouter>
   );

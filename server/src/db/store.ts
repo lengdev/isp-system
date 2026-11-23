@@ -1,4 +1,36 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const SESSIONS_CACHE_FILE = path.join(__dirname, '.sessions-cache.json');
+
+function loadCachedSessions(): any[] {
+  try {
+    if (fs.existsSync(SESSIONS_CACHE_FILE)) {
+      const raw = fs.readFileSync(SESSIONS_CACHE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Filter out expired sessions (> 30 days old)
+        const now = Date.now();
+        return parsed.filter((s) => s.expiresAt && new Date(s.expiresAt).getTime() > now);
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function saveCachedSessions(sessions: any[]) {
+  try {
+    fs.writeFileSync(SESSIONS_CACHE_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
+  } catch {
+    // ignore
+  }
+}
 import {
   SEED_USERS,
   SEED_ROUTERS,
@@ -62,7 +94,7 @@ class NetPulseDataStore {
   payments: any[] = [];
   tickets = [...SEED_TICKETS];
   ticketMessages: any[] = [];
-  sessions: any[] = [];
+  sessions: any[] = loadCachedSessions();
   auditLogs: any[] = [];
   notifications: any[] = [
     {
@@ -244,6 +276,10 @@ class NetPulseDataStore {
     };
     this.auditLogs.unshift(entry);
     return entry;
+  }
+
+  saveSessions() {
+    saveCachedSessions(this.sessions);
   }
 }
 

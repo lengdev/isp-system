@@ -474,16 +474,20 @@ export const DataTable = <T extends Record<string, any>>({
   // Auto-refresh timer for live tables (30s)
   useEffect(() => {
     if (!autoRefreshInterval || !onRefresh) return;
+    let isMounted = true;
     const interval = setInterval(() => {
+      if (!isMounted) return;
       onRefresh();
       setLastUpdated(0);
     }, autoRefreshInterval * 1000);
 
     const secondsTicker = setInterval(() => {
+      if (!isMounted) return;
       setLastUpdated((prev) => prev + 1);
     }, 1000);
 
     return () => {
+      isMounted = false;
       clearInterval(interval);
       clearInterval(secondsTicker);
     };
@@ -491,16 +495,20 @@ export const DataTable = <T extends Record<string, any>>({
 
   // Window resize: auto-force cards on small screens (<768px)
   useEffect(() => {
+    let isMounted = true;
     const handleResize = () => {
+      if (!isMounted) return;
       const width = window.innerWidth;
       if (width < 768) {
-        setViewModeState('cards');
+        setViewModeState((prev) => (prev !== 'cards' ? 'cards' : prev));
       }
     };
 
-    handleResize();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
 
@@ -812,12 +820,20 @@ export const DataTable = <T extends Record<string, any>>({
   });
 
   // Notify parent of row selection changes
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+  const isFirstSelectionChange = useRef(true);
+
   useEffect(() => {
-    if (onSelectionChange) {
-      const selected = table.getSelectedRowModel().rows.map((r) => r.original);
-      onSelectionChange(selected);
+    if (isFirstSelectionChange.current) {
+      isFirstSelectionChange.current = false;
+      return;
     }
-  }, [rowSelection, onSelectionChange, table]);
+    if (onSelectionChangeRef.current) {
+      const selected = table.getSelectedRowModel().rows.map((r) => r.original);
+      onSelectionChangeRef.current(selected);
+    }
+  }, [rowSelection]);
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const rows = table.getRowModel().rows;
@@ -885,17 +901,32 @@ export const DataTable = <T extends Record<string, any>>({
   const [isOverflowingX, setIsOverflowingX] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    let animId: number | null = null;
     const container = tableContainerRef.current;
     if (!container) return;
 
     const checkOverflow = () => {
-      setIsOverflowingX(totalTableWidth > container.clientWidth);
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+      }
+      animId = requestAnimationFrame(() => {
+        if (!isMounted || !container) return;
+        const overflows = totalTableWidth > container.clientWidth;
+        setIsOverflowingX((prev) => (prev !== overflows ? overflows : prev));
+      });
     };
 
-    checkOverflow();
     const ro = new ResizeObserver(checkOverflow);
     ro.observe(container);
-    return () => ro.disconnect();
+
+    return () => {
+      isMounted = false;
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+      }
+      ro.disconnect();
+    };
   }, [totalTableWidth]);
 
   // TanStack Virtualizer
@@ -1015,7 +1046,8 @@ export const DataTable = <T extends Record<string, any>>({
     if (initialColFilters.length > 0) {
       table.setColumnFilters(initialColFilters);
     }
-  }, [columns, table]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // MultiSort rules
   const currentSortRules: MultiSortRule[] = sorting.map((s) => ({

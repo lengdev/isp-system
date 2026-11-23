@@ -71,10 +71,17 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'vlan:*',
     'ipam:*',
     'ticket:*',
+    'installation:*',
+    'technician:*',
+    'operations:*',
+    'inventory:view',
+    'report:*',
   ],
   TECHNICIAN: [
     'customer:view',
     'installation:*',
+    'technician:*',
+    'operations:*',
     'ticket:*',
     'inventory:view',
     'equipment:assign',
@@ -82,6 +89,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   FIELD_TECHNICIAN: [
     'customer:view',
     'installation:*',
+    'technician:*',
+    'operations:*',
     'ticket:*',
     'inventory:view',
     'equipment:assign',
@@ -89,6 +98,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPPORT_AGENT: [
     'customer:*',
     'ticket:*',
+    'operations:*',
+    'technician:view',
     'subscription:view',
     'portal:*',
   ],
@@ -206,13 +217,35 @@ export class AuthService {
       }
     }
 
-    // Compare password with bcrypt
-    const isMatch = await bcrypt.compare(passwordPlain, user.passwordHash);
+    // Compare password with bcrypt (supports plain text and client SHA-256 hash)
+    let isMatch = await bcrypt.compare(passwordPlain, user.passwordHash);
+    
+    // Support client-side SHA-256 hashed passwords
+    const admin123Sha = '5c06eb3d5a05a19f49476d694ca81a36344660e9d5b98e3d6a6630f31c2422e7';
+    const netpulse123Sha = 'f5ed0db118fa35aa505c070bc719148a1f9186d26e66a9a79ba777e8ecf45714';
+
     // Allow dev convenience passwords in non-production
     const isDev = process.env.NODE_ENV !== 'production';
-    const isDemoPass = isDev && (passwordPlain === 'admin123!' || passwordPlain === 'netpulse123');
+    const isDemoPass =
+      isDev &&
+      (passwordPlain === 'admin123!' ||
+        passwordPlain === 'netpulse123' ||
+        passwordPlain === admin123Sha ||
+        passwordPlain === netpulse123Sha);
 
-    if (!isMatch && !isDemoPass) {
+    if (!isMatch && isDemoPass) {
+      isMatch = true;
+    }
+
+    if (!isMatch && /^[a-f0-9]{64}$/i.test(passwordPlain)) {
+      if (passwordPlain === admin123Sha) {
+        isMatch = (await bcrypt.compare('admin123!', user.passwordHash)) || isDemoPass;
+      } else if (passwordPlain === netpulse123Sha) {
+        isMatch = (await bcrypt.compare('netpulse123', user.passwordHash)) || isDemoPass;
+      }
+    }
+
+    if (!isMatch) {
       recordFailedAttempt(attemptKey);
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
 
@@ -263,6 +296,7 @@ export class AuthService {
       createdAt: new Date().toISOString(),
     };
     dbStore.sessions.push(session);
+    dbStore.saveSessions();
 
     dbStore.logAudit('LOGIN_SUCCESS', 'User', user.id, `User ${user.username} successfully authenticated`, user.username, ip);
 
@@ -301,13 +335,55 @@ export class AuthService {
       throw new Error('Invalid refresh token');
     }
 
-    // Reuse detection: If token was already revoked, revoke all sessions for this user family
+    // Reuse detection: If token was already revoked, check grace period
     if (session.revokedAt) {
+      const revokedAtMs = new Date(session.revokedAt).getTime();
+      const nowMs = Date.now();
+      const GRACE_PERIOD_MS = 10000; // 10-second grace window for concurrent requests / React StrictMode
+
+      if (nowMs - revokedAtMs <= GRACE_PERIOD_MS && session.replacedBySessionId) {
+        // Concurrency window: Return the already-rotated active session safely
+        const activeSession = dbStore.sessions.find(
+          (s) => s.id === session.replacedBySessionId && !s.revokedAt
+        );
+        if (activeSession) {
+          const user = dbStore.users.find((u) => u.id === activeSession.userId && u.isActive);
+          if (user) {
+            const payload: TokenPayload = {
+              userId: user.id,
+              username: user.username,
+              email: user.email,
+              role: user.role,
+              roles: [user.role],
+              fullName: user.fullName,
+            };
+            const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_ACCESS_EXPIRES_IN });
+            return {
+              token: accessToken,
+              accessToken,
+              refreshToken: session.replacedByToken || rawRefreshToken,
+              refreshTokenExpires: new Date(activeSession.expiresAt),
+              user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                fullName: user.fullName,
+                role: user.role,
+                roles: [user.role],
+                permissions: ROLE_PERMISSIONS[user.role] || [],
+              },
+            };
+          }
+        }
+      }
+
+      // Beyond grace window: Genuine token reuse detected! Revoke all sessions for this user family
       dbStore.sessions
         .filter((s) => s.userId === session.userId)
         .forEach((s) => {
           s.revokedAt = new Date().toISOString();
         });
+      dbStore.saveSessions();
       dbStore.logAudit(
         'REFRESH_REUSE_DETECTED',
         'Session',
@@ -322,6 +398,7 @@ export class AuthService {
     // Check expiration
     if (new Date(session.expiresAt) < new Date()) {
       session.revokedAt = new Date().toISOString();
+      dbStore.saveSessions();
       dbStore.logAudit('REFRESH_EXPIRED', 'Session', session.id, 'Expired refresh token presented', session.userId, ip);
       throw new Error('Refresh token has expired. Please log in again.');
     }
@@ -330,9 +407,6 @@ export class AuthService {
     if (!user) {
       throw new Error('User account not found or deactivated');
     }
-
-    // Token Rotation: Revoke previous session
-    session.revokedAt = new Date().toISOString();
 
     // Issue new 256-bit Refresh Token and Access Token
     const newRawRefreshToken = crypto.randomBytes(32).toString('hex');
@@ -352,6 +426,12 @@ export class AuthService {
       createdAt: new Date().toISOString(),
     };
     dbStore.sessions.push(newSession);
+
+    // Token Rotation: Link and revoke previous session
+    session.revokedAt = new Date().toISOString();
+    session.replacedBySessionId = newSession.id;
+    session.replacedByToken = newRawRefreshToken;
+    dbStore.saveSessions();
 
     const payload: TokenPayload = {
       userId: user.id,
@@ -392,6 +472,7 @@ export class AuthService {
       const session = dbStore.sessions.find((s) => s.refreshTokenHash === tokenHash);
       if (session) {
         session.revokedAt = new Date().toISOString();
+        dbStore.saveSessions();
         dbStore.logAudit('LOGOUT', 'Session', session.id, `User session revoked`, session.userId || actorId || 'user', ip);
         return { message: 'Logged out successfully' };
       }

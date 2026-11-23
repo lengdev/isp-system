@@ -4,7 +4,7 @@ export const SEED_USERS = [
     id: 'usr-admin-1',
     username: 'admin',
     email: 'admin@netpulse.net',
-    passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma', // password: admin123! or netpulse123
+    passwordHash: '$2b$10$Cy4LMLnWH3B4jdeKbj8BZOSiaVpil9ZKlVLbi3.JeMoDx8Q8kNwuS', // password: admin123! or netpulse123
     fullName: 'David Vance',
     phone: '+855 12 888 001',
     role: 'SUPER_ADMIN',

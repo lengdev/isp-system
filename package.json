@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-all.mjs",
+    "dev:ui": "vite",
     "dev:all": "node scripts/dev-all.mjs",
     "db:seed": "node scripts/seed-admin.mjs",
     "start": "node dist-server/server.js",

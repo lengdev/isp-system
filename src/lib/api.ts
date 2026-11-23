@@ -3,10 +3,33 @@ import { useAuthStore } from '../store/authStore';
 // NetPulse REST API Client
 const BASE_URL = '/api/v1';
 
-let isRefreshing = false;
-let refreshPromise: Promise<string | null> | null = null;
+export async function hashPasswordClient(password: string): Promise<string> {
+  if (!password) return '';
+  // If already a 64-char hex string (SHA-256), return as is
+  if (/^[a-f0-9]{64}$/i.test(password)) return password;
+  try {
+    if (typeof window !== 'undefined' && window.crypto?.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    // fallback if web crypto unavailable
+  }
+  return password;
+}
 
-async function refreshAccessToken(): Promise<string | null> {
+export interface RefreshResult {
+  accessToken: string;
+  user: any;
+}
+
+let isRefreshing = false;
+let refreshPromise: Promise<RefreshResult | null> | null = null;
+
+async function refreshAccessToken(): Promise<RefreshResult | null> {
   if (isRefreshing && refreshPromise) {
     return refreshPromise;
   }
@@ -14,10 +37,22 @@ async function refreshAccessToken(): Promise<string | null> {
   isRefreshing = true;
   refreshPromise = (async () => {
     try {
+      let storedRefreshToken: string | null = null;
+      try {
+        storedRefreshToken =
+          sessionStorage.getItem('netpulse_refresh_token') ||
+          localStorage.getItem('netpulse_refresh_token');
+      } catch {
+        // ignore
+      }
+
+      const body = storedRefreshToken ? JSON.stringify({ refreshToken: storedRefreshToken }) : undefined;
+
       const response = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body,
       });
 
       if (!response.ok) {
@@ -30,10 +65,26 @@ async function refreshAccessToken(): Promise<string | null> {
         if (data.user) {
           useAuthStore.getState().setUser(data.user);
         }
-        return data.accessToken;
+        if (data.refreshToken) {
+          try {
+            sessionStorage.setItem('netpulse_refresh_token', data.refreshToken);
+            if (localStorage.getItem('netpulse_refresh_token')) {
+              localStorage.setItem('netpulse_refresh_token', data.refreshToken);
+            }
+          } catch {
+            // ignore
+          }
+        }
+        return { accessToken: data.accessToken, user: data.user };
       }
       return null;
     } catch {
+      try {
+        sessionStorage.removeItem('netpulse_refresh_token');
+        localStorage.removeItem('netpulse_refresh_token');
+      } catch {
+        // ignore
+      }
       useAuthStore.getState().clearAuth();
       return null;
     } finally {
@@ -70,12 +121,12 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
     !endpoint.startsWith('/auth/login') &&
     !endpoint.startsWith('/auth/refresh')
   ) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
+    const refreshData = await refreshAccessToken();
+    if (refreshData?.accessToken) {
       // Retry original request with newly issued access token
       const retryHeaders = {
         ...headers,
-        Authorization: `Bearer ${newToken}`,
+        Authorization: `Bearer ${refreshData.accessToken}`,
       };
       const retryResponse = await fetch(`${BASE_URL}${endpoint}`, {
         ...options,
@@ -118,35 +169,62 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
 export const api = {
   // Authentication & Session
   auth: {
-    login: (username: string, password: string, rememberMe = false) =>
-      fetchJson<any>('/auth/login', {
+    login: async (username: string, password: string, rememberMe = false) => {
+      const hashedPassword = await hashPasswordClient(password);
+      const res = await fetchJson<any>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password, rememberMe }),
-      }),
-    refresh: () =>
-      fetchJson<any>('/auth/refresh', {
+        body: JSON.stringify({ username, password: hashedPassword, rememberMe }),
+      });
+      if (res?.refreshToken) {
+        try {
+          sessionStorage.setItem('netpulse_refresh_token', res.refreshToken);
+          if (rememberMe) {
+            localStorage.setItem('netpulse_refresh_token', res.refreshToken);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return res;
+    },
+    refresh: () => refreshAccessToken(),
+    logout: async () => {
+      let storedRefreshToken: string | null = null;
+      try {
+        storedRefreshToken =
+          sessionStorage.getItem('netpulse_refresh_token') ||
+          localStorage.getItem('netpulse_refresh_token');
+        sessionStorage.removeItem('netpulse_refresh_token');
+        localStorage.removeItem('netpulse_refresh_token');
+      } catch {
+        // ignore
+      }
+      return fetchJson<any>('/auth/logout', {
         method: 'POST',
-      }),
-    logout: () =>
-      fetchJson<any>('/auth/logout', {
-        method: 'POST',
-      }),
+        body: JSON.stringify({ refreshToken: storedRefreshToken }),
+      });
+    },
     me: () => fetchJson<any>('/auth/me'),
     forgotPassword: (emailOrUsername: string) =>
       fetchJson<any>('/auth/forgot-password', {
         method: 'POST',
         body: JSON.stringify({ emailOrUsername }),
       }),
-    resetPassword: (token: string, newPassword: string) =>
-      fetchJson<any>('/auth/reset-password', {
+    resetPassword: async (token: string, newPassword: string) => {
+      const hashedNew = await hashPasswordClient(newPassword);
+      return fetchJson<any>('/auth/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ token, newPassword }),
-      }),
-    changePassword: (currentPassword: string, newPassword: string) =>
-      fetchJson<any>('/auth/change-password', {
+        body: JSON.stringify({ token, newPassword: hashedNew }),
+      });
+    },
+    changePassword: async (currentPassword: string, newPassword: string) => {
+      const hashedCurrent = await hashPasswordClient(currentPassword);
+      const hashedNew = await hashPasswordClient(newPassword);
+      return fetchJson<any>('/auth/change-password', {
         method: 'POST',
-        body: JSON.stringify({ currentPassword, newPassword }),
-      }),
+        body: JSON.stringify({ currentPassword: hashedCurrent, newPassword: hashedNew }),
+      });
+    },
     getHealth: () => fetchJson<{ status: string }>('/health'),
     getUsers: () => fetchJson<any[]>('/auth/users'),
     createUser: (data: any) => fetchJson<any>('/auth/users', { method: 'POST', body: JSON.stringify(data) }),

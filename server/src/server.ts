@@ -170,25 +170,25 @@ app.use(
 app.use(
   '/api/v1/operations',
   authenticate,
-  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'ADMINISTRATOR'),
+  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'NETWORK_ENGINEER', 'SUPPORT_AGENT', 'ADMINISTRATOR'),
   operationsRoutes
 );
 app.use(
   '/api/v1/installations',
   authenticate,
-  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'ADMINISTRATOR'),
+  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
   operationsRoutes
 );
 app.use(
   '/api/v1/technicians',
   authenticate,
-  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'ADMINISTRATOR'),
+  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
   operationsRoutes
 );
 app.use(
   '/api/v1/inventory',
   authenticate,
-  requireRole('SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PROCUREMENT_OFFICER', 'ADMINISTRATOR'),
+  requireRole('SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PROCUREMENT_OFFICER', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
   inventoryRoutes
 );
 app.use(
@@ -228,7 +228,7 @@ app.use(
 app.use(
   '/api/v1/reports',
   authenticate,
-  requireRole('SUPER_ADMIN', 'ADMINISTRATOR', 'ACCOUNTANT'),
+  requireRole('SUPER_ADMIN', 'ADMINISTRATOR', 'ACCOUNTANT', 'NETWORK_ENGINEER', 'BILLING_CASHIER'),
   reportsRoutes
 );
 app.use(
@@ -255,12 +255,21 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // Start Server if directly executed
 if (process.env.NODE_ENV !== 'test') {
   initDatabaseConnection().then(() => {
-    app.listen(PORT, () => {
+    const s = app.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`=======================================================`);
       console.log(`🚀 NetPulse ISP ERP Backend running on port ${PORT}`);
       console.log(`📡 REST API Gateway: http://localhost:${PORT}/api/v1`);
       console.log(`📚 Swagger Docs:    http://localhost:${PORT}/api/docs`);
       console.log(`=======================================================`);
+    });
+    s.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`\x1b[31m[NetPulse Fatal]: Port ${PORT} is already in use by another process!\x1b[0m`);
+        console.error(`To free port ${PORT}, run: kill -9 $(lsof -t -i:${PORT})\n`);
+      } else {
+        console.error('[NetPulse Server Listen Error]:', err);
+      }
+      process.exit(1);
     });
   });
 }

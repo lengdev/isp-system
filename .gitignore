@@ -9,3 +9,4 @@ dist-ssr
 test-results/
 playwright-report/
 .env
+.sessions-cache.json

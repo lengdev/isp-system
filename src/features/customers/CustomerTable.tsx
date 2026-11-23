@@ -103,9 +103,12 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
     return result;
   }, [customers, filters]);
 
-  // Clear selection on load (0 rows selected on load)
+  // Clear selection on load (0 rows selected on load) if needed
   useEffect(() => {
-    clearSelectedCustomers();
+    const current = useStore.getState().selectedCustomerIds;
+    if (current && current.length > 0) {
+      clearSelectedCustomers();
+    }
   }, [clearSelectedCustomers]);
 
   // Distinct cities for filter dropdown

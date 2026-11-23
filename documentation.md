@@ -7,7 +7,7 @@
 
 **NetPulse** is an enterprise-grade ISP ERP, CRM, and Network Operations platform specifically engineered for Internet Service Providers operating mixed **FTTH (Fiber to the Home)** and **Wireless (WISP)** distribution networks with **MikroTik RouterOS** infrastructure, managing 500 to 2,000+ active subscribers.
 
-The system is built on a high-concurrency **PERN (PostgreSQL, Express, React, Node.js)** architecture in strict TypeScript, adhering to single-source-of-truth domain models, double-entry financial controls, and carrier-grade network operations safety.
+The system is built on a high-concurrency **PERN (PostgreSQL, Express, React, Node.js)** architecture in strict TypeScript, adhering to single-source-of-truth domain models, double-entry financial controls, carrier-grade network operations safety, and enterprise authentication standards.
 
 ```
                            +------------------------------------------------+
@@ -16,7 +16,7 @@ The system is built on a high-concurrency **PERN (PostgreSQL, Express, React, No
                            |    Framer Motion, TanStack, Zustand Store)     |
                            +-----------------------+------------------------+
                                                    |
-                                                   | HTTP / REST API & SSE
+                                                   | HTTP / REST API & SSE (Cookies + Bearer)
                                                    v
                            +------------------------------------------------+
                            |           NetPulse API Gateway / Server        |
@@ -48,27 +48,43 @@ The system is built on a high-concurrency **PERN (PostgreSQL, Express, React, No
 
 ## 2. Core Modules Implemented
 
-### 2.1 Identity, Access Control & Compliance
-- **Granular RBAC**: 5 Pre-configured ISP roles:
-  1. `SUPER_ADMIN`: Unrestricted system, infrastructure, and financial authority.
-  2. `NETWORK_ENGINEER`: Full access to MikroTik routers, PPPoE accounts, VLANs, and IPAM.
-  3. `BILLING_CASHIER`: Invoicing, payment collection, KHQR settlement, and cashiering.
-  4. `FIELD_TECHNICIAN`: Work orders, installation tasks, CPE/ONT registration, and site testing.
-  5. `SUPPORT_AGENT`: CRM view, subscriber troubleshooting, speed tests, and ticketing.
-- **Audit Logging**: Every administrative action, status modification, network change, and financial transaction is logged with actor ID, action name, resource ID, client IP, and UTC timestamp.
+### 2.1 Enterprise Authentication & Session Management
+- **Client-Side SHA-256 Pre-Hashing**: Plaintext passwords are automatically hashed with SHA-256 via the Web Crypto API prior to network transmission, ensuring raw passwords never traverse HTTP payloads or appear in browser DevTools Network inspectors.
+- **In-Memory JWT Access Tokens**: Short-lived (15 minutes) JWTs kept strictly in memory (Zustand authStore) and never persisted to `localStorage` or `sessionStorage` to eliminate XSS token theft vectors.
+- **Secure Refresh Token Cookies**: 256-bit cryptographically secure random refresh tokens stored as SHA-256 hashes in the `Session` database table. Sent to clients via `httpOnly`, `Secure` (production), `SameSite=Lax/Strict` cookies (7 days default, 30 days if "Remember me" is checked).
+- **Token Rotation & Concurrency Grace Window**: Strict refresh token rotation invalidates the old token upon issuing a new pair. Includes an RFC 6749/6819 compliant 10-second concurrency grace window to prevent React 18 StrictMode double-mounts from triggering false positive token reuse revocations.
+- **Reuse Detection & Family Revocation**: Reusing an old or invalidated refresh token indicates potential token interception; the system instantly revokes the entire session family and clears all client credentials.
+- **Brute-Force Defense & Account Lockout**: Automatic 15-minute account lockout after 5 consecutive failed login attempts, tracked per user and IP address.
+- **Timing-Safe Comparison & Anti-Enumeration**: Bcrypt (cost factor 10–12) with generic error responses (`Invalid username or password`) for both non-existent users and incorrect passwords.
+- **Security Audit Logging**: Every authentication event (`LOGIN_SUCCESS`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `LOGOUT`, `PASSWORD_CHANGED`, `PASSWORD_RESET_REQUESTED`) is committed to the immutable `AuditLog` table with actor ID, IP address, and UTC timestamp.
+- **Session Cache Resilience**: Active sessions are cached locally (`server/src/db/.sessions-cache.json`) so development sessions seamlessly survive backend restarts and reloads.
 
-### 2.2 MikroTik Network Management & RouterOS API
+### 2.2 Granular Role-Based Access Control (RBAC)
+NetPulse implements strict role-based access control with 5 primary ISP operational roles:
+
+| Role | Responsibilities | Permitted Modules & Views |
+|---|---|---|
+| `SUPER_ADMIN` | Full unrestricted authority | All modules, billing, settings, users, network, accounting, operations |
+| `NETWORK_ENGINEER` | Network infrastructure & field NOC | MikroTik routers, PPPoE, VLANs, IPAM, installations, technician roster, inventory, technical reports |
+| `BILLING_CASHIER` | Subscriber billing & payments | Customers, packages, invoices, payments, KHQR settlement, financial statements |
+| `FIELD_TECHNICIAN` | Dispatch & physical deployment | Scheduled installations, work orders, technician roster, support tickets, inventory dispatch |
+| `SUPPORT_AGENT` | Subscriber CRM & helpdesk | Customer lookup, line speedtests, support tickets, customer communications |
+
+- **Backend Protection**: Layered Express middleware (`authenticate`, `requireRole`, `authorize`) enforces permission barriers across all REST controllers.
+- **Frontend Route Protection**: `<ProtectedRoute>` validates authenticated sessions, `<RequirePermission>` protects granular UI views, and the sidebar dynamically filters items matching user permissions with a dedicated `403 Forbidden` page.
+
+### 2.3 MikroTik Network Management & RouterOS API
 - **Fleet Management**: Secure registration of core routers, distribution switches, and wireless towers with encrypted API credentials (`api-ssl` port 8729, standard port 8728).
 - **PPPoE Provisioning**: Automated creation, modification, suspension, and deletion of `/ppp/secret` records on MikroTik routers with rate-limit queue profiles (`rx-bits-per-second / tx-bits-per-second`).
 - **Session Telemetry**: Real-time inspection of active PPPoE sessions (`/ppp/active`), assigned IP addresses, caller MAC addresses, session uptime, and byte counters.
 - **Diagnostics**: Router health telemetry (CPU load %, memory usage %, system uptime) and remote diagnostic actions (connectivity ping and controlled reboot).
 - **Graceful Simulator Fallback**: When testing or deploying in sandbox environments without live hardware connectivity, an embedded RouterOS simulator ensures full workflow validation without failing transactions.
 
-### 2.3 Carrier-Grade Network Segmentation (VLAN & IPAM)
+### 2.4 Carrier-Grade Network Segmentation (VLAN & IPAM)
 - **VLAN Management**: Scope-aware VLAN catalog supporting Management, Fiber Internet, Wireless Internet, Transport, and Corporate VLANs. Built-in uniqueness validation prevents conflicting VLAN IDs on the same physical router interface.
 - **IP Address Management (IPAM)**: Subnet definition, gateway/DNS configuration, dynamic pool management, and static IP allocation with duplicate assignment prevention across active subscribers.
 
-### 2.4 Double-Entry Accounting & Financial Invariants
+### 2.5 Double-Entry Accounting & Financial Invariants
 NetPulse enforces an uncompromised double-entry general ledger based on standard GAAP/IFRS principles:
 - **Zero-Sum Ledger Rule**: Every journal entry validates that $\sum \text{Debits} \equiv \sum \text{Credits}$ to the exact cent.
 - **Automated Accrual Billing**: Invoice issuance records:
@@ -86,16 +102,16 @@ NetPulse enforces an uncompromised double-entry general ledger based on standard
   - $\text{Credit: Accumulated Depreciation (1510)}$
 - **Financial Statements**: Dynamic generation of **Trial Balance**, **Profit & Loss (P&L)**, **Balance Sheet**, and **AR Aging Reports** (Current, 1–30 days, 31–60 days, 61–90 days, 90+ days).
 
-### 2.5 Multi-Warehouse Inventory & Serialized Tracking
+### 2.6 Multi-Warehouse Inventory & Serialized Tracking
 - **Warehouses**: Multi-facility management (Central Warehouse, Regional Depots, Technician Vehicle Vans).
 - **Stock Movement Controls**: Complete audit trail for Receipts (`IN`), Dispatches (`OUT`), and Site-to-Site Transfers (`TRANSFER`) with automated negative stock prevention.
 - **Serialized Equipment**: Unit-level tracking for ONUs/ONTs, MikroTik routers, and Wireless CPEs with MAC/Serial number verification and customer assignment locking.
 
-### 2.6 Procurement & Supplier Operations
+### 2.7 Procurement & Supplier Operations
 - **Vendor Management**: Approved hardware and fiber optic vendor profiles.
 - **Purchase Orders & Receiving**: Workflow from `DRAFT` $\to$ `APPROVED` $\to$ `RECEIVED`. Generating a Goods Received Note (GRN) automatically increments warehouse stock levels, posts the Accounts Payable journal entry, and prepares supplier invoice payment.
 
-### 2.7 Operations & Field Installations Workflow
+### 2.8 Operations & Field Installations Workflow
 - **End-to-End Work Order Lifecycle**:
   1. Customer order registered and installation work order created.
   2. Field technician assigned with scheduled installation date.
@@ -103,7 +119,7 @@ NetPulse enforces an uncompromised double-entry general ledger based on standard
   4. Technician completes site drop cable, mounts ONT, and triggers field activation.
   5. NetPulse backend provisions the PPPoE secret on the target MikroTik router, attaches the subscription, transitions customer status to `Active`, and issues the first month's invoice.
 
-### 2.8 Customer Self-Service Portal
+### 2.9 Customer Self-Service Portal
 - Direct subscriber portal interface allowing customers to:
   - Check real-time PPPoE connection status, IP address, and bandwidth plan.
   - Review invoice history and outstanding balances.
@@ -127,17 +143,31 @@ The database is defined in `prisma/schema.prisma` with over 30 normalized entiti
 | **Operations & Dispatch** | `Installation`, `Technician`, `SupportTicket`, `TicketComment` |
 | **Automation & Settings** | `Message`, `Notification`, `AutomationRule`, `CompanySetting` |
 
+### Auth Schema Enhancements (`20261123010000_auth_enhancements`):
+- `User`: Added `failedLoginAttempts`, `lockedUntil`, `mustChangePassword`, `resetPasswordTokenHash`, `resetPasswordExpiresAt`.
+- `Session`: Added `refreshTokenHash`, `ip`, `revokedAt`.
+- `UserRoleType`: Added `BILLING_CASHIER`, `FIELD_TECHNICIAN`, `SUPPORT_AGENT`.
+- `AuditLog`: Added `ip`.
+
 ---
 
 ## 4. API Endpoints Reference
 
 All endpoints are prefixed with `/api/v1` and documented via OpenAPI 3.0 at `/api/docs`.
 
-### Authentication & Users
-- `POST /api/v1/auth/login` – Authenticate with username and password; returns JWT token.
-- `GET /api/v1/auth/me` – Retrieve profile and permissions of authenticated user.
-- `GET /api/v1/auth/users` – List administrative and staff users.
+### Authentication & Sessions
+- `POST /api/v1/auth/login` – Authenticate with username and password; returns JWT access token + httpOnly refresh cookie.
+- `POST /api/v1/auth/refresh` – Rotates refresh token and returns new 15-minute access token.
+- `POST /api/v1/auth/logout` – Revokes session in database and clears authentication cookie.
+- `GET /api/v1/auth/me` – Retrieve profile, roles, and permissions of authenticated user.
+- `POST /api/v1/auth/forgot-password` – Initiates password reset flow with secure one-time token.
+- `POST /api/v1/auth/reset-password` – Completes password reset with token verification.
+- `POST /api/v1/auth/change-password` – Authenticated password update.
+- `GET /api/v1/auth/users` – List administrative and staff users (Super Admin only).
 - `POST /api/v1/auth/users` – Create new staff user with role assignment.
+
+### System & Health
+- `GET /api/v1/health` – Public health probe returning `{ status: "ok" }` for the "System Operational" status pill.
 
 ### CRM & Customers
 - `GET /api/v1/customers` – Search, filter, and paginate customer directory.
@@ -243,38 +273,67 @@ Automated backup and restore scripts with compression and 30-day retention pruni
 ```
 
 ### 5.3 Local Development Mode
-To run both backend and frontend concurrently for development:
+To run both backend and frontend concurrently with auto-reload and watch mode:
 
 ```bash
-# Start backend API (port 5000) and Vite dev server (port 5173) concurrently:
+# Compile and start backend API (port 5000) and Vite dev server (port 5173):
 npm run dev:all
 ```
 
+The script compiles the TypeScript backend, launches Node 24 in `--watch` mode targeting `dist-server/server.js`, and spins up Vite with proxy forwarding (`/api` $\to$ `http://localhost:5000`).
+
 ---
 
-## 6. Automated Verification & Quality Assurance
+## 6. Pre-Configured Staff Accounts
+
+| Role | Username | Email | Default Password | Primary Access Scope |
+|---|---|---|---|---|
+| **Super Admin** | `admin` | `admin@netpulse.net` | `admin123!` | Complete unrestricted access across all modules |
+| **Network Engineer** | `engineer` | `noc@netpulse.net` | `admin123!` | MikroTik, PPPoE, VLAN, IPAM, Installations, Technicians, Inventory |
+| **Billing & Cashier** | `cashier` | `cashier@netpulse.net` | `admin123!` | Invoices, Cashier Payments, KHQR, Customer accounts |
+| **Field Technician** | `tech` | `tech@netpulse.net` | `admin123!` | Scheduled installations, work orders, support tickets |
+| **Support Agent** | `support` | `support@netpulse.net` | `admin123!` | Subscriber directory, line diagnostics, tickets |
+
+> [!NOTE]
+> All demo accounts are seeded with password `admin123!`. In production, set `SUPER_ADMIN_PASSWORD` in your `.env` file before executing `npm run db:seed`.
+
+---
+
+## 7. Automated Verification & Quality Assurance
 
 Both the front-end user experience and backend domain logic are covered by automated test suites:
 
 ```bash
-# Run complete test verification
+# Run complete test verification (Regression + Backend + Frontend Auth)
 npm test
 ```
 
-### Test Suite Results:
-- **DataTable & UI Regression Suite**: **22 / 22 Tests Passed**
-  - Viewport boundary detection, popover anchoring, column alignment, sticky offsets, selection counters, status filters, and accessibility compliance.
-- **Backend Domain Logic Suite**: **12 / 12 Tests Passed**
-  - Super Admin JWT authentication and invalid credential rejection.
-  - CRM customer creation, search, and indexing.
-  - MikroTik RouterOS API ping and PPPoE secret provisioning.
-  - VLAN interface duplicate detection and IPAM static pool allocation.
-  - Invoicing duplicate prevention and accrual revenue recognition.
-  - Cashier payment collection and automated overdue subscriber reconnection.
-  - Double-entry accounting balancing ($\text{Debits} \equiv \text{Credits}$).
-  - Multi-warehouse inventory stock tracking and negative inventory blocking.
-  - Full procurement lifecycle: PO $\to$ GRN $\to$ Stock In $\to$ Accounts Payable journal.
-  - End-to-end field installation workflow with RouterOS activation.
-- **Production Compilation**:
-  - `tsc -p server/tsconfig.json`: Clean compile to `dist-server/`.
-  - `tsc -b && vite build`: Clean production build to `dist/`.
+### Complete Test Results: **45 / 45 Tests Passed (100%)**
+
+1. **DataTable & UI Regression Suite**: **22 / 22 Tests Passed**
+   - Viewport boundary detection, popover anchoring, column alignment, sticky offsets, selection counters, status filters, card mode persistence, and accessibility compliance.
+2. **Backend Domain & Security Suite**: **16 / 16 Tests Passed**
+   - Super Admin JWT login & token generation.
+   - Rejection of invalid credentials.
+   - CRM customer creation, search, and indexing.
+   - MikroTik RouterOS API ping and PPPoE secret provisioning.
+   - VLAN interface duplicate detection and IPAM static pool allocation.
+   - Invoicing duplicate prevention and accrual revenue recognition.
+   - Cashier payment collection and automated overdue subscriber reconnection.
+   - Double-entry accounting balancing ($\text{Debits} \equiv \text{Credits}$).
+   - Multi-warehouse inventory stock tracking and negative inventory blocking.
+   - Full procurement lifecycle: PO $\to$ GRN $\to$ Stock In $\to$ Accounts Payable journal.
+   - End-to-end field installation workflow with RouterOS activation.
+   - **5 Failed Login Attempts triggering 15-minute Account Lockout & Audit Log**.
+   - **Refresh token issuance, single-flight rotation, and reuse invalidation**.
+   - **Logout session revocation and cookie clearing**.
+   - **Granular RBAC permissions matrix across all 5 roles**.
+3. **Frontend Auth & RBAC Suite**: **7 / 7 Tests Passed**
+   - Login schema validation & error states.
+   - Forgot password & reset password complexity rules.
+   - Protected route redirection & `?next=` parameter retention.
+   - Zustand store role hierarchy and wildcard permission checks (`installation:*`, `network:*`, etc.).
+
+### Build Verification:
+- `npm run build:server`: `tsc -p server/tsconfig.json` compiles cleanly to `dist-server/` with **0 errors**.
+- `npm run build`: `tsc -b && vite build` compiles cleanly to `dist/` with **0 errors**.
