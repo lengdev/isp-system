@@ -99,7 +99,7 @@ export const AppContent: React.FC = () => {
     document.documentElement.setAttribute('data-motion', animations || 'system');
   }, [darkMode, themeMode, comfort, density, animations]);
 
-  // Silently restore session on mount via refresh token
+  // Silently restore session on mount via refresh token (httpOnly cookie)
   useEffect(() => {
     let isMounted = true;
     const restoreSession = async () => {
@@ -110,26 +110,8 @@ export const AppContent: React.FC = () => {
       // If already authenticated with access token in store, mark initialized and exit immediately
       const currentAuth = useAuthStore.getState();
       if (currentAuth.status === 'authenticated' && currentAuth.accessToken) {
-        if (isMounted && !currentAuth.isInitialized) {
+        if (!currentAuth.isInitialized) {
           setStatus('authenticated');
-        }
-        return;
-      }
-
-      let hasStoredToken = false;
-      try {
-        hasStoredToken = Boolean(
-          sessionStorage.getItem('netpulse_refresh_token') ||
-          localStorage.getItem('netpulse_refresh_token')
-        );
-      } catch {
-        // ignore
-      }
-
-      // If no stored refresh token exists anywhere, do not call refresh endpoint (avoids 401 in console)
-      if (!hasStoredToken) {
-        if (isMounted) {
-          setStatus('unauthenticated');
         }
         return;
       }
@@ -138,22 +120,20 @@ export const AppContent: React.FC = () => {
         setStatus('loading');
         const refreshRes = await api.auth.refresh();
         if (refreshRes && refreshRes.accessToken) {
-          if (isMounted) {
-            setAuth(refreshRes.accessToken, refreshRes.user);
-          }
+          setAuth(refreshRes.accessToken, refreshRes.user);
           try {
             const meRes = await api.auth.me();
-            if (isMounted && meRes?.user) {
+            if (meRes?.user) {
               setAuth(refreshRes.accessToken, meRes.user);
             }
           } catch {
             // Background profile refresh fallback
           }
         } else {
-          if (isMounted) clearAuth();
+          clearAuth();
         }
       } catch {
-        if (isMounted) clearAuth();
+        clearAuth();
       }
     };
 

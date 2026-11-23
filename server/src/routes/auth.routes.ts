@@ -26,14 +26,11 @@ function setRefreshCookie(res: any, refreshToken: string, expiresAt: Date, remem
   const isProduction = process.env.NODE_ENV === 'production';
   const cookieOptions: any = {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'lax',
     secure: isProduction,
     path: '/api/v1/auth',
+    maxAge: Math.max(0, expiresAt.getTime() - Date.now()),
   };
-
-  if (rememberMe) {
-    cookieOptions.maxAge = Math.max(0, expiresAt.getTime() - Date.now());
-  }
 
   res.cookie('refresh_token', refreshToken, cookieOptions);
 }
@@ -88,7 +85,7 @@ router.post('/refresh', async (req, res) => {
     res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/api/v1/auth',
     });
     res.status(401).json({ error: err.message });
@@ -119,7 +116,7 @@ router.post('/logout', async (req, res) => {
     res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/api/v1/auth',
     });
     res.clearCookie('refreshToken', {

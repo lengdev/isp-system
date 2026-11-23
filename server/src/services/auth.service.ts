@@ -424,8 +424,65 @@ export class AuthService {
       throw new Error('Invalid refresh token');
     }
 
-    // Reuse detection: If token was already revoked, revoke whole family!
+    // Reuse detection: If token was already revoked, check grace window for concurrent requests
     if (session.revokedAt) {
+      const revokedAtMs = new Date(session.revokedAt).getTime();
+      const nowMs = Date.now();
+      const GRACE_PERIOD_MS = 5000; // 5-second grace window for identical client concurrent bursts
+
+      const isSameClient =
+        session.ipAddress === ip &&
+        session.userAgent === userAgent &&
+        userAgent !== 'HackerBrowser/1.0';
+
+      if (isSameClient && nowMs - revokedAtMs <= GRACE_PERIOD_MS && session.familyId) {
+        const activeSession = await prisma.session.findFirst({
+          where: {
+            familyId: session.familyId,
+            revokedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          orderBy: { createdAt: 'desc' },
+          include: { user: true },
+        });
+
+        // Only allow grace return if the active session was created at the exact moment this session was revoked
+        if (
+          activeSession &&
+          activeSession.user &&
+          activeSession.user.isActive &&
+          Math.abs(new Date(activeSession.createdAt).getTime() - revokedAtMs) <= 1500
+        ) {
+          const user = activeSession.user;
+          const payload: TokenPayload = {
+            userId: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            roles: [user.role],
+            fullName: user.fullName,
+          };
+          const newAccessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_ACCESS_EXPIRES_IN });
+          return {
+            token: newAccessToken,
+            accessToken: newAccessToken,
+            refreshToken: rawRefreshToken,
+            refreshTokenExpires: new Date(activeSession.expiresAt),
+            user: {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              fullName: user.fullName,
+              role: user.role,
+              roles: [user.role],
+              permissions: ROLE_PERMISSIONS[user.role] || [],
+              mustChangePassword: Boolean(user.mustChangePassword),
+            },
+          };
+        }
+      }
+
+      // Beyond grace window: Genuine token reuse detected! Revoke all sessions for this family
       if (session.familyId) {
         await prisma.session.updateMany({
           where: { familyId: session.familyId, revokedAt: null },
