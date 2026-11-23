@@ -291,45 +291,71 @@ export class CustomerService {
           const router = await tx.router.findFirst();
           const routerId = router?.id || 'rtr-core-1';
 
-          await tx.customer.create({
-            data: {
-              id: newCustomer.id,
-              code: newCustomer.code,
-              fullName: newCustomer.fullName,
-              email: newCustomer.email,
-              phone: newCustomer.phone,
-              type: newCustomer.type as any,
-              status: newCustomer.status as any,
-              rating: new Prisma.Decimal(newCustomer.rating),
-              balanceDue: new Prisma.Decimal(newCustomer.balanceDue),
-              addresses: {
-                create: {
-                  addressLine: newCustomer.address,
-                  city: newCustomer.city,
-                  isPrimary: true,
-                },
+          let code = newCustomer.code;
+          let counter = dbStore.customers.length + 1000;
+          while (await tx.customer.findUnique({ where: { code } })) {
+            counter++;
+            code = `CUST-${counter}`;
+          }
+          newCustomer.code = code;
+
+          const existingByEmail = await tx.customer.findUnique({
+            where: { email: newCustomer.email },
+          });
+
+          if (existingByEmail) {
+            newCustomer.id = existingByEmail.id;
+            newCustomer.code = existingByEmail.code;
+            await tx.customer.update({
+              where: { id: existingByEmail.id },
+              data: {
+                fullName: newCustomer.fullName,
+                phone: newCustomer.phone,
+                type: newCustomer.type as any,
+                status: newCustomer.status as any,
               },
-              subscriptions: {
-                create: {
-                  subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                  packageId: pkgId,
-                  routerId: routerId,
-                  technology: newCustomer.connectionType as any,
-                  status: newCustomer.status as any,
-                  monthlyFee: new Prisma.Decimal(pkgMonthlyPrice),
-                  pppoeAccount: {
-                    create: {
-                      username: newCustomer.pppoeUsername,
-                      passwordHash: 'dummy_hash',
-                      routerId: routerId,
-                      ipAddress: newCustomer.ipAddress,
-                      macAddress: newCustomer.macAddress,
+            });
+          } else {
+            await tx.customer.create({
+              data: {
+                id: newCustomer.id,
+                code: newCustomer.code,
+                fullName: newCustomer.fullName,
+                email: newCustomer.email,
+                phone: newCustomer.phone,
+                type: newCustomer.type as any,
+                status: newCustomer.status as any,
+                rating: new Prisma.Decimal(newCustomer.rating),
+                balanceDue: new Prisma.Decimal(newCustomer.balanceDue),
+                addresses: {
+                  create: {
+                    addressLine: newCustomer.address,
+                    city: newCustomer.city,
+                    isPrimary: true,
+                  },
+                },
+                subscriptions: {
+                  create: {
+                    subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                    packageId: pkgId,
+                    routerId: routerId,
+                    technology: newCustomer.connectionType as any,
+                    status: newCustomer.status as any,
+                    monthlyFee: new Prisma.Decimal(pkgMonthlyPrice),
+                    pppoeAccount: {
+                      create: {
+                        username: newCustomer.pppoeUsername,
+                        passwordHash: 'dummy_hash',
+                        routerId: routerId,
+                        ipAddress: newCustomer.ipAddress,
+                        macAddress: newCustomer.macAddress,
+                      },
                     },
                   },
                 },
               },
-            },
-          });
+            });
+          }
 
           await tx.auditLog.create({
             data: {
