@@ -133,15 +133,26 @@ export function DataTableToolbar<T extends Record<string, any>>({
   const [moreOpen, setMoreOpen] = useState(false);
   const [groupBySubmenu, setGroupBySubmenu] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
 
-  // Debounced search (250ms)
   useEffect(() => {
-    if (localSearch !== searchQuery) {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Debounced search (250ms) - only trigger when user input actually differs
+  useEffect(() => {
+    if (localSearch === searchQuery) return;
+    if (isMountedRef.current) {
       setIsSearching(true);
     }
     const handler = setTimeout(() => {
-      onSearchChange(localSearch);
-      setIsSearching(false);
+      if (isMountedRef.current) {
+        onSearchChange(localSearch);
+        setIsSearching(false);
+      }
     }, 250);
     return () => clearTimeout(handler);
   }, [localSearch, searchQuery, onSearchChange]);

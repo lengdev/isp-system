@@ -82,6 +82,15 @@ const ActionMenuButton = <T,>({
 }: ActionMenuButtonProps<T>) => {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [coords, setCoords] = useState<{
     top?: number;
     bottom?: number;
@@ -91,7 +100,7 @@ const ActionMenuButton = <T,>({
   } | null>(null);
 
   const updateCoords = useCallback(() => {
-    if (!triggerRef.current) return;
+    if (!isMountedRef.current || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const estimatedMenuHeight = actions.reduce(
       (acc, act) => acc + (act.divider ? 9 : 36),
@@ -110,6 +119,7 @@ const ActionMenuButton = <T,>({
       spaceBelow < estimatedMenuHeight && (spaceAbove >= estimatedMenuHeight || spaceAbove > spaceBelow);
 
     if (placeAbove) {
+      if (!isMountedRef.current) return;
       setCoords({
         bottom: window.innerHeight - rect.top + 4,
         right,
@@ -117,6 +127,7 @@ const ActionMenuButton = <T,>({
         placeAbove: true,
       });
     } else {
+      if (!isMountedRef.current) return;
       setCoords({
         top: rect.bottom + 4,
         right,
@@ -287,6 +298,14 @@ export const DataTable = <T extends Record<string, any>>({
   searchPlaceholder,
 }: DataTableProps<T>) => {
   const addToast = useStore((s) => s.addToast);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Persistence keys
   const storageKeyDensity = `netpulse_dt_density_${viewKey}`;
@@ -335,7 +354,22 @@ export const DataTable = <T extends Record<string, any>>({
 
   // Search & Filters
   const [globalFilter, setGlobalFilter] = useState('');
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() => {
+    if (typeof window === 'undefined') return [];
+    const params = new URLSearchParams(window.location.search);
+    const initialColFilters: ColumnFiltersState = [];
+    columns.forEach((col) => {
+      const val = params.get(col.id);
+      if (val) {
+        if (col.filter?.type === 'multi' || col.filter?.type === 'select') {
+          initialColFilters.push({ id: col.id, value: val.split(',').filter(Boolean) });
+        } else {
+          initialColFilters.push({ id: col.id, value: val });
+        }
+      }
+    });
+    return initialColFilters;
+  });
 
   // Sorting
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -474,20 +508,18 @@ export const DataTable = <T extends Record<string, any>>({
   // Auto-refresh timer for live tables (30s)
   useEffect(() => {
     if (!autoRefreshInterval || !onRefresh) return;
-    let isMounted = true;
     const interval = setInterval(() => {
-      if (!isMounted) return;
+      if (!isMountedRef.current) return;
       onRefresh();
       setLastUpdated(0);
     }, autoRefreshInterval * 1000);
 
     const secondsTicker = setInterval(() => {
-      if (!isMounted) return;
+      if (!isMountedRef.current) return;
       setLastUpdated((prev) => prev + 1);
     }, 1000);
 
     return () => {
-      isMounted = false;
       clearInterval(interval);
       clearInterval(secondsTicker);
     };
@@ -495,9 +527,8 @@ export const DataTable = <T extends Record<string, any>>({
 
   // Window resize: auto-force cards on small screens (<768px)
   useEffect(() => {
-    let isMounted = true;
     const handleResize = () => {
-      if (!isMounted) return;
+      if (!isMountedRef.current) return;
       const width = window.innerWidth;
       if (width < 768) {
         setViewModeState((prev) => (prev !== 'cards' ? 'cards' : prev));
@@ -506,7 +537,6 @@ export const DataTable = <T extends Record<string, any>>({
 
     window.addEventListener('resize', handleResize);
     return () => {
-      isMounted = false;
       window.removeEventListener('resize', handleResize);
     };
   }, []);
@@ -901,7 +931,6 @@ export const DataTable = <T extends Record<string, any>>({
   const [isOverflowingX, setIsOverflowingX] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
     let animId: number | null = null;
     const container = tableContainerRef.current;
     if (!container) return;
@@ -911,8 +940,8 @@ export const DataTable = <T extends Record<string, any>>({
         cancelAnimationFrame(animId);
       }
       animId = requestAnimationFrame(() => {
-        if (!isMounted || !container) return;
-        const overflows = totalTableWidth > container.clientWidth;
+        if (!isMountedRef.current || !tableContainerRef.current) return;
+        const overflows = totalTableWidth > tableContainerRef.current.clientWidth;
         setIsOverflowingX((prev) => (prev !== overflows ? overflows : prev));
       });
     };
@@ -921,7 +950,6 @@ export const DataTable = <T extends Record<string, any>>({
     ro.observe(container);
 
     return () => {
-      isMounted = false;
       if (animId !== null) {
         cancelAnimationFrame(animId);
       }
@@ -1027,26 +1055,7 @@ export const DataTable = <T extends Record<string, any>>({
     }
   }, [table]);
 
-  // Sync filters from URL on initial mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const initialColFilters: ColumnFiltersState = [];
 
-    columns.forEach((col) => {
-      const val = params.get(col.id);
-      if (val) {
-        if (col.filter?.type === 'multi' || col.filter?.type === 'select') {
-          initialColFilters.push({ id: col.id, value: val.split(',').filter(Boolean) });
-        } else {
-          initialColFilters.push({ id: col.id, value: val });
-        }
-      }
-    });
-
-    if (initialColFilters.length > 0) {
-      table.setColumnFilters(initialColFilters);
-    }
-  }, []);
 
   // MultiSort rules
   const currentSortRules: MultiSortRule[] = sorting.map((s) => ({

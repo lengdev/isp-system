@@ -54,7 +54,7 @@ import { useStore } from './store/useStore';
 import { useAuthStore } from './store/authStore';
 import { api } from './lib/api';
 
-const AnimatedRouteWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AnimatedRouteWrapper: React.FC<{ children: React.ReactNode }> = React.memo(({ children }) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -65,7 +65,8 @@ const AnimatedRouteWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
       {children}
     </motion.div>
   );
-};
+});
+AnimatedRouteWrapper.displayName = 'AnimatedRouteWrapper';
 
 export const AppContent: React.FC = () => {
   const location = useLocation();
@@ -106,11 +107,14 @@ export const AppContent: React.FC = () => {
         return;
       }
 
-      const isAuthPage =
-        typeof window !== 'undefined' &&
-        (window.location.pathname.startsWith('/login') ||
-          window.location.pathname.startsWith('/forgot-password') ||
-          window.location.pathname.startsWith('/reset-password'));
+      // If already authenticated with access token in store, mark initialized and exit immediately
+      const currentAuth = useAuthStore.getState();
+      if (currentAuth.status === 'authenticated' && currentAuth.accessToken) {
+        if (isMounted && !currentAuth.isInitialized) {
+          setStatus('authenticated');
+        }
+        return;
+      }
 
       let hasStoredToken = false;
       try {
@@ -122,9 +126,11 @@ export const AppContent: React.FC = () => {
         // ignore
       }
 
-      // If on auth page and no stored token, skip refresh call to avoid 401 in console
-      if (isAuthPage && !hasStoredToken) {
-        setStatus('unauthenticated');
+      // If no stored refresh token exists anywhere, do not call refresh endpoint (avoids 401 in console)
+      if (!hasStoredToken) {
+        if (isMounted) {
+          setStatus('unauthenticated');
+        }
         return;
       }
 

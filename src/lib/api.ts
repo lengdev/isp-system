@@ -26,15 +26,13 @@ export interface RefreshResult {
   user: any;
 }
 
-let isRefreshing = false;
 let refreshPromise: Promise<RefreshResult | null> | null = null;
 
 async function refreshAccessToken(): Promise<RefreshResult | null> {
-  if (isRefreshing && refreshPromise) {
+  if (refreshPromise) {
     return refreshPromise;
   }
 
-  isRefreshing = true;
   refreshPromise = (async () => {
     try {
       let storedRefreshToken: string | null = null;
@@ -88,7 +86,6 @@ async function refreshAccessToken(): Promise<RefreshResult | null> {
       useAuthStore.getState().clearAuth();
       return null;
     } finally {
-      isRefreshing = false;
       refreshPromise = null;
     }
   })();
@@ -114,7 +111,7 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
     credentials: 'include', // Automatically passes httpOnly cookies
   });
 
-  // Intercept 401 Unauthorized
+  // Intercept 401 Unauthorized only on protected requests (never auth login/refresh)
   if (
     response.status === 401 &&
     retryOn401 &&
@@ -124,23 +121,18 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
     if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Playwright')) {
       throw new Error('E2E mock network bypass: 401 Unauthenticated');
     }
+
+    // Single in-flight refresh shared by any concurrent 401 requests
     const refreshData = await refreshAccessToken();
     if (refreshData?.accessToken) {
-      // Retry original request with newly issued access token
+      // Retry original request exactly once with newly issued access token
       const retryHeaders = {
         ...headers,
         Authorization: `Bearer ${refreshData.accessToken}`,
       };
-      const retryResponse = await fetch(`${BASE_URL}${endpoint}`, {
-        ...options,
-        headers: retryHeaders,
-        credentials: 'include',
-      });
-      if (retryResponse.ok) {
-        return retryResponse.json();
-      }
+      return fetchJson<T>(endpoint, { ...options, headers: retryHeaders }, false);
     } else {
-      // Auto-logout and redirect to /login?next=
+      // Refresh failed: clear session and redirect cleanly to /login without looping
       useAuthStore.getState().clearAuth();
       if (
         typeof window !== 'undefined' &&
@@ -151,6 +143,7 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
         const next = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `/login?next=${next}`;
       }
+      throw new Error('Session expired. Please log in again.');
     }
   }
 

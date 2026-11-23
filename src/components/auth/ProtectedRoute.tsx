@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = React.memo(({ children }) => {
   const status = useAuthStore((s) => s.status);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const location = useLocation();
@@ -27,4 +27,5 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   return <>{children}</>;
-};
+});
+ProtectedRoute.displayName = 'ProtectedRoute';

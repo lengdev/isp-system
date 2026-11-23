@@ -11,7 +11,7 @@ interface RequirePermissionProps {
   children: React.ReactNode;
 }
 
-export const RequirePermission: React.FC<RequirePermissionProps> = ({
+export const RequirePermission: React.FC<RequirePermissionProps> = React.memo(({
   permission,
   role,
   roles,
@@ -22,6 +22,13 @@ export const RequirePermission: React.FC<RequirePermissionProps> = ({
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const hasRole = useAuthStore((s) => s.hasRole);
   const user = useAuthStore((s) => s.user);
+  const status = useAuthStore((s) => s.status);
+  const isInitialized = useAuthStore((s) => s.isInitialized);
+
+  // Hold rendering if auth state has not yet finished initializing
+  if (!isInitialized || status === 'loading' || status === 'idle') {
+    return null;
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -51,4 +58,5 @@ export const RequirePermission: React.FC<RequirePermissionProps> = ({
   }
 
   return <>{children}</>;
-};
+});
+RequirePermission.displayName = 'RequirePermission';
