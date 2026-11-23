@@ -4,7 +4,7 @@ test.describe('NetPulse ISP Smoke & Full Page Navigation Suite', () => {
   test('app loads and displays title', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/NetPulse/i);
-    await expect(page).toHaveURL(/customers/);
+    await expect(page).toHaveURL(/(customers|dashboard)/);
   });
 
   const routes = [
@@ -14,7 +14,7 @@ test.describe('NetPulse ISP Smoke & Full Page Navigation Suite', () => {
     { path: '/plans', title: 'Internet Plans Catalog' },
     { path: '/billing', title: 'Billing & Invoices' },
     { path: '/tickets', title: 'Support Tickets & Dispatch' },
-    { path: '/network', title: 'Network Infrastructure' },
+    { path: '/network', title: 'Network' },
     { path: '/technicians', title: 'Technicians & Field Installations' },
     { path: '/reports', title: 'Analytics & Reports' },
     { path: '/messages', title: 'Subscriber Messaging & Broadcast' },

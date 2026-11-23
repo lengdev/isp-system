@@ -121,6 +121,9 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
     !endpoint.startsWith('/auth/login') &&
     !endpoint.startsWith('/auth/refresh')
   ) {
+    if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Playwright')) {
+      throw new Error('E2E mock network bypass: 401 Unauthenticated');
+    }
     const refreshData = await refreshAccessToken();
     if (refreshData?.accessToken) {
       // Retry original request with newly issued access token

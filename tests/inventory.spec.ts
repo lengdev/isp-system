@@ -8,7 +8,7 @@ test.describe('Inventory & Products Feature Suite', () => {
 
   test('navigates to Inventory Products and renders header & title', async ({ page }) => {
     await expect(page.locator('h2:has-text("Products")')).toBeVisible();
-    await expect(page.locator('text=Inventory')).first().toBeVisible();
+    await expect(page.locator('text=Inventory').first()).toBeVisible();
     await expect(page.locator('button:has-text("New Product")').first()).toBeVisible();
 
     // Verify task 1: button show/hide stats near New Product is removed

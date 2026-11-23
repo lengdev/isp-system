@@ -76,7 +76,7 @@ export const NetworkPage: React.FC = () => {
   const [targetCustId, setTargetCustId] = useState('cust-1001');
 
   const ipPoolOptions: ComboboxOption[] = useMemo(
-    () => ipPools.map((p) => ({ value: p.id, label: `${p.name} (${p.availableIps} free)` })),
+    () => (ipPools || []).map((p) => ({ value: p.id, label: `${p.name} (${p.availableIps} free)` })),
     [ipPools]
   );
 
@@ -87,9 +87,9 @@ export const NetworkPage: React.FC = () => {
         api.network.getVlans().catch(() => []),
         api.network.getIpPools().catch(() => []),
       ]);
-      setPppoeAccounts(pppoeRes);
-      setVlans(vlanRes);
-      setIpPools(poolRes);
+      setPppoeAccounts(Array.isArray(pppoeRes) ? pppoeRes : []);
+      setVlans(Array.isArray(vlanRes) ? vlanRes : []);
+      setIpPools(Array.isArray(poolRes) ? poolRes : []);
     } catch (err: any) {
       console.warn('Network data load error:', err);
     }

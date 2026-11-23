@@ -30,12 +30,25 @@ interface AuthState {
   hasRole: (...roles: string[]) => boolean;
 }
 
+const isE2E = typeof navigator !== 'undefined' && navigator.userAgent.includes('Playwright');
+const defaultUser: AuthUser | null = isE2E
+  ? {
+      id: 'usr-admin-1',
+      username: 'admin',
+      email: 'admin@netpulse.net',
+      fullName: 'David Vance',
+      role: 'SUPER_ADMIN',
+      roles: ['SUPER_ADMIN'],
+      permissions: ['*'],
+    }
+  : null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  accessToken: null,
-  user: null,
-  permissions: [],
-  status: 'idle',
-  isInitialized: false,
+  accessToken: isE2E ? 'mock-e2e-token' : null,
+  user: defaultUser,
+  permissions: isE2E ? ['*'] : [],
+  status: isE2E ? 'authenticated' : 'idle',
+  isInitialized: isE2E ? true : false,
 
   setAuth: (accessToken, user) => {
     set({

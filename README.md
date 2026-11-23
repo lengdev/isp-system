@@ -70,7 +70,7 @@ NetPulse is a production-grade ISP (Internet Service Provider) Customer Manageme
 # 1. Install dependencies
 npm install
 
-# 2. Start the local development server
+# 2. Start the local development server (Backend API on port 5000 + Frontend on port 5173)
 npm run dev
 ```
 

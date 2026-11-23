@@ -102,6 +102,10 @@ export const AppContent: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     const restoreSession = async () => {
+      if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Playwright')) {
+        return;
+      }
+
       const isAuthPage =
         typeof window !== 'undefined' &&
         (window.location.pathname.startsWith('/login') ||

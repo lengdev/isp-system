@@ -222,9 +222,7 @@ export const DevTablePage: React.FC = () => {
         onRetry={() => setHasError(false)}
         viewKey="dev_table_benchmark"
         enableImport={true}
-        onImport={(imported) => {
-          console.log('Imported items:', imported);
-        }}
+        onImport={() => {}}
         rowActions={(row) => [
           { label: 'View Profile', icon: <Eye className="w-3.5 h-3.5" />, onClick: () => alert(`View ${row.name}`) },
           { label: 'Edit', icon: <Edit2 className="w-3.5 h-3.5" />, onClick: () => alert(`Edit ${row.name}`) },

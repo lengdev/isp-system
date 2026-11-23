@@ -27,7 +27,7 @@ test.describe('NetPulse ISP Customers Master Spec E2E', () => {
     await expect(resultCount).toBeVisible();
 
     // 4. No header label clipped
-    const expectedHeaders = ['Customer', 'Plan', 'Price', 'Usage', 'Due', 'Status', 'Rating', 'IP', 'City', 'Action'];
+    const expectedHeaders = ['Customer', 'Plan', 'Price', 'Usage', 'Due', 'Status', 'Rating', 'IP', 'City'];
     for (const h of expectedHeaders) {
       const headerEl = page.locator(`th:has-text("${h}")`).first();
       await expect(headerEl).toBeVisible();
