@@ -1,4 +1,13 @@
 import { useAuthStore } from '../store/authStore';
+import type {
+  RoleItem,
+  RolesMatrixResponse,
+  UserWithRoles,
+  CreateRolePayload,
+  UpdateRolePayload,
+  UpdateRolePermissionsPayload,
+  UpdateRolePermissionsResponse,
+} from '../features/roles/types';
 
 // NetPulse REST API Client
 const BASE_URL = '/api/v1';
@@ -394,5 +403,39 @@ export const api = {
     payKHQR: (customerId: string, amount: number) =>
       fetchJson<any>('/portal/pay-khqr', { method: 'POST', body: JSON.stringify({ customerId, amount }) }),
     submitTicket: (data: any) => fetchJson<any>('/portal/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  },
+
+  // Roles & Permissions (RBAC)
+  roles: {
+    getMatrix: () => fetchJson<RolesMatrixResponse>('/auth/roles'),
+    createRole: (data: CreateRolePayload) =>
+      fetchJson<RoleItem>('/auth/roles', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateRole: (id: string, data: UpdateRolePayload) =>
+      fetchJson<RoleItem>(`/auth/roles/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    updateRolePermissions: (id: string, data: UpdateRolePermissionsPayload) =>
+      fetchJson<UpdateRolePermissionsResponse>(`/auth/roles/${id}/permissions`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    deleteRole: (id: string) =>
+      fetchJson<{ success: boolean; message: string }>(`/auth/roles/${id}`, {
+        method: 'DELETE',
+      }),
+    duplicateRole: (id: string) =>
+      fetchJson<RoleItem>(`/auth/roles/${id}/duplicate`, {
+        method: 'POST',
+      }),
+    getUsers: () => fetchJson<UserWithRoles[]>('/auth/users'),
+    updateUserRoles: (userId: string, roles: string[]) =>
+      fetchJson<{ id: string; username: string; roles: string[] }>(`/auth/users/${userId}/roles`, {
+        method: 'PATCH',
+        body: JSON.stringify({ roles }),
+      }),
   },
 };

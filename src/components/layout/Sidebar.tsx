@@ -164,23 +164,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
       name: 'Settings',
       path: '/settings',
       icon: Settings,
-      roles: ['SUPER_ADMIN'],
       submenu: [
         { name: 'System Settings', path: '/settings', icon: Settings, roles: ['SUPER_ADMIN'] },
+        { name: 'Roles & Permissions', path: '/settings/roles', icon: Key, permission: 'roles.manage' },
         { name: 'Staff & Roles (RBAC)', path: '/settings/users', icon: Users, roles: ['SUPER_ADMIN'] },
         { name: 'Audit Compliance Logs', path: '/settings/audit', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
       ],
     },
   ];
 
-  const isItemVisible = (item: NavItemDef) => {
+  const isItemVisible = (item: NavItemDef | NavSubItem): boolean => {
     if (!user) return true; // Default fallback
     if (user.role === 'SUPER_ADMIN') return true;
-    if (item.roles && item.roles.length > 0 && !hasRole(...item.roles)) {
-      return false;
-    }
-    if (item.permission && !hasPermission(item.permission)) {
-      return false;
+    if ('submenu' in item && item.submenu && item.submenu.length > 0) {
+      const hasVisibleSub = item.submenu.some((sub) => isItemVisible(sub));
+      if (!hasVisibleSub) return false;
+    } else {
+      if (item.roles && item.roles.length > 0 && !hasRole(...item.roles)) {
+        return false;
+      }
+      if (item.permission && !hasPermission(item.permission)) {
+        return false;
+      }
     }
     return true;
   };

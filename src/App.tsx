@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion, MotionConfig } from 'framer-motion';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/queryClient';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/layout/TopBar';
 import { CommandPalette } from './components/layout/CommandPalette';
@@ -27,6 +29,7 @@ import { MessagesPage } from './pages/MessagesPage';
 import { AutomationPage } from './pages/AutomationPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { RolesPage } from './pages/RolesPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { AccountingPage } from './pages/AccountingPage';
 import { PaymentsPage } from './pages/PaymentsPage';
@@ -471,6 +474,18 @@ export const AppContent: React.FC = () => {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/settings/roles"
+                  element={
+                    <ProtectedRoute>
+                      <RequirePermission permission="roles.manage">
+                        <AnimatedRouteWrapper>
+                          <RolesPage />
+                        </AnimatedRouteWrapper>
+                      </RequirePermission>
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Dev Tools */}
                 <Route
@@ -525,14 +540,16 @@ export const AppContent: React.FC = () => {
 
 export function App() {
   return (
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <AppContent />
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <AppContent />
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 
