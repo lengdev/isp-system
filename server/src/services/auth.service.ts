@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma, dbStore } from '../db/store.js';
+import { RbacService } from './rbac.service.js';
 
 // Environment configurations
 const JWT_SECRET = process.env.JWT_SECRET || 'netpulse-super-secret-production-grade-jwt-key-2026';
@@ -399,7 +400,7 @@ export class AuthService {
         phone: user.phone,
         role: user.role,
         roles: [user.role],
-        permissions: ROLE_PERMISSIONS[user.role] || [],
+        permissions: await AuthService.getUserPermissions(user.role),
         mustChangePassword: Boolean(user.mustChangePassword),
       },
     };
@@ -475,7 +476,7 @@ export class AuthService {
               fullName: user.fullName,
               role: user.role,
               roles: [user.role],
-              permissions: ROLE_PERMISSIONS[user.role] || [],
+              permissions: await AuthService.getUserPermissions(user.role),
               mustChangePassword: Boolean(user.mustChangePassword),
             },
           };
@@ -571,7 +572,7 @@ export class AuthService {
         fullName: user.fullName,
         role: user.role,
         roles: [user.role],
-        permissions: ROLE_PERMISSIONS[user.role] || [],
+        permissions: await AuthService.getUserPermissions(user.role),
         mustChangePassword: Boolean(user.mustChangePassword),
       },
     };
@@ -758,15 +759,50 @@ export class AuthService {
   }
 
   /**
-   * Check if role has required permission code
+   * Helper: Get permissions for a role, preferring dynamic DB/cache and falling back to memory
+   */
+  static async getUserPermissions(userRole: string): Promise<string[]> {
+    if (userRole === 'SUPER_ADMIN') {
+      return ['*'];
+    }
+    try {
+      const perms = await RbacService.getRolePermissions(userRole);
+      if (perms && perms.size > 0) {
+        return Array.from(perms);
+      }
+    } catch {
+      // Fallback if DB query fails
+    }
+    return ROLE_PERMISSIONS[userRole] || [];
+  }
+
+  /**
+   * Check if role has required permission code asynchronously (reads DB with 30s cache)
+   */
+  static async hasPermissionAsync(userRole: string, requiredPermission: string): Promise<boolean> {
+    if (userRole === 'SUPER_ADMIN') return true;
+    try {
+      return await RbacService.checkPermission(userRole, requiredPermission);
+    } catch {
+      return this.hasPermission(userRole, requiredPermission);
+    }
+  }
+
+  /**
+   * Check if role has required permission code (synchronous check with memory fallback)
    */
   static hasPermission(userRole: string, requiredPermission: string): boolean {
+    if (userRole === 'SUPER_ADMIN') return true;
+
     const permissions = ROLE_PERMISSIONS[userRole] || [];
     if (permissions.includes('*')) return true;
     if (permissions.includes(requiredPermission)) return true;
 
     const [module] = requiredPermission.split(':');
     if (permissions.includes(`${module}:*`)) return true;
+
+    const dotPerm = requiredPermission.replace(':', '.');
+    if (permissions.includes(dotPerm)) return true;
 
     return false;
   }

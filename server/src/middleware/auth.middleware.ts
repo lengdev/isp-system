@@ -86,16 +86,28 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
  * Middleware: Authorize user by checking if they hold at least one of the specified permissions
  */
 export function authorize(...requiredPermissions: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    if (req.user.role === 'SUPER_ADMIN') {
+    if (req.user.role === 'SUPER_ADMIN' || (req.user.roles && req.user.roles.includes('SUPER_ADMIN'))) {
       return next();
     }
 
-    const hasAny = requiredPermissions.some((perm) => AuthService.hasPermission(req.user!.role, perm));
+    const userRoles = req.user.roles && req.user.roles.length > 0 ? req.user.roles : [req.user.role];
+    let hasAny = false;
+
+    for (const role of userRoles) {
+      for (const perm of requiredPermissions) {
+        if (await AuthService.hasPermissionAsync(role, perm)) {
+          hasAny = true;
+          break;
+        }
+      }
+      if (hasAny) break;
+    }
+
     if (!hasAny) {
       return res.status(403).json({
         error: 'Access denied: insufficient permissions',

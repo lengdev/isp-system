@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { AuthService, ROLE_PERMISSIONS } from '../services/auth.service.js';
+import { RbacService } from '../services/rbac.service.js';
 import {
   authenticate,
+  authorize,
   requireRole,
   validateBody,
   loginSchema,
@@ -133,8 +135,9 @@ router.post('/logout', async (req, res) => {
 });
 
 // GET /api/v1/auth/me
-router.get('/me', authenticate, (req, res) => {
+router.get('/me', authenticate, async (req, res) => {
   const user = req.user!;
+  const permissions = await AuthService.getUserPermissions(user.role);
   res.json({
     user: {
       id: user.userId,
@@ -143,7 +146,7 @@ router.get('/me', authenticate, (req, res) => {
       fullName: user.fullName,
       role: user.role,
       roles: user.roles || [user.role],
-      permissions: ROLE_PERMISSIONS[user.role] || [],
+      permissions,
     },
   });
 });
@@ -184,10 +187,10 @@ router.post('/change-password', authenticate, validateBody(changePasswordSchema)
   }
 });
 
-// GET /api/v1/auth/users
-router.get('/users', authenticate, requireRole('SUPER_ADMIN'), async (_req, res) => {
+// GET /api/v1/auth/users (for Users tab and admin user management)
+router.get('/users', authenticate, authorize('roles.manage'), async (_req, res) => {
   try {
-    const users = await AuthService.listUsers();
+    const users = await RbacService.listUsersWithRoles();
     res.json(users);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -195,12 +198,127 @@ router.get('/users', authenticate, requireRole('SUPER_ADMIN'), async (_req, res)
 });
 
 // POST /api/v1/auth/users
-router.post('/users', authenticate, requireRole('SUPER_ADMIN'), async (req, res) => {
+router.post('/users', authenticate, authorize('roles.manage'), async (req, res) => {
   try {
     const user = await AuthService.createUser(req.body);
     res.status(201).json(user);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/v1/auth/users/:id/roles
+router.patch('/users/:id/roles', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const roles = Array.isArray(req.body.roles)
+      ? req.body.roles
+      : req.body.role
+      ? [req.body.role]
+      : req.body.roleId
+      ? [req.body.roleId]
+      : [];
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const result = await RbacService.updateUserRoles(id, roles, actor);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// GET /api/v1/auth/roles -> { roles, permissions, matrix }
+router.get('/roles', authenticate, authorize('roles.manage'), async (_req, res) => {
+  try {
+    const data = await RbacService.getRolesMatrix();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/auth/roles -> create (name, description, copyFromRoleId optional)
+router.post('/roles', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const { name, description, copyFromRoleId } = req.body;
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const role = await RbacService.createRole({ name, description, copyFromRoleId }, actor);
+    res.status(201).json(role);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/v1/auth/roles/:id -> rename / description (not for SUPER_ADMIN)
+router.patch('/roles/:id', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const { name, description } = req.body;
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const role = await RbacService.updateRole(id, { name, description }, actor);
+    res.json(role);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// PUT /api/v1/auth/roles/:id/permissions -> body { add:[keys], remove:[keys], expectedUpdatedAt }
+router.put('/roles/:id/permissions', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const { add, remove, expectedUpdatedAt } = req.body;
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const result = await RbacService.updateRolePermissions(id, { add, remove, expectedUpdatedAt }, actor);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message, code: err.code });
+  }
+});
+
+// DELETE /api/v1/auth/roles/:id -> only if not isSystem and userCount === 0
+router.delete('/roles/:id', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const result = await RbacService.deleteRole(id, actor);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/auth/roles/:id/duplicate
+router.post('/roles/:id/duplicate', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const role = await RbacService.duplicateRole(id, actor);
+    res.status(201).json(role);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 

@@ -1,0 +1,14 @@
+-- DropIndex
+DROP INDEX IF EXISTS "Permission_code_key";
+
+-- AlterTable
+ALTER TABLE "Permission" DROP COLUMN IF EXISTS "code",
+DROP COLUMN IF EXISTS "module",
+ADD COLUMN "group" TEXT NOT NULL,
+ADD COLUMN "key" TEXT NOT NULL,
+ADD COLUMN "label" TEXT NOT NULL,
+ADD COLUMN "sortOrder" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "Permission_key_key" ON "Permission"("key");

@@ -71,10 +71,13 @@ model Role {
 
 model Permission {
   id          String           @id @default(uuid())
-  code        String           @unique // e.g. "customer.create", "invoice.view", "journal.post"
-  module      String           // e.g. "crm", "billing", "network", "accounting"
+  key         String           @unique // e.g. "customers.view", "billing.create"
+  group       String           // e.g. "Customers (CRM)", "Billing & Payments"
+  label       String           // e.g. "View Customers"
   description String?
+  sortOrder   Int              @default(0)
   createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   rolePermissions RolePermission[]
 }

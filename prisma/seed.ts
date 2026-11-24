@@ -2,6 +2,7 @@
 import { PrismaClient, UserRoleType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import { RbacService } from '../dist-server/services/rbac.service.js';
 
 dotenv.config();
 
@@ -117,6 +118,11 @@ export async function seed() {
         console.log(`  - Demo user ensured: ${du.username} [${du.role}]`);
       }
     }
+
+    // Seed RBAC Permissions, Roles, and Role-Permissions Matrix
+    console.log('🌱 Seeding RBAC Permissions and Roles matrix...');
+    await RbacService.seedRbac();
+    console.log('✓ RBAC Permissions and Roles matrix seeded successfully.');
 
     console.log('✓ NetPulse Database seeding completed successfully.');
   } catch (err: any) {
