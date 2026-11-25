@@ -18,23 +18,16 @@ import { Badge } from '../../components/ui/Badge';
 import { Chip } from '../../components/ui/Chip';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { Button } from '../../components/ui/Button';
-import { Field, Input } from '../../components/ui/Field';
-import { Modal } from '../../components/ui/Modal';
-import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { useStore } from '../../store/useStore';
 import { useAuthStore } from '../../store/authStore';
 import { useCan } from '../../lib/permissions';
 import { api } from '../../lib/api';
 import { cn, formatDate } from '../../lib/utils';
-import { BRAND_DOMAIN } from '../../lib/brand';
 import type { RoleItem, UserWithRoles } from '../../types/roles';
-import { getRoleBadgeColor, formatRoleDisplayName } from './roleBadge';
-
-function formatRoleLabel(role: RoleItem): string {
-  const normalized = formatRoleDisplayName(role.name);
-  const displayName = role.name.includes('_') ? `${normalized} (${role.name})` : role.name;
-  return role.description ? `${displayName} — ${role.description}` : displayName;
-}
+import { getRoleBadgeColor } from './roleBadge';
+import { UserFormModal } from './UserFormModal';
+import { DeleteUserModal } from './DeleteUserModal';
+import { UserActivityDrawer } from './UserActivityDrawer';
 
 export interface UsersWorkspaceProps {
   embedded?: boolean;
@@ -64,6 +57,7 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [dbRoles, setDbRoles] = useState<RoleItem[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -78,35 +72,21 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
   }));
   const lastQueryStrRef = useRef<string>('');
 
-  // Temporary Add User modal (expanded in Phase 4 alongside Edit, Delete, View Log)
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('');
-  const [password, setPassword] = useState('Password123!');
-
-  // Placeholders for Phase 4 action targets
+  // Modal & Drawer state
+  const [formOpen, setFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserWithRoles | null>(null);
   const [viewingLogUser, setViewingLogUser] = useState<UserWithRoles | null>(null);
 
   const loadRoles = useCallback(async () => {
+    setRolesLoading(true);
     try {
       const matrixResult = await api.roles.getMatrix();
-      const fetchedRoles = matrixResult.roles || [];
-      setDbRoles(fetchedRoles);
-      setRole((prev) => {
-        if (prev && fetchedRoles.some((r) => r.name === prev)) return prev;
-        const preferred = fetchedRoles.find(
-          (r) => r.name === 'FIELD_TECHNICIAN' || r.name === 'TECHNICIAN'
-        );
-        return preferred?.name || fetchedRoles[0]?.name || '';
-      });
+      setDbRoles(matrixResult.roles || []);
     } catch {
       // Roles matrix failure should not block user table error reporting
+    } finally {
+      setRolesLoading(false);
     }
   }, []);
 
@@ -154,6 +134,12 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
     [tableQuery, onLoadingChange]
   );
 
+  const handleMutationSuccess = useCallback(async () => {
+    await fetchUsers();
+    queryClient.invalidateQueries({ queryKey: ['rolesUsers'] });
+    queryClient.invalidateQueries({ queryKey: ['rolesMatrix'] });
+  }, [fetchUsers, queryClient]);
+
   useEffect(() => {
     loadRoles();
   }, [loadRoles]);
@@ -173,21 +159,14 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
   }, []);
 
   const openCreateModal = useCallback(() => {
-    setUsername('');
-    setEmail('');
-    setFullName('');
-    setPhone('');
-    setPassword('Password123!');
-    const preferred = dbRoles.find(
-      (r) => r.name === 'FIELD_TECHNICIAN' || r.name === 'TECHNICIAN'
-    );
-    setRole((prev) =>
-      prev && dbRoles.some((r) => r.name === prev)
-        ? prev
-        : preferred?.name || dbRoles[0]?.name || ''
-    );
-    setIsAddOpen(true);
-  }, [dbRoles]);
+    setEditingUser(null);
+    setFormOpen(true);
+  }, []);
+
+  const openEditModal = useCallback((u: UserWithRoles) => {
+    setEditingUser(u);
+    setFormOpen(true);
+  }, []);
 
   useEffect(() => {
     if (externalAddSignal > 0) {
@@ -200,17 +179,6 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
       fetchUsers();
     }
   }, [externalRefreshSignal, fetchUsers]);
-
-  const roleOptions: ComboboxOption[] = useMemo(
-    () =>
-      dbRoles.map((r) => ({
-        value: r.name,
-        label: formatRoleLabel(r),
-        shortLabel: r.name,
-        badge: r.isSystem ? undefined : 'Custom',
-      })),
-    [dbRoles]
-  );
 
   const roleFilterOptions = useMemo(
     () =>
@@ -228,42 +196,6 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
     ],
     []
   );
-
-  const handleCreateUser = async () => {
-    if (!fullName.trim() || !username.trim() || !email.trim() || !role || !password) {
-      addToast({
-        type: 'error',
-        title: 'Missing Required Fields',
-        message: 'Please enter full name, username, email, role, and initial password.',
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await api.auth.createUser({
-        username: username.trim(),
-        email: email.trim(),
-        fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
-        roles: [role],
-        password,
-      });
-      addToast({
-        type: 'success',
-        title: 'User Created',
-        message: `${fullName.trim()} (${role}) added.`,
-      });
-      setIsAddOpen(false);
-      await fetchUsers();
-      queryClient.invalidateQueries({ queryKey: ['rolesUsers'] });
-      queryClient.invalidateQueries({ queryKey: ['rolesMatrix'] });
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'User Creation Failed', message: err.message });
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleBulkStatusChange = async (
     selectedRows: UserWithRoles[],
@@ -304,8 +236,7 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
         message: `Updated ${updatedCount} user account${updatedCount === 1 ? '' : 's'}.`,
       });
       clearSelection();
-      await fetchUsers();
-      queryClient.invalidateQueries({ queryKey: ['rolesUsers'] });
+      await handleMutationSuccess();
     }
 
     if (errors.length > 0) {
@@ -387,7 +318,8 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
       {
         id: 'roles',
         header: 'Roles',
-        accessorFn: (u) => (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role]).join(', '),
+        accessorFn: (u) =>
+          (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role]).join(', '),
         width: 245,
         minWidth: 180,
         sortable: true,
@@ -397,10 +329,12 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
           type: 'multi',
           options: roleFilterOptions,
         },
-        exportValue: (u) => (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role]).join(', '),
+        exportValue: (u) =>
+          (Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role]).join(', '),
         cell: ({ row }) => {
           const u = row.original;
-          const userRoles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+          const userRoles =
+            Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
           const visibleRoles = userRoles.slice(0, 2);
           const extraCount = userRoles.length - visibleRoles.length;
 
@@ -459,7 +393,8 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
         minWidth: 130,
         sortable: true,
         priority: 2,
-        exportValue: (u) => (u.lastLoginAt ? new Date(u.lastLoginAt).toISOString() : 'Never'),
+        exportValue: (u) =>
+          u.lastLoginAt ? new Date(u.lastLoginAt).toISOString() : 'Never',
         cell: ({ row }) => {
           const ts = row.original.lastLoginAt;
           if (!ts) {
@@ -518,7 +453,7 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
           icon: <Edit2 className="w-3.5 h-3.5" />,
           disabled: !canManageUsers,
           tooltip: !canManageUsers ? 'Requires users.manage permission' : undefined,
-          onClick: (row) => setEditingUser(row),
+          onClick: (row) => openEditModal(row),
         },
         {
           label: 'View Log',
@@ -551,7 +486,14 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
 
       return actions;
     },
-    [canManageUsers, canViewAudit, currentUser?.id, showPermissionsButton, onManagePermissions]
+    [
+      canManageUsers,
+      canViewAudit,
+      currentUser?.id,
+      showPermissionsButton,
+      onManagePermissions,
+      openEditModal,
+    ]
   );
 
   const renderBulkActions = useCallback(
@@ -623,11 +565,6 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
       (Array.isArray(tableQuery.filters?.status) && tableQuery.filters.status.length > 0)
   );
 
-  // Keep references to Phase 4 modal/drawer targets cleanly without unused lint errors
-  void editingUser;
-  void deletingUser;
-  void viewingLogUser;
-
   return (
     <div className="space-y-4">
       {embedded && (
@@ -678,74 +615,29 @@ export const UsersWorkspace: React.FC<UsersWorkspaceProps> = ({
         addNewLabel="Add User"
       />
 
-      {/* ADD USER MODAL (full shared Add/Edit modal completed in Phase 4) */}
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Add User">
-        <div className="space-y-4 text-xs">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Full Name">
-              <Input
-                placeholder="e.g. Sokha Meng"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-            </Field>
-            <Field label="Username">
-              <Input
-                placeholder="e.g. sokha_tech"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </Field>
-          </div>
+      <UserFormModal
+        isOpen={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingUser(null);
+        }}
+        user={editingUser}
+        roles={dbRoles}
+        rolesLoading={rolesLoading}
+        onSuccess={handleMutationSuccess}
+      />
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Email Address">
-              <Input
-                placeholder={`sokha@${BRAND_DOMAIN}`}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </Field>
-            <Field label="Phone Number">
-              <Input
-                placeholder="+855 12 333 444"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </Field>
-          </div>
+      <DeleteUserModal
+        isOpen={Boolean(deletingUser)}
+        onClose={() => setDeletingUser(null)}
+        user={deletingUser}
+        onSuccess={handleMutationSuccess}
+      />
 
-          <Field label="Role & Permissions">
-            <Combobox
-              options={roleOptions}
-              value={role}
-              onChange={(val) => setRole(val)}
-              placeholder={isFetching ? 'Loading roles...' : 'Select a role...'}
-              searchable={roleOptions.length > 6}
-              clearable={false}
-              loading={isFetching && roleOptions.length === 0}
-              size="md"
-            />
-          </Field>
-
-          <Field label="Initial Password">
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setIsAddOpen(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleCreateUser} disabled={submitting}>
-              {submitting ? 'Creating...' : 'Create User'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <UserActivityDrawer
+        user={viewingLogUser}
+        onClose={() => setViewingLogUser(null)}
+      />
     </div>
   );
 };
