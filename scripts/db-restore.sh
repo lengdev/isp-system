@@ -16,7 +16,7 @@ echo "Restoring from: ${BACKUP_FILE}"
 if command -v docker &> /dev/null && docker ps | grep -q nsmisp-postgres; then
   gunzip -c "${BACKUP_FILE}" | docker exec -i nsmisp-postgres psql -U nsmisp -d nsmisp
 else
-  gunzip -c "${BACKUP_FILE}" | psql "${CLEAN_DB_URL:-postgresql://nsmisp:nsmisp@localhost:5432/nsmisp}"
+  gunzip -c "${BACKUP_FILE}" | psql "${CLEAN_DB_URL:-postgresql://nsmisp:nsmisp123@localhost:5432/nsmisp}"
 fi
 
 echo "✓ NSMISP database successfully restored from ${BACKUP_FILE}"

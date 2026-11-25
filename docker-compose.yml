@@ -40,9 +40,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
+      FRONTEND_URL: http://localhost
       DATABASE_URL: postgresql://nsmisp:nsmisp123@postgres:5432/nsmisp?schema=public
       JWT_SECRET: nsmisp-production-grade-jwt-secret-key-2026
+      JWT_REFRESH_SECRET: nsmisp-production-grade-refresh-jwt-secret-key-2026
       JWT_EXPIRES_IN: 7d
+      COOKIE_SECURE: 'false' # Set to 'true' behind HTTPS in production
       REDIS_URL: redis://redis:6379
       MIKROTIK_DEFAULT_HOST: 192.168.88.1
       MIKROTIK_DEFAULT_PORT: 8728

@@ -278,8 +278,7 @@ npm install
 cp .env.example .env
 
 # 2. Ensure PostgreSQL is running and DATABASE_URL in .env matches
-#    Note: .env.example defaults to postgresql://nsmisp:nsmisp@localhost:5432/nsmisp?schema=public
-#    while docker-compose.yml provisions POSTGRES_USER=nsmisp, POSTGRES_PASSWORD=nsmisp123, POSTGRES_DB=nsmisp
+#    Both .env.example and docker-compose.yml default to user=nsmisp, password=nsmisp123, db=nsmisp
 docker compose up -d postgres
 
 # 3. Generate Prisma client, run migrations, build server, and seed DB

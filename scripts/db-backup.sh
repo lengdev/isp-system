@@ -13,7 +13,7 @@ echo "Starting NSMISP PostgreSQL backup at $(date)..."
 if command -v docker &> /dev/null && docker ps | grep -q nsmisp-postgres; then
   docker exec -t nsmisp-postgres pg_dump -U nsmisp -d nsmisp | gzip > "${BACKUP_FILE}"
 else
-  pg_dump "${CLEAN_DB_URL:-postgresql://nsmisp:nsmisp@localhost:5432/nsmisp}" | gzip > "${BACKUP_FILE}"
+  pg_dump "${CLEAN_DB_URL:-postgresql://nsmisp:nsmisp123@localhost:5432/nsmisp}" | gzip > "${BACKUP_FILE}"
 fi
 
 echo "✓ NSMISP Backup successfully generated: ${BACKUP_FILE}"
