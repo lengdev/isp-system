@@ -5,8 +5,10 @@ import { prisma, dbStore } from '../db/store.js';
 import { RbacService } from './rbac.service.js';
 
 // Environment configurations
-const JWT_SECRET = process.env.JWT_SECRET || 'netpulse-super-secret-production-grade-jwt-key-2026';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'netpulse-refresh-super-secret-jwt-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'nsmisp-super-secret-production-grade-jwt-key-2026';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'nsmisp-refresh-super-secret-jwt-key-2026';
+const JWT_ISSUER = 'nsmisp';
+const JWT_AUDIENCE = 'nsmisp';
 const JWT_ACCESS_EXPIRES_IN = '15m'; // 15 minutes access token lifetime
 const BCRYPT_SALT_ROUNDS = 12;
 
@@ -291,14 +293,14 @@ export class AuthService {
     if (!isMatch && /^[a-f0-9]{64}$/i.test(passwordPlain)) {
       if (await bcrypt.compare('admin123!', user.passwordHash)) isMatch = true;
       else if (await bcrypt.compare('StrongSuperAdminPassword2026!', user.passwordHash)) isMatch = true;
-      else if (await bcrypt.compare('netpulse123', user.passwordHash)) isMatch = true;
+      else if (await bcrypt.compare('nsmisp123', user.passwordHash)) isMatch = true;
       else if (await bcrypt.compare('Password123!', user.passwordHash)) isMatch = true;
     }
 
     if (!isMatch && isDev) {
       if (
         passwordPlain === 'admin123!' ||
-        passwordPlain === 'netpulse123' ||
+        passwordPlain === 'nsmisp123' ||
         passwordPlain === 'Password123!' ||
         passwordPlain === 'StrongSuperAdminPassword2026!'
       ) {
@@ -373,7 +375,11 @@ export class AuthService {
       roleIds: roleIds,
       fullName: user.fullName,
     };
-    const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_ACCESS_EXPIRES_IN });
+    const accessToken = jwt.sign(payload, JWT_SECRET, {
+      expiresIn: JWT_ACCESS_EXPIRES_IN,
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
 
     // Issue 256-bit cryptographically secure Refresh Token
     const rawRefreshToken = crypto.randomBytes(32).toString('hex');
@@ -482,7 +488,11 @@ export class AuthService {
             roles: [user.role],
             fullName: user.fullName,
           };
-          const newAccessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_ACCESS_EXPIRES_IN });
+          const newAccessToken = jwt.sign(payload, JWT_SECRET, {
+            expiresIn: JWT_ACCESS_EXPIRES_IN,
+            issuer: JWT_ISSUER,
+            audience: JWT_AUDIENCE,
+          });
           return {
             token: newAccessToken,
             accessToken: newAccessToken,
@@ -555,7 +565,11 @@ export class AuthService {
       roles: [user.role],
       fullName: user.fullName,
     };
-    const newAccessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_ACCESS_EXPIRES_IN });
+    const newAccessToken = jwt.sign(payload, JWT_SECRET, {
+      expiresIn: JWT_ACCESS_EXPIRES_IN,
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
 
     // Rotate atomically in a Prisma transaction
     await prisma.$transaction([
@@ -789,14 +803,17 @@ export class AuthService {
       return {
         userId: '970027e3-5ca2-48e6-9d9d-2c6cc9068c9d',
         username: 'admin',
-        email: 'admin@netpulse.net',
+        email: 'admin@nsmisp.net',
         role: 'SUPER_ADMIN',
         roles: ['SUPER_ADMIN'],
         fullName: 'David Vance',
       };
     }
     try {
-      return jwt.verify(token, JWT_SECRET) as TokenPayload;
+      return jwt.verify(token, JWT_SECRET, {
+        issuer: JWT_ISSUER,
+        audience: JWT_AUDIENCE,
+      }) as TokenPayload;
     } catch {
       throw new Error('Invalid or expired authentication token');
     }

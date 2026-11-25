@@ -24,6 +24,7 @@ import {
   GroupingState,
 } from '@tanstack/react-table';
 import { motion, AnimatePresence } from 'framer-motion';
+import { migrateLegacyStorage, STORAGE_PREFIX } from '../../../lib/storageMigration';
 import {
   ArrowUpDown,
   ArrowUp,
@@ -307,13 +308,14 @@ export const DataTable = <T extends Record<string, any>>({
   }, []);
 
   // Persistence keys
-  const storageKeyDensity = `netpulse_dt_density_${viewKey}`;
-  const storageKeyViews = `netpulse_dt_views_${viewKey}`;
-  const storageKeyCols = `netpulse_dt_cols_${viewKey}`;
-  const storageKeyView = `netpulse_dt_view_${viewKey}`;
+  const storageKeyDensity = `${STORAGE_PREFIX}_dt_density_${viewKey}`;
+  const storageKeyViews = `${STORAGE_PREFIX}_dt_views_${viewKey}`;
+  const storageKeyCols = `${STORAGE_PREFIX}_dt_cols_${viewKey}`;
+  const storageKeyView = `${STORAGE_PREFIX}_dt_view_${viewKey}`;
 
   // Density state: comfortable (56px) / default (48px) / compact (40px)
   const [density, setDensity] = useState<TableDensity>(() => {
+    migrateLegacyStorage();
     const saved = localStorage.getItem(storageKeyDensity);
     return (saved as TableDensity) || 'default';
   });

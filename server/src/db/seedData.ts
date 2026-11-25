@@ -1,10 +1,10 @@
-// Seed data for NetPulse ISP Operations
+// Seed data for NSMISP ISP Operations
 export const SEED_USERS = [
   {
     id: 'usr-admin-1',
     username: 'admin',
-    email: 'admin@netpulse.net',
-    passwordHash: '$2b$10$Cy4LMLnWH3B4jdeKbj8BZOSiaVpil9ZKlVLbi3.JeMoDx8Q8kNwuS', // password: admin123! or netpulse123
+    email: 'admin@nsmisp.net',
+    passwordHash: '$2b$10$Cy4LMLnWH3B4jdeKbj8BZOSiaVpil9ZKlVLbi3.JeMoDx8Q8kNwuS', // password: admin123! or nsmisp123
     fullName: 'David Vance',
     phone: '+855 12 888 001',
     role: 'SUPER_ADMIN',
@@ -19,7 +19,7 @@ export const SEED_USERS = [
   {
     id: 'usr-engineer-1',
     username: 'engineer',
-    email: 'noc@netpulse.net',
+    email: 'noc@nsmisp.net',
     passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma',
     fullName: 'Vireak Chan',
     phone: '+855 12 888 003',
@@ -35,7 +35,7 @@ export const SEED_USERS = [
   {
     id: 'usr-cashier-1',
     username: 'cashier',
-    email: 'cashier@netpulse.net',
+    email: 'cashier@nsmisp.net',
     passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma',
     fullName: 'Bopha Pich',
     phone: '+855 12 888 004',
@@ -51,7 +51,7 @@ export const SEED_USERS = [
   {
     id: 'usr-tech-1',
     username: 'tech',
-    email: 'tech@netpulse.net',
+    email: 'tech@nsmisp.net',
     passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma',
     fullName: 'Marcus Vance',
     phone: '+855 98 444 101',
@@ -67,7 +67,7 @@ export const SEED_USERS = [
   {
     id: 'usr-support-1',
     username: 'support',
-    email: 'support@netpulse.net',
+    email: 'support@nsmisp.net',
     passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma',
     fullName: 'Sokunthea Keo',
     phone: '+855 12 888 005',
@@ -83,7 +83,7 @@ export const SEED_USERS = [
   {
     id: 'usr-accountant-1',
     username: 'accountant',
-    email: 'finance@netpulse.net',
+    email: 'finance@nsmisp.net',
     passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma',
     fullName: 'Sophea Pich',
     phone: '+855 12 888 002',
@@ -99,7 +99,7 @@ export const SEED_USERS = [
   {
     id: 'usr-tech-2',
     username: 'tech_marcus',
-    email: 'marcus@netpulse.net',
+    email: 'marcus@nsmisp.net',
     passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma',
     fullName: 'Marcus Vance',
     phone: '+855 98 444 101',
@@ -147,7 +147,7 @@ export const SEED_ROUTERS = [
     managementIp: '192.168.88.1',
     apiPort: 8728,
     username: 'admin',
-    encryptedSecret: 'netpulse123',
+    encryptedSecret: 'nsmisp123',
     model: 'MikroTik CCR2004-16G-2S+',
     osVersion: 'RouterOS v7.14.2',
     location: 'Phnom Penh Central POP',
@@ -162,7 +162,7 @@ export const SEED_ROUTERS = [
     managementIp: '192.168.88.2',
     apiPort: 8728,
     username: 'admin',
-    encryptedSecret: 'netpulse123',
+    encryptedSecret: 'nsmisp123',
     model: 'MikroTik CCR2116-12G-4S+',
     osVersion: 'RouterOS v7.14.2',
     location: 'Siem Reap Regional POP',
@@ -177,7 +177,7 @@ export const SEED_ROUTERS = [
     managementIp: '192.168.88.3',
     apiPort: 8728,
     username: 'admin',
-    encryptedSecret: 'netpulse123',
+    encryptedSecret: 'nsmisp123',
     model: 'MikroTik CCR1009-7G-1C-1S+',
     osVersion: 'RouterOS v7.13.5',
     location: 'Tower Site 04 - Toul Kork',
@@ -590,9 +590,9 @@ export const SEED_SERIAL_NUMBERS = [
 ];
 
 export const SEED_TECHNICIANS = [
-  { id: 'tech-1', userId: 'usr-tech-1', name: 'Marcus Vance', phone: '+855 98 444 101', email: 'marcus@netpulse.net', zone: 'North Zone / Toul Kork', status: 'Available', rating: 4.9, completedToday: 2 },
-  { id: 'tech-2', name: 'Sokha Meng', phone: '+855 98 444 102', email: 'sokha@netpulse.net', zone: 'South Zone / BKK & Chamkarmon', status: 'On Job', rating: 4.8, completedToday: 3 },
-  { id: 'tech-3', name: 'Piseth Roeun', phone: '+855 98 444 103', email: 'piseth@netpulse.net', zone: 'East Zone / Chbar Ampov', status: 'Available', rating: 4.9, completedToday: 1 },
+  { id: 'tech-1', userId: 'usr-tech-1', name: 'Marcus Vance', phone: '+855 98 444 101', email: 'marcus@nsmisp.net', zone: 'North Zone / Toul Kork', status: 'Available', rating: 4.9, completedToday: 2 },
+  { id: 'tech-2', name: 'Sokha Meng', phone: '+855 98 444 102', email: 'sokha@nsmisp.net', zone: 'South Zone / BKK & Chamkarmon', status: 'On Job', rating: 4.8, completedToday: 3 },
+  { id: 'tech-3', name: 'Piseth Roeun', phone: '+855 98 444 103', email: 'piseth@nsmisp.net', zone: 'East Zone / Chbar Ampov', status: 'Available', rating: 4.9, completedToday: 1 },
 ];
 
 export const SEED_INSTALLATIONS = [

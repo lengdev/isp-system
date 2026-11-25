@@ -1,5 +1,5 @@
 {
-  "name": "netpulse-isp",
+  "name": "nsmisp-isp",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -20,9 +20,9 @@
     "lint": "eslint .",
     "test:unit": "node scripts/test-regression.mjs",
     "test:frontend-auth": "node scripts/test-auth-frontend.mjs",
-    "test:backend": "node --test server/test/netpulse.test.mjs",
+    "test:backend": "node --test server/test/nsmisp.test.mjs",
     "test:pw": "playwright test",
-    "test": "node scripts/test-regression.mjs && node --test server/test/netpulse.test.mjs && node scripts/test-auth-frontend.mjs"
+    "test": "node scripts/test-regression.mjs && node --test server/test/nsmisp.test.mjs && node scripts/test-auth-frontend.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

@@ -18,6 +18,7 @@ import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { useStore } from '../store/useStore';
 import { api } from '../lib/api';
+import { BRAND_NAME } from '../lib/brand';
 
 export const CustomerPortalPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
@@ -93,7 +94,7 @@ export const CustomerPortalPage: React.FC = () => {
             <div className="inline-flex p-3 rounded-2xl bg-[var(--brand)] text-white shadow-lg shadow-orange-500/20">
               <Wifi className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-[var(--text)] tracking-tight">NetPulse Customer Portal</h2>
+            <h2 className="text-2xl font-bold text-[var(--text)] tracking-tight">{BRAND_NAME} Customer Portal</h2>
             <p className="text-xs text-[var(--text-muted)]">
               Log in to view broadband speed, pay invoices via KHQR, and request technical support
             </p>
@@ -306,7 +307,7 @@ export const CustomerPortalPage: React.FC = () => {
 
           <div className="space-y-1">
             <div className="text-xl font-bold text-[var(--text)]">${khqrData?.amount?.toFixed(2)} USD</div>
-            <div className="text-xs text-[var(--text-muted)]">NetPulse Broadband ({khqrData?.merchantId})</div>
+            <div className="text-xs text-[var(--text-muted)]">{BRAND_NAME} Broadband ({khqrData?.merchantId})</div>
           </div>
 
           <Button variant="primary" onClick={() => setIsKhqrOpen(false)}>Close</Button>

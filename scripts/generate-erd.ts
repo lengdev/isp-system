@@ -1078,7 +1078,7 @@ function buildLegendDiagram(
 
   // 1. Metadata & Summary Box
   const metaText =
-    `NetPulse Database ERD\n` +
+    `NSMISP Database ERD\n` +
     `Commit: ${gitMeta.commitHash}\n` +
     `Commit Date: ${gitMeta.commitDate}\n` +
     `Models: ${models.length}  |  Foreign Keys: ${relations.length}  |  Enums: ${enums.length}\n` +
@@ -1277,7 +1277,7 @@ function main(): void {
 
   const mxfileXml =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<mxfile host="app.diagrams.net" agent="netpulse-erd-generator" version="24.7.17" pages="${
+    `<mxfile host="app.diagrams.net" agent="nsmisp-erd-generator" version="24.7.17" pages="${
       2 + domainDiagrams.length
     }">\n` +
     `${overview.xml}\n` +
@@ -1285,7 +1285,7 @@ function main(): void {
     `${legendXml}\n` +
     `</mxfile>\n`;
 
-  const outPath = path.resolve(process.cwd(), 'docs/erd/netpulse-erd.drawio');
+  const outPath = path.resolve(process.cwd(), 'docs/erd/nsmisp-erd.drawio');
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, mxfileXml, 'utf8');
 

@@ -7,6 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 import { useStore } from '../store/useStore';
 import { api } from '../lib/api';
+import { BRAND_DOMAIN } from '../lib/brand';
 
 const ROLE_OPTIONS: ComboboxOption[] = [
   { value: 'SUPER_ADMIN', label: 'Super Admin (Full Access)' },
@@ -134,7 +135,7 @@ export const StaffUsersPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Email Address">
-              <Input placeholder="sokha@netpulse.net" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input placeholder={`sokha@${BRAND_DOMAIN}`} value={email} onChange={(e) => setEmail(e.target.value)} />
             </Field>
             <Field label="Phone Number">
               <Input placeholder="+855 12 333 444" value={phone} onChange={(e) => setPhone(e.target.value)} />

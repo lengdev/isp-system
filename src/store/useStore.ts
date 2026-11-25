@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '../lib/api';
+import { migrateLegacyStorage, STORAGE_PREFIX, STORE_PERSIST_KEY } from '../lib/storageMigration';
+
+migrateLegacyStorage();
 import {
   Customer,
   CustomerStatus,
@@ -288,19 +291,19 @@ export const useStore = create<AppStore>()(
       isLoading: false,
       darkMode: false,
       themeMode: 'light',
-      comfort: (typeof window !== 'undefined' && (localStorage.getItem('netpulse_comfort') as any)) || 'soft',
+      comfort: (typeof window !== 'undefined' && (localStorage.getItem(`${STORAGE_PREFIX}_comfort`) as any)) || 'soft',
       density:
         (typeof window !== 'undefined' &&
-          (localStorage.getItem('netpulse_density') as any)) ||
+          (localStorage.getItem(`${STORAGE_PREFIX}_density`) as any)) ||
         'compact',
       animations: 'system',
       sidebarCollapsed:
         (typeof window !== 'undefined' &&
-          localStorage.getItem('netpulse_sidebar_collapsed') === 'true') ||
+          localStorage.getItem(`${STORAGE_PREFIX}_sidebar_collapsed`) === 'true') ||
         false,
       sidebarUpgradeDismissed:
         (typeof window !== 'undefined' &&
-          localStorage.getItem('netpulse_upgrade_dismissed') === 'true') ||
+          localStorage.getItem(`${STORAGE_PREFIX}_upgrade_dismissed`) === 'true') ||
         false,
       currency: '$',
 
@@ -409,14 +412,14 @@ export const useStore = create<AppStore>()(
       setComfort: (comfort) => {
         set({ comfort });
         if (typeof window !== 'undefined') {
-          localStorage.setItem('netpulse_comfort', comfort);
+          localStorage.setItem(`${STORAGE_PREFIX}_comfort`, comfort);
           document.documentElement.setAttribute('data-comfort', comfort);
         }
       },
       setDensity: (density) => {
         set({ density });
         if (typeof window !== 'undefined') {
-          localStorage.setItem('netpulse_density', density);
+          localStorage.setItem(`${STORAGE_PREFIX}_density`, density);
           document.documentElement.setAttribute('data-density', density);
         }
       },
@@ -429,20 +432,20 @@ export const useStore = create<AppStore>()(
       setSidebarCollapsed: (sidebarCollapsed) => {
         set({ sidebarCollapsed });
         if (typeof window !== 'undefined') {
-          localStorage.setItem('netpulse_sidebar_collapsed', String(sidebarCollapsed));
+          localStorage.setItem(`${STORAGE_PREFIX}_sidebar_collapsed`, String(sidebarCollapsed));
         }
       },
       toggleSidebarCollapsed: () => {
         const next = !get().sidebarCollapsed;
         set({ sidebarCollapsed: next });
         if (typeof window !== 'undefined') {
-          localStorage.setItem('netpulse_sidebar_collapsed', String(next));
+          localStorage.setItem(`${STORAGE_PREFIX}_sidebar_collapsed`, String(next));
         }
       },
       setSidebarUpgradeDismissed: (sidebarUpgradeDismissed) => {
         set({ sidebarUpgradeDismissed });
         if (typeof window !== 'undefined') {
-          localStorage.setItem('netpulse_upgrade_dismissed', String(sidebarUpgradeDismissed));
+          localStorage.setItem(`${STORAGE_PREFIX}_upgrade_dismissed`, String(sidebarUpgradeDismissed));
         }
       },
       setCurrency: (currency) => set({ currency }),
@@ -1153,7 +1156,7 @@ export const useStore = create<AppStore>()(
       },
     }),
     {
-      name: 'netpulse_isp_store_v1',
+      name: STORE_PERSIST_KEY,
       partialize: (state) => ({
         customers: state.customers,
         plans: state.plans,

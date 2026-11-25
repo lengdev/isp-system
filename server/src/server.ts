@@ -75,7 +75,7 @@ app.get('/api/v1/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'NetPulse ISP Operations API',
+    service: 'NSMISP Operations API',
     version: '1.0.0',
   });
 });
@@ -84,7 +84,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'NetPulse ISP ERP & CRM Engine',
+    service: 'NSMISP ERP & CRM Engine',
     version: '1.0.0',
   });
 });
@@ -101,7 +101,7 @@ app.get('/api/docs', (_req, res) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NetPulse ISP API Documentation</title>
+  <title>NSMISP API Documentation</title>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
   <style>
     body { margin: 0; background: #FAF7F5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -254,13 +254,13 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
     err.code === 'P1017' ||
     err.name === 'PrismaClientInitializationError'
   ) {
-    console.error('[NetPulse Error]: Database connection error (503)');
+    console.error('[NSMISP Error]: Database connection error (503)');
     return res.status(503).json({
       error: 'Service temporarily unavailable',
     });
   }
 
-  console.error('[NetPulse Error]:', err.message || err);
+  console.error('[NSMISP Error]:', err.message || err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
   });
@@ -269,15 +269,15 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 let server: any = null;
 
 const shutdown = async (signal: string) => {
-  console.log(`\n[NetPulse] Received ${signal}. Shutting down gracefully...`);
+  console.log(`\n[NSMISP] Received ${signal}. Shutting down gracefully...`);
   if (server) {
     server.close(async () => {
-      console.log('[NetPulse] HTTP server closed.');
+      console.log('[NSMISP] HTTP server closed.');
       try {
         await prisma.$disconnect();
-        console.log('[NetPulse] Database disconnected.');
+        console.log('[NSMISP] Database disconnected.');
       } catch (err) {
-        console.error('[NetPulse] Error during database disconnect:', err);
+        console.error('[NSMISP] Error during database disconnect:', err);
       }
       process.exit(0);
     });
@@ -297,13 +297,13 @@ async function startServer() {
     await initDatabaseConnection();
     await RbacService.syncRegistry();
   } catch (err: any) {
-    console.error('[NetPulse FATAL]: Database connection failed. Aborting startup.');
+    console.error('[NSMISP FATAL]: Database connection failed. Aborting startup.');
     process.exit(1);
   }
 
   server = app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`=======================================================`);
-    console.log(`🚀 NetPulse ISP ERP Backend running on port ${PORT}`);
+    console.log(`🚀 NSMISP ERP Backend running on port ${PORT}`);
     console.log(`📡 REST API Gateway: http://localhost:${PORT}/api/v1`);
     console.log(`📚 Swagger Docs:    http://localhost:${PORT}/api/docs`);
     console.log(`=======================================================`);
@@ -311,10 +311,10 @@ async function startServer() {
 
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`\x1b[31m[NetPulse Fatal]: Port ${PORT} is already in use by another process!\x1b[0m`);
+      console.error(`\x1b[31m[NSMISP Fatal]: Port ${PORT} is already in use by another process!\x1b[0m`);
       console.error(`To free port ${PORT}, run: kill -9 $(lsof -t -i:${PORT})\n`);
     } else {
-      console.error('[NetPulse Server Listen Error]:', err);
+      console.error('[NSMISP Server Listen Error]:', err);
     }
     process.exit(1);
   });

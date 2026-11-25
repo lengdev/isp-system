@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { BRAND_NAME } from '../../lib/brand';
 import {
   Search,
   Users,
@@ -352,7 +353,7 @@ export const CommandPalette: React.FC = () => {
                   to select
                 </span>
               </div>
-              <span className="text-[#F26B3A] font-semibold">NetPulse Assistant</span>
+              <span className="text-[#F26B3A] font-semibold">{BRAND_NAME} Assistant</span>
             </div>
           </motion.div>
         </div>

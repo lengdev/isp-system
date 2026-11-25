@@ -6,6 +6,7 @@ import { Field, Input } from '../components/ui/Field';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 import { ThemeMode, ComfortMode, DensityMode, AnimationMode } from '../types';
 import { cn } from '../lib/utils';
+import { BRAND_NAME, BRAND_LEGAL_NAME, BRAND_SUPPORT_EMAIL } from '../lib/brand';
 
 export const SettingsPage: React.FC = () => {
   const darkMode = useStore((s) => s.darkMode);
@@ -22,9 +23,9 @@ export const SettingsPage: React.FC = () => {
   const resetDemoData = useStore((s) => s.resetDemoData);
   const addToast = useStore((s) => s.addToast);
 
-  const [companyName, setCompanyName] = useState('NetPulse High-Speed Broadband LLC');
+  const [companyName, setCompanyName] = useState<string>(BRAND_LEGAL_NAME);
   const [supportPhone, setSupportPhone] = useState('+1 (800) 555-PULSE');
-  const [supportEmail, setSupportEmail] = useState('support@netpulse.net');
+  const [supportEmail, setSupportEmail] = useState<string>(BRAND_SUPPORT_EMAIL);
 
   const currencyOptions: ComboboxOption[] = [
     { value: '$', label: '$ (USD — US Dollar)' },
@@ -75,7 +76,7 @@ export const SettingsPage: React.FC = () => {
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="e.g. NetPulse Broadband LLC"
+              placeholder={`e.g. ${BRAND_NAME} Broadband LLC`}
             />
           </Field>
 
@@ -93,7 +94,7 @@ export const SettingsPage: React.FC = () => {
                 type="email"
                 value={supportEmail}
                 onChange={(e) => setSupportEmail(e.target.value)}
-                placeholder="support@netpulse.net"
+                placeholder={BRAND_SUPPORT_EMAIL}
               />
             </Field>
           </div>

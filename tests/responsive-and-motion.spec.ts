@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('NetPulse ISP Responsive & Motion Audit Suite', () => {
+test.describe('NSMISP ISP Responsive & Motion Audit Suite', () => {
   const viewports = [
     { name: 'Desktop 1440px', width: 1440, height: 900 },
     { name: 'Laptop 1280px', width: 1280, height: 800 },

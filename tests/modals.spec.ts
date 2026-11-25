@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('NetPulse ISP Modals & Multi-Step System E2E', () => {
+test.describe('NSMISP ISP Modals & Multi-Step System E2E', () => {
   test('Add Customer modal opens, steps through validation, and completes creation', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/customers');
@@ -16,7 +16,7 @@ test.describe('NetPulse ISP Modals & Multi-Step System E2E', () => {
 
     // Fill Step 1 (Personal & Contact)
     await modal.locator('input[placeholder*="Rachel Adams"]').fill('Playwright Test Subscriber');
-    await modal.locator('input[placeholder*="name@example.com"]').fill('playwright.test@netpulse.net');
+    await modal.locator('input[placeholder*="name@example.com"]').fill('playwright.test@nsmisp.net');
     await modal.locator('input[placeholder*="512"]').fill('+1 (555) 987-6543');
     await modal.locator('input[placeholder*="Evergreen Terrace"]').fill('100 Automation Way');
 

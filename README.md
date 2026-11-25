@@ -1,6 +1,6 @@
-# NetPulse — ISP ERP, CRM & Network Operations Platform
+# NSMISP — ISP ERP, CRM & Network Operations Platform
 
-NetPulse is a full-stack **ISP (Internet Service Provider)** ERP, CRM, and Network Operations platform built for operators running mixed **FTTH (Fiber to the Home)** and **Wireless (WISP)** networks with **MikroTik RouterOS** infrastructure.
+NSMISP *(formerly NetPulse)* is a full-stack **ISP (Internet Service Provider)** ERP, CRM, and Network Operations platform built for operators running mixed **FTTH (Fiber to the Home)** and **Wireless (WISP)** networks with **MikroTik RouterOS** infrastructure.
 
 The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)** TypeScript architecture featuring database-backed authentication, a dynamic RBAC & feature-navigation registry, double-entry accounting invariants, multi-warehouse inventory tracking, and responsive UI primitives.
 
@@ -10,7 +10,7 @@ The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)
 
 ```text
 +------------------------------------------------------------------+
-|                        NetPulse Unified UI                       |
+|                         NSMISP Unified UI                        |
 |   React 18 · TypeScript · Vite 5 · Tailwind CSS 3 · Zustand      |
 |   TanStack Query / Table / Virtual · Framer Motion · Recharts    |
 +---------------------------------+--------------------------------+
@@ -18,7 +18,7 @@ The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)
                                   | HTTP / REST API (/api/v1, httpOnly Cookies + Bearer JWT)
                                   v
 +------------------------------------------------------------------+
-|                    NetPulse API Gateway (Express 5)              |
+|                     NSMISP API Gateway (Express 5)               |
 |   Node.js · TypeScript · Helmet · Zod · JWT · Dynamic RBAC       |
 |   Swagger / OpenAPI 3.0 (/api/docs)                              |
 +--------+-----------------+-------------------+-------------------+
@@ -60,7 +60,7 @@ The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)
 - **Timing-Safe Comparison**: Non-existent usernames run a dummy `bcrypt.compare` against `DUMMY_HASH` to mitigate username enumeration timing differences.
 
 ### 3. Dynamic RBAC, Permissions Matrix & Feature Registry (`/settings/roles`)
-NetPulse replaces static hardcoded role checks with a database-synchronized modular registry (`server/src/rbac/registry/`):
+NSMISP replaces static hardcoded role checks with a database-synchronized modular registry (`server/src/rbac/registry/`):
 
 - **Registry Modules (`server/src/rbac/registry/`)**:
   - Domain definitions for `dashboard`, `customers`, `packages`, `network`, `billing`, `accounting`, `inventory`, `procurement`, `operations`, `reports`, `automation`, `portal`, `messages`, `integrations`, `settings`, and `users-roles`.
@@ -135,7 +135,7 @@ isp-system-2/
 │   ├── src/
 │   │   ├── server.ts                # Express gateway, startup DB & RBAC sync, route mounts
 │   │   ├── db/
-│   │   │   ├── store.ts             # PrismaClient, initDatabaseConnection(), NetPulseDataStore
+│   │   │   ├── store.ts             # PrismaClient, initDatabaseConnection(), NsmispDataStore
 │   │   │   └── seedData.ts          # In-memory domain seed fixtures
 │   │   ├── docs/openapi.ts          # OpenAPI 3.0 specification
 │   │   ├── middleware/
@@ -144,8 +144,8 @@ isp-system-2/
 │   │   ├── routes/                  # 14 Express route modules mounted under /api/v1
 │   │   └── services/                # 13 backend service modules
 │   └── test/
-│       ├── netpulse.test.mjs        # Core domain & auth service integration tests
-│       ├── netpulse.test.ts         # TypeScript source test reference
+│       ├── nsmisp.test.mjs          # Core domain & auth service integration tests
+│       ├── nsmisp.test.ts           # TypeScript source test reference
 │       ├── rbac.test.mjs            # RBAC matrix, features & requireFeature API tests
 │       └── features-frontend.test.mjs # Dynamic permission & ANY/ALL feature mode tests
 ├── src/
@@ -221,7 +221,7 @@ async function startServer() {
     await initDatabaseConnection();
     await RbacService.syncRegistry();
   } catch (err: any) {
-    console.error('[NetPulse FATAL]: Database connection failed. Aborting startup.');
+    console.error('[NSMISP FATAL]: Database connection failed. Aborting startup.');
     process.exit(1);
   }
   ...
@@ -232,11 +232,11 @@ async function startServer() {
 - **Runtime Database Error Mapping**: Express error middleware maps Prisma initialization/connection errors (`P1001`, `P1002`, `P1017`, `PrismaClientInitializationError`) to HTTP `503 Service temporarily unavailable`.
 - **Hybrid Storage Across Services**:
   - **PostgreSQL via Prisma**: `auth.service.ts` (users, sessions, audit logs), `rbac.service.ts` (roles, permissions, features, role/feature/user mappings), `customer.service.ts` (customers, addresses, subscriptions, packages, activities), and `package.routes.ts` (packages).
-  - **In-Memory `dbStore` (`NetPulseDataStore` in `server/src/db/store.ts`)**: `accounting.service.ts`, `automation.service.ts`, `billing.service.ts`, `inventory.service.ts`, `mikrotik.service.ts`, `network.service.ts`, `operations.service.ts`, `payment.service.ts`, `procurement.service.ts`, and `report.service.ts` currently read and mutate the seeded in-memory `dbStore` repository (and `auth.service.ts` mirrors audit log entries to `dbStore.logAudit(...)` as well as PostgreSQL).
+  - **In-Memory `dbStore` (`NsmispDataStore` in `server/src/db/store.ts`)**: `accounting.service.ts`, `automation.service.ts`, `billing.service.ts`, `inventory.service.ts`, `mikrotik.service.ts`, `network.service.ts`, `operations.service.ts`, `payment.service.ts`, `procurement.service.ts`, and `report.service.ts` currently read and mutate the seeded in-memory `dbStore` repository (and `auth.service.ts` mirrors audit log entries to `dbStore.logAudit(...)` as well as PostgreSQL).
 
 ### 3. Database Schema & Migrations (`prisma/schema.prisma`)
 
-The Prisma schema defines **56 models** across 5 applied migrations (`20261123000000_init`, `20261123010000_auth_enhancements`, `20261123153906_session_family_id`, `20261124180000_rbac_permissions_matrix`, `20261124193500_features_and_permissions`):
+The Prisma schema defines **56 models** across applied migrations (`20261123000000_init`, `20261123010000_auth_enhancements`, `20261123153906_session_family_id`, `20261124180000_rbac_permissions_matrix`, `20261124193500_features_and_permissions`, `20261125000000_rename_brand_to_nsmisp`):
 
 | Domain | Models |
 |---|---|
@@ -252,14 +252,14 @@ The Prisma schema defines **56 models** across 5 applied migrations (`2026112300
 
 ## Database Diagram
 
-The repository includes an automated Prisma DMMF → draw.io ER diagram at [`docs/erd/netpulse-erd.drawio`](docs/erd/netpulse-erd.drawio) containing an **Overview** page, one detailed page per domain (with cross-domain reference boxes), and a **Legend** page.
+The repository includes an automated Prisma DMMF → draw.io ER diagram at [`docs/erd/nsmisp-erd.drawio`](docs/erd/nsmisp-erd.drawio) containing an **Overview** page, one detailed page per domain (with cross-domain reference boxes), and a **Legend** page.
 
 - **Regenerate** after updating `prisma/schema.prisma`:
   ```bash
   npx prisma generate
   npm run db:diagram
   ```
-- **Open & view**: Open `docs/erd/netpulse-erd.drawio` in **draw.io Desktop**, or go to [app.diagrams.net](https://app.diagrams.net) and select **File > Open from > Device...** (or **File > Open**).
+- **Open & view**: Open `docs/erd/nsmisp-erd.drawio` in **draw.io Desktop**, or go to [app.diagrams.net](https://app.diagrams.net) and select **File > Open from > Device...** (or **File > Open**).
 
 ---
 
@@ -335,14 +335,14 @@ Services defined in `docker-compose.yml`:
 
 | Role | Username | Email | Seeded Password | Scope |
 |---|---|---|---|---|
-| `SUPER_ADMIN` | `admin` | `admin@netpulse.net` | `ADMIN_PASSWORD` env var *(default `StrongSuperAdminPassword2026!`)* | Full unrestricted access |
-| `NETWORK_ENGINEER` | `engineer` | `noc@netpulse.net` | `Password123!` *(non-production only)* | Network, PPPoE, VLAN, IPAM, Operations, Inventory view, Reports |
-| `BILLING_CASHIER` | `cashier` | `cashier@netpulse.net` | `Password123!` *(non-production only)* | Customers view, Billing, Payments, KHQR, Accounting view |
-| `FIELD_TECHNICIAN` | `tech` | `tech@netpulse.net` | `Password123!` *(non-production only)* | Customers view, Installations, Technicians, Tickets, Inventory view |
-| `SUPPORT_AGENT` | `support` | `support@netpulse.net` | `Password123!` *(non-production only)* | Customers, Packages/Subscriptions view, Tickets, Portal, Messages |
-| `ACCOUNTANT` | `accountant` | `finance@netpulse.net` | `Password123!` *(non-production only)* | Billing, Payments, Accounting & Reports, Procurement view |
+| `SUPER_ADMIN` | `admin` | `admin@nsmisp.net` | `ADMIN_PASSWORD` env var *(default `StrongSuperAdminPassword2026!`)* | Full unrestricted access |
+| `NETWORK_ENGINEER` | `engineer` | `noc@nsmisp.net` | `Password123!` *(non-production only)* | Network, PPPoE, VLAN, IPAM, Operations, Inventory view, Reports |
+| `BILLING_CASHIER` | `cashier` | `cashier@nsmisp.net` | `Password123!` *(non-production only)* | Customers view, Billing, Payments, KHQR, Accounting view |
+| `FIELD_TECHNICIAN` | `tech` | `tech@nsmisp.net` | `Password123!` *(non-production only)* | Customers view, Installations, Technicians, Tickets, Inventory view |
+| `SUPPORT_AGENT` | `support` | `support@nsmisp.net` | `Password123!` *(non-production only)* | Customers, Packages/Subscriptions view, Tickets, Portal, Messages |
+| `ACCOUNTANT` | `accountant` | `finance@nsmisp.net` | `Password123!` *(non-production only)* | Billing, Payments, Accounting & Reports, Procurement view |
 
-*(In `scripts/seed-admin.mjs`, `ADMIN_PASSWORD` falls back to `NetPulseAdmin2026!`.)*
+*(In `scripts/seed-admin.mjs`, `ADMIN_PASSWORD` falls back to `NsmispAdmin2026!`.)*
 
 ---
 
@@ -415,7 +415,7 @@ npm run lint               # ESLint across repository
 # Core Test Suites
 npm run test:unit          # scripts/test-regression.mjs (22 DataTable & UI checks)
 npm run test:frontend-auth # scripts/test-auth-frontend.mjs (7 auth & RBAC schema tests)
-npm run test:backend       # server/test/netpulse.test.mjs
+npm run test:backend       # server/test/nsmisp.test.mjs
 npm test                   # Runs test:unit, test:backend, and test:frontend-auth
 
 # Additional Node Test Suites

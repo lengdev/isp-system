@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { BRAND_ADMIN_EMAIL } from '../lib/brand';
 
 export interface AuthUser {
   id: string;
@@ -38,7 +39,7 @@ const defaultUser: AuthUser | null = isE2E
   ? {
       id: 'usr-admin-1',
       username: 'admin',
-      email: 'admin@netpulse.net',
+      email: BRAND_ADMIN_EMAIL,
       fullName: 'David Vance',
       role: 'SUPER_ADMIN',
       roles: ['SUPER_ADMIN'],

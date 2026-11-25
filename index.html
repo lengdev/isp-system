@@ -13,12 +13,12 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap"
     rel="stylesheet">
-  <title>NetPulse - ISP Customer Management & Operations</title>
+  <title>NSMISP - ISP Customer Management & Operations</title>
   <!-- Prevent theme/comfort/density/motion flash on initial load -->
   <script>
     (function () {
       try {
-        var raw = localStorage.getItem('netpulse-storage');
+        var raw = localStorage.getItem('nsmisp-storage') || localStorage.getItem('nsmisp_isp_store_v1');
         var state = (raw ? JSON.parse(raw).state : null) || {};
         var themeMode = state.themeMode || (state.darkMode ? 'dark' : 'light');
         var isDark =

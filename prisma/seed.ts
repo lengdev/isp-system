@@ -13,13 +13,13 @@ const prisma = new PrismaClient({
 const BCRYPT_SALT_ROUNDS = 12;
 
 export async function seed() {
-  console.log('🌱 Starting NetPulse Prisma database seed...');
+  console.log('🌱 Starting NSMISP Prisma database seed...');
 
   try {
     await prisma.$connect();
 
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@netpulse.net';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@nsmisp.net';
     const adminPassword = process.env.ADMIN_PASSWORD || 'StrongSuperAdminPassword2026!';
     const adminFullName = process.env.ADMIN_FULLNAME || 'David Vance';
 
@@ -56,35 +56,35 @@ export async function seed() {
       const demoUsers = [
         {
           username: 'engineer',
-          email: 'noc@netpulse.net',
+          email: 'noc@nsmisp.net',
           fullName: 'Vireak Chan',
           role: UserRoleType.NETWORK_ENGINEER,
           password: 'Password123!',
         },
         {
           username: 'cashier',
-          email: 'cashier@netpulse.net',
+          email: 'cashier@nsmisp.net',
           fullName: 'Bopha Pich',
           role: UserRoleType.BILLING_CASHIER,
           password: 'Password123!',
         },
         {
           username: 'tech',
-          email: 'tech@netpulse.net',
+          email: 'tech@nsmisp.net',
           fullName: 'Marcus Vance',
           role: UserRoleType.FIELD_TECHNICIAN,
           password: 'Password123!',
         },
         {
           username: 'support',
-          email: 'support@netpulse.net',
+          email: 'support@nsmisp.net',
           fullName: 'Sokunthea Keo',
           role: UserRoleType.SUPPORT_AGENT,
           password: 'Password123!',
         },
         {
           username: 'accountant',
-          email: 'finance@netpulse.net',
+          email: 'finance@nsmisp.net',
           fullName: 'Sophea Pich',
           role: UserRoleType.ACCOUNTANT,
           password: 'Password123!',
@@ -119,12 +119,37 @@ export async function seed() {
       }
     }
 
+    // Seed or update default CompanySetting branding without overwriting custom org profiles
+    const existingCompanySetting = await prisma.companySetting.findFirst();
+    if (!existingCompanySetting) {
+      await prisma.companySetting.create({
+        data: {
+          companyName: 'NSMISP High-Speed Broadband LLC',
+          supportEmail: 'support@nsmisp.net',
+        },
+      });
+    } else if (
+      existingCompanySetting.companyName.includes('NetPulse') ||
+      existingCompanySetting.supportEmail === 'support@netpulse.net'
+    ) {
+      await prisma.companySetting.update({
+        where: { id: existingCompanySetting.id },
+        data: {
+          companyName: existingCompanySetting.companyName.replace(/NetPulse/gi, 'NSMISP'),
+          supportEmail:
+            existingCompanySetting.supportEmail === 'support@netpulse.net'
+              ? 'support@nsmisp.net'
+              : existingCompanySetting.supportEmail,
+        },
+      });
+    }
+
     // Seed RBAC Permissions, Roles, and Role-Permissions Matrix
     console.log('🌱 Seeding RBAC Permissions and Roles matrix...');
     await RbacService.seedRbac();
     console.log('✓ RBAC Permissions and Roles matrix seeded successfully.');
 
-    console.log('✓ NetPulse Database seeding completed successfully.');
+    console.log('✓ NSMISP Database seeding completed successfully.');
   } catch (err: any) {
     console.error('❌ Seeding failed:', err.message || err);
     throw err;

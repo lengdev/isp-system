@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
+import { BRAND_NAME } from '../../lib/brand';
 import {
   LayoutDashboard,
   Users,
@@ -397,7 +398,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                 className="min-w-0 overflow-hidden"
               >
                 <h1 className="text-[14px] font-bold tracking-tight text-[var(--text)] truncate leading-tight">
-                  NetPulse
+                  {BRAND_NAME}
                 </h1>
                 <p className="text-[11px] text-[var(--text-muted)] truncate leading-tight">
                   ISP Operations
@@ -597,7 +598,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                 </NavLink>
                 <div className="min-w-0 flex-1">
                   <div className="text-[12px] font-semibold text-[var(--text)] truncate">
-                    {user?.fullName || 'NetPulse Admin'}
+                    {user?.fullName || `${BRAND_NAME} Admin`}
                   </div>
                   <div className="text-[11px] text-orange-600 dark:text-orange-400 font-medium truncate">
                     {formatRole(user?.role)}

@@ -1174,10 +1174,10 @@ model AutomationRule {
 
 model CompanySetting {
   id              String   @id @default(uuid())
-  companyName     String   @default("NetPulse High-Speed Broadband LLC")
+  companyName     String   @default("NSMISP High-Speed Broadband LLC")
   companyAddress  String   @default("Building 42, St. 214, Phnom Penh, Cambodia")
   supportPhone    String   @default("+855 23 888 999")
-  supportEmail    String   @default("support@netpulse.net")
+  supportEmail    String   @default("support@nsmisp.net")
   currency        String   @default("$")
   timezone        String   @default("Asia/Phnom_Penh")
   invoicePrefix   String   @default("INV")

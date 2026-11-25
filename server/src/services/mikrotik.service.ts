@@ -50,7 +50,7 @@ export class MikroTikService {
             remoteAddress: cust.ipAddress,
             callerId: cust.macAddress,
             disabled: cust.status === 'SUSPENDED' || cust.status === 'DISCONNECTED',
-            comment: `NetPulse Subscriber: ${cust.code} (${cust.fullName})`,
+            comment: `NSMISP Subscriber: ${cust.code} (${cust.fullName})`,
           });
 
           if (cust.status === 'ACTIVE') {

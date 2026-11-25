@@ -52,7 +52,7 @@ test('--- FRONTEND AUTH & RBAC VALIDATION TEST SUITE ---', async (t) => {
   });
 
   await t.test('3. Forgot Password Schema: Validates input presence', () => {
-    assert.strictEqual(forgotPasswordSchema.safeParse({ emailOrUsername: 'admin@netpulse.net' }).success, true);
+    assert.strictEqual(forgotPasswordSchema.safeParse({ emailOrUsername: 'admin@nsmisp.net' }).success, true);
     assert.strictEqual(forgotPasswordSchema.safeParse({ emailOrUsername: '' }).success, false);
   });
 
@@ -89,8 +89,8 @@ test('--- FRONTEND AUTH & RBAC VALIDATION TEST SUITE ---', async (t) => {
 
     // Compliant strong password
     const valid = resetPasswordSchema.safeParse({
-      password: 'P@ssword2026NetPulse!',
-      confirmPassword: 'P@ssword2026NetPulse!',
+      password: 'P@ssword2026NSMISP!',
+      confirmPassword: 'P@ssword2026NSMISP!',
     });
     assert.strictEqual(valid.success, true);
   });

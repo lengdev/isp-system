@@ -4,12 +4,13 @@ import { useStore } from '../store/useStore';
 import { Button } from '../components/ui/Button';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 import { Input, Textarea } from '../components/ui/Field';
+import { BRAND_NAME } from '../lib/brand';
 
 export const MessagesPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
   const [channel, setChannel] = useState<'SMS' | 'Email'>('SMS');
   const [recipientGroup, setRecipientGroup] = useState('All Active Subscribers');
-  const [subject, setSubject] = useState('NetPulse Network Notice');
+  const [subject, setSubject] = useState(`${BRAND_NAME} Network Notice`);
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -38,7 +39,7 @@ export const MessagesPage: React.FC = () => {
       id: 'msg-2',
       channel: 'Email',
       recipient: '14 Overdue Accounts',
-      preview: 'Friendly reminder: your monthly NetPulse statement is past due.',
+      preview: `Friendly reminder: your monthly ${BRAND_NAME} statement is past due.`,
       date: 'Sep 15, 2025',
       status: 'Delivered',
     },

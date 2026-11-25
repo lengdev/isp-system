@@ -9,11 +9,11 @@ const prisma = new PrismaClient();
 const BCRYPT_SALT_ROUNDS = 12;
 
 async function main() {
-  console.log('\x1b[36m%s\x1b[0m', '🌱 NetPulse Database Seeding: RBAC Roles & Super Admin...');
+  console.log('\x1b[36m%s\x1b[0m', '🌱 NSMISP Database Seeding: RBAC Roles & Super Admin...');
 
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@netpulse.net';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'NetPulseAdmin2026!';
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@nsmisp.net';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'NsmispAdmin2026!';
   const adminFullName = process.env.ADMIN_FULLNAME || 'David Vance';
 
   const adminPasswordHash = await bcrypt.hash(adminPassword, BCRYPT_SALT_ROUNDS);
@@ -51,35 +51,35 @@ async function main() {
       const demoUsers = [
         {
           username: 'engineer',
-          email: 'noc@netpulse.net',
+          email: 'noc@nsmisp.net',
           fullName: 'Vireak Chan',
           role: 'NETWORK_ENGINEER',
           password: 'Password123!',
         },
         {
           username: 'cashier',
-          email: 'cashier@netpulse.net',
+          email: 'cashier@nsmisp.net',
           fullName: 'Bopha Pich',
           role: 'BILLING_CASHIER',
           password: 'Password123!',
         },
         {
           username: 'tech',
-          email: 'tech@netpulse.net',
+          email: 'tech@nsmisp.net',
           fullName: 'Marcus Vance',
           role: 'FIELD_TECHNICIAN',
           password: 'Password123!',
         },
         {
           username: 'support',
-          email: 'support@netpulse.net',
+          email: 'support@nsmisp.net',
           fullName: 'Sokunthea Keo',
           role: 'SUPPORT_AGENT',
           password: 'Password123!',
         },
         {
           username: 'accountant',
-          email: 'finance@netpulse.net',
+          email: 'finance@nsmisp.net',
           fullName: 'Sophea Pich',
           role: 'ACCOUNTANT',
           password: 'Password123!',

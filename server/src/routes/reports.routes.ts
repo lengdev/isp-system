@@ -18,7 +18,7 @@ router.get('/export', (req, res) => {
   const type = (req.query.type as any) || 'customers';
   const csv = ReportService.exportCsv(type);
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename="netpulse-${type}-${Date.now()}.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="nsmisp-${type}-${Date.now()}.csv"`);
   res.send(csv);
 });
 

@@ -168,12 +168,12 @@ export class PaymentService {
     const txnId = `NP-${Date.now()}`;
 
     // Standard EMVCo / KHQR string payload representation
-    const khqrString = `00020101021229370016bakong@nbc.org.kh0113${bakongId}5204581253038405406${amount.toFixed(2)}5802KH5912NETPULSE ISP6010PHNOM PENH62180114${txnId}6304ABCD`;
+    const khqrString = `00020101021229370016bakong@nbc.org.kh0113${bakongId}5204581253038405406${amount.toFixed(2)}5802KH5910NSMISP ISP6010PHNOM PENH62180114${txnId}6304ABCD`;
 
     return {
       khqrString,
       transactionId: txnId,
-      merchantName: 'NetPulse High-Speed Broadband',
+      merchantName: 'NSMISP High-Speed Broadband',
       merchantId: bakongId,
       amount,
       currency: 'USD',

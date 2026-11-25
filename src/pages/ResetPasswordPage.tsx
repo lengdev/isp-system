@@ -6,6 +6,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Activity, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import { api } from '../lib/api';
+import { BRAND_NAME } from '../lib/brand';
 
 const resetSchema = z
   .object({
@@ -69,7 +70,7 @@ export const ResetPasswordPage: React.FC = () => {
             <Activity className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-lg font-bold tracking-tight text-slate-900 leading-none">NetPulse</div>
+            <div className="text-lg font-bold tracking-tight text-slate-900 leading-none">{BRAND_NAME}</div>
             <div className="text-[11px] text-slate-500 font-medium tracking-wide">ISP Operations Platform</div>
           </div>
         </Link>
@@ -105,7 +106,7 @@ export const ResetPasswordPage: React.FC = () => {
               <div className="text-center mb-6">
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">Set New Password</h2>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  Create a strong password (minimum 8 characters) for your NetPulse staff account.
+                  Create a strong password (minimum 8 characters) for your {BRAND_NAME} staff account.
                 </p>
               </div>
 
@@ -191,7 +192,7 @@ export const ResetPasswordPage: React.FC = () => {
       </main>
 
       <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 text-center text-xs text-slate-500">
-        © 2026 NetPulse. All rights reserved.
+        © 2026 {BRAND_NAME}. All rights reserved.
       </footer>
     </div>
   );

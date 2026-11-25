@@ -1,18 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { AuthService } from '../src/services/auth.service.ts';
-import { CustomerService } from '../src/services/customer.service.ts';
-import { MikroTikService } from '../src/services/mikrotik.service.ts';
-import { NetworkService } from '../src/services/network.service.ts';
-import { BillingService } from '../src/services/billing.service.ts';
-import { PaymentService } from '../src/services/payment.service.ts';
-import { AccountingService } from '../src/services/accounting.service.ts';
-import { InventoryService } from '../src/services/inventory.service.ts';
-import { ProcurementService } from '../src/services/procurement.service.ts';
-import { OperationsService } from '../src/services/operations.service.ts';
-import { dbStore } from '../src/db/store.ts';
+import { AuthService } from '../../dist-server/services/auth.service.js';
+import { CustomerService } from '../../dist-server/services/customer.service.js';
+import { MikroTikService } from '../../dist-server/services/mikrotik.service.js';
+import { NetworkService } from '../../dist-server/services/network.service.js';
+import { BillingService } from '../../dist-server/services/billing.service.js';
+import { PaymentService } from '../../dist-server/services/payment.service.js';
+import { AccountingService } from '../../dist-server/services/accounting.service.js';
+import { InventoryService } from '../../dist-server/services/inventory.service.js';
+import { ProcurementService } from '../../dist-server/services/procurement.service.js';
+import { OperationsService } from '../../dist-server/services/operations.service.js';
+import { dbStore } from '../../dist-server/db/store.js';
 
-test('--- NETPULSE AUTOMATED TEST SUITE ---', async (t) => {
+test('--- NSMISP AUTOMATED TEST SUITE ---', async (t) => {
   // 1. AUTH & RBAC
   await t.test('1. Auth: Super Admin Login & JWT Generation', async () => {
     const res = await AuthService.login('admin', 'admin123!');
@@ -26,7 +26,7 @@ test('--- NETPULSE AUTOMATED TEST SUITE ---', async (t) => {
   await t.test('2. Auth: Reject Invalid Credentials', async () => {
     await assert.rejects(
       async () => await AuthService.login('admin', 'wrongpass999'),
-      /Invalid username\/email or password/
+      /Invalid username.*password/i
     );
   });
 
@@ -121,7 +121,7 @@ test('--- NETPULSE AUTOMATED TEST SUITE ---', async (t) => {
   // 6. PAYMENTS, DOUBLE-ENTRY JOURNAL & RECONNECTION
   await t.test('7. Payment: Cashier Payment & Subscriber Reconnection', async () => {
     // Set customer to suspended
-    const cust = dbStore.customers.find((c) => c.id === 'cust-1004')!;
+    const cust = dbStore.customers.find((c) => c.id === 'cust-1004');
     cust.status = 'SUSPENDED';
     cust.balanceDue = 110.0;
 
@@ -172,7 +172,7 @@ test('--- NETPULSE AUTOMATED TEST SUITE ---', async (t) => {
     // Reversal entry maintains audit trail
     const reversal = AccountingService.reverseJournalEntry(balanced.entry.entryNumber, 'Entered in error');
     assert.strictEqual(reversal.entry.isPosted, true);
-    const original = dbStore.journalEntries.find((e) => e.entryNumber === balanced.entry.entryNumber)!;
+    const original = dbStore.journalEntries.find((e) => e.entryNumber === balanced.entry.entryNumber);
     assert.strictEqual(original.isReversed, true);
   });
 
@@ -215,7 +215,7 @@ test('--- NETPULSE AUTOMATED TEST SUITE ---', async (t) => {
     assert.strictEqual(grn.po.status, 'COMPLETED');
 
     // Supplier balance should have increased by 5 * 28 = $140
-    const sup = dbStore.suppliers.find((s) => s.id === 'sup-1')!;
+    const sup = dbStore.suppliers.find((s) => s.id === 'sup-1');
     const prevBalance = sup.balancePayable;
 
     // Pay supplier
@@ -254,5 +254,126 @@ test('--- NETPULSE AUTOMATED TEST SUITE ---', async (t) => {
     assert.strictEqual(completed.installation.status, 'COMPLETED');
     assert.strictEqual(completed.customer.status, 'ACTIVE');
     assert.ok(completed.invoice, 'First monthly invoice generated');
+  });
+
+  // 11. AUTH ENHANCEMENTS: LOCKOUT, ROTATION, REUSE DETECTION & RBAC
+  await t.test('12. Auth: 5 Failed Attempts Trigger Account Lockout & Audit Log', async () => {
+    const testUsername = 'engineer'; // Network engineer demo account
+    const userObj = dbStore.users.find((u) => u.username === testUsername);
+    assert.ok(userObj, 'Test user must exist');
+
+    // Reset user attempt counters
+    userObj.failedLoginAttempts = 0;
+    userObj.lockedUntil = null;
+
+    // 4 failed attempts - should reject but not lock yet
+    for (let i = 1; i <= 4; i++) {
+      await assert.rejects(
+        () => AuthService.login(testUsername, 'wrong_password_xyz', false, `192.168.1.${i}`),
+        /Invalid username.*password/i
+      );
+    }
+    assert.strictEqual(userObj.failedLoginAttempts, 4);
+    assert.strictEqual(userObj.lockedUntil, null);
+
+    // 5th failed attempt triggers lockout
+    await assert.rejects(
+      () => AuthService.login(testUsername, 'wrong_password_xyz', false, '192.168.1.5'),
+      /Account is locked|Too many attempts/i
+    );
+    assert.ok(userObj.lockedUntil, 'User must now be locked');
+
+    // 6th attempt on locked account should be rejected immediately
+    await assert.rejects(
+      () => AuthService.login(testUsername, 'valid_pass_now', false, '192.168.1.6'),
+      /Account is locked/i
+    );
+
+    // Verify audit logs contain LOGIN_FAILURE and ACCOUNT_LOCKED
+    const failureLogs = dbStore.auditLogs.filter((l) => l.action === 'LOGIN_FAILURE' && l.performedBy === testUsername);
+    assert.ok(failureLogs.length >= 4, 'Multiple LOGIN_FAILURE logs recorded');
+    const lockedLogs = dbStore.auditLogs.filter((l) => l.action === 'ACCOUNT_LOCKED' && l.performedBy === testUsername);
+    assert.ok(lockedLogs.length >= 1, 'ACCOUNT_LOCKED log recorded');
+
+    // Reset user state for subsequent tests
+    userObj.failedLoginAttempts = 0;
+    userObj.lockedUntil = null;
+  });
+
+  await t.test('13. Auth: Refresh Token Issuance, Rotation & Old Token Invalidation', async () => {
+    // 1. Initial Login with rememberMe
+    const loginRes = await AuthService.login('cashier', 'admin123!', true, '10.0.0.1', 'Mozilla/5.0');
+    assert.ok(loginRes.accessToken, 'Access token returned');
+    assert.ok(loginRes.refreshToken, 'Refresh token returned');
+    const originalRefreshToken = loginRes.refreshToken;
+
+    // 2. Perform token refresh
+    const refreshRes = await AuthService.refresh(originalRefreshToken, '10.0.0.1', 'Mozilla/5.0');
+    assert.ok(refreshRes.accessToken, 'New access token issued');
+    assert.ok(refreshRes.refreshToken, 'Rotated refresh token issued');
+    assert.notStrictEqual(refreshRes.refreshToken, originalRefreshToken, 'Refresh token must be rotated');
+
+    // 3. Refresh with the NEW token succeeds
+    const secondRefresh = await AuthService.refresh(refreshRes.refreshToken, '10.0.0.1', 'Mozilla/5.0');
+    assert.ok(secondRefresh.accessToken, 'Second refresh succeeded');
+
+    // 4. Token Reuse Detection: Attempting to reuse the original (already rotated) token must fail
+    await assert.rejects(
+      () => AuthService.refresh(originalRefreshToken, '10.0.0.99', 'HackerBrowser/1.0'),
+      /revoked|reuse detected/i
+    );
+
+    // Token reuse must revoke all sessions for this user family
+    const reuseLogs = dbStore.auditLogs.filter((l) => l.action === 'REFRESH_REUSE_DETECTED');
+    assert.ok(reuseLogs.length >= 1, 'REFRESH_REUSE_DETECTED audit log recorded');
+  });
+
+  await t.test('14. Auth: Logout Session Revocation', async () => {
+    const loginRes = await AuthService.login('tech', 'admin123!', false, '10.0.0.2', 'Mobile Safari');
+    assert.ok(loginRes.refreshToken);
+
+    // Logout
+    await AuthService.logout(loginRes.refreshToken, '10.0.0.2');
+
+    // After logout, trying to refresh with that token must be rejected
+    await assert.rejects(
+      () => AuthService.refresh(loginRes.refreshToken, '10.0.0.2', 'Mobile Safari'),
+      /revoked|reuse detected|Invalid/i
+    );
+
+    const logoutLogs = dbStore.auditLogs.filter((l) => l.action === 'LOGOUT');
+    assert.ok(logoutLogs.length >= 1, 'LOGOUT audit log recorded');
+  });
+
+  await t.test('15. Auth: Granular RBAC Permissions & Roles Matrix', () => {
+    // Super Admin has all permissions
+    assert.strictEqual(AuthService.hasPermission('SUPER_ADMIN', 'billing:create'), true);
+    assert.strictEqual(AuthService.hasPermission('SUPER_ADMIN', 'network:write'), true);
+    assert.strictEqual(AuthService.hasPermission('SUPER_ADMIN', 'nonexistent:perm'), true);
+
+    // Network Engineer
+    assert.strictEqual(AuthService.hasPermission('NETWORK_ENGINEER', 'network:view'), true);
+    assert.strictEqual(AuthService.hasPermission('NETWORK_ENGINEER', 'pppoe:manage'), true);
+    assert.strictEqual(AuthService.hasPermission('NETWORK_ENGINEER', 'billing:create'), false);
+
+    // Billing Cashier
+    assert.strictEqual(AuthService.hasPermission('BILLING_CASHIER', 'billing:create'), true);
+    assert.strictEqual(AuthService.hasPermission('BILLING_CASHIER', 'payment:create'), true);
+    assert.strictEqual(AuthService.hasPermission('BILLING_CASHIER', 'network:write'), false);
+
+    // Field Technician
+    assert.strictEqual(AuthService.hasPermission('FIELD_TECHNICIAN', 'installation:update'), true);
+    assert.strictEqual(AuthService.hasPermission('FIELD_TECHNICIAN', 'ticket:update'), true);
+    assert.strictEqual(AuthService.hasPermission('FIELD_TECHNICIAN', 'accounting:journal'), false);
+
+    // Support Agent
+    assert.strictEqual(AuthService.hasPermission('SUPPORT_AGENT', 'ticket:create'), true);
+    assert.strictEqual(AuthService.hasPermission('SUPPORT_AGENT', 'ticket:update'), true);
+    assert.strictEqual(AuthService.hasPermission('SUPPORT_AGENT', 'network:reboot'), false);
+
+    // Role checks
+    assert.strictEqual(AuthService.hasRole('SUPER_ADMIN', 'BILLING_CASHIER'), true); // Super Admin passes all
+    assert.strictEqual(AuthService.hasRole('NETWORK_ENGINEER', 'NETWORK_ENGINEER', 'SUPER_ADMIN'), true);
+    assert.strictEqual(AuthService.hasRole('BILLING_CASHIER', 'NETWORK_ENGINEER'), false);
   });
 });

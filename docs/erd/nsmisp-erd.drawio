@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" agent="netpulse-erd-generator" version="24.7.17" pages="11">
+<mxfile host="app.diagrams.net" agent="nsmisp-erd-generator" version="24.7.17" pages="11">
   <diagram id="page_overview" name="Overview">
     <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1940" pageHeight="1200" math="0" shadow="0">
       <root>
@@ -2775,8 +2775,8 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="leg__meta" value="NetPulse Database ERD
-Commit: c95e55f
+        <mxCell id="leg__meta" value="NSMISP Database ERD
+Commit: a62a903
 Commit Date: 2026-11-25
 Models: 56  |  Foreign Keys: 63  |  Enums: 20
 Models in &quot;Other&quot; (8): CustomerActivity, CustomerAddress, CustomerAttachment, GoodsReceivedItem, JournalEntryLine, NetworkProvisionJob, ProductCategory, TicketMessage" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;spacingLeft=16;spacingRight=16;fillColor=#F8FAFC;strokeColor=#334155;strokeWidth=1.5;fontColor=#0F172A;fontSize=12;fontStyle=1;" vertex="1" parent="1">

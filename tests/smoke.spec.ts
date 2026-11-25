@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('NetPulse ISP Smoke & Full Page Navigation Suite', () => {
+test.describe('NSMISP ISP Smoke & Full Page Navigation Suite', () => {
   test('app loads and displays title', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveTitle(/NetPulse/i);
+    await expect(page).toHaveTitle(/NSMISP/i);
     await expect(page).toHaveURL(/(customers|dashboard)/);
   });
 

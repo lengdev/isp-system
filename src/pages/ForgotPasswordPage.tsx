@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Activity, Mail, ArrowLeft, ArrowRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
+import { BRAND_NAME, BRAND_ADMIN_EMAIL } from '../lib/brand';
 
 const forgotSchema = z.object({
   emailOrUsername: z.string().min(1, 'Please enter your email or username'),
@@ -51,7 +52,7 @@ export const ForgotPasswordPage: React.FC = () => {
             <Activity className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-lg font-bold tracking-tight text-slate-900 leading-none">NetPulse</div>
+            <div className="text-lg font-bold tracking-tight text-slate-900 leading-none">{BRAND_NAME}</div>
             <div className="text-[11px] text-slate-500 font-medium tracking-wide">ISP Operations Platform</div>
           </div>
         </Link>
@@ -111,7 +112,7 @@ export const ForgotPasswordPage: React.FC = () => {
                       id="email-input"
                       type="text"
                       autoFocus
-                      placeholder="e.g. admin@netpulse.net"
+                      placeholder={`e.g. ${BRAND_ADMIN_EMAIL}`}
                       {...register('emailOrUsername')}
                       className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-white/90 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
                     />
@@ -155,7 +156,7 @@ export const ForgotPasswordPage: React.FC = () => {
       </main>
 
       <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 text-center text-xs text-slate-500">
-        © 2026 NetPulse. All rights reserved.
+        © 2026 {BRAND_NAME}. All rights reserved.
       </footer>
     </div>
   );

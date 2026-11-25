@@ -1,5 +1,6 @@
 import { useAuthStore } from '../store/authStore';
 import { queryClient } from './queryClient';
+import { migrateLegacyStorage, REFRESH_TOKEN_KEY } from './storageMigration';
 import type {
   RoleItem,
   RolesMatrixResponse,
@@ -35,8 +36,10 @@ export interface AdminPermissionItem {
   updatedAt: string;
 }
 
-// NetPulse REST API Client
+// NSMISP REST API Client
 const BASE_URL = '/api/v1';
+
+migrateLegacyStorage();
 
 export async function hashPasswordClient(password: string): Promise<string> {
   if (!password) return '';
@@ -73,8 +76,8 @@ async function refreshAccessToken(): Promise<RefreshResult | null> {
       let storedRefreshToken: string | null = null;
       try {
         storedRefreshToken =
-          sessionStorage.getItem('netpulse_refresh_token') ||
-          localStorage.getItem('netpulse_refresh_token');
+          sessionStorage.getItem(REFRESH_TOKEN_KEY) ||
+          localStorage.getItem(REFRESH_TOKEN_KEY);
       } catch {
         // ignore
       }
@@ -100,9 +103,9 @@ async function refreshAccessToken(): Promise<RefreshResult | null> {
         }
         if (data.refreshToken) {
           try {
-            sessionStorage.setItem('netpulse_refresh_token', data.refreshToken);
-            if (localStorage.getItem('netpulse_refresh_token')) {
-              localStorage.setItem('netpulse_refresh_token', data.refreshToken);
+            sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+            if (localStorage.getItem(REFRESH_TOKEN_KEY)) {
+              localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
             }
           } catch {
             // ignore
@@ -113,8 +116,8 @@ async function refreshAccessToken(): Promise<RefreshResult | null> {
       return null;
     } catch {
       try {
-        sessionStorage.removeItem('netpulse_refresh_token');
-        localStorage.removeItem('netpulse_refresh_token');
+        sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
       } catch {
         // ignore
       }
@@ -240,9 +243,9 @@ export const api = {
       });
       if (res?.refreshToken) {
         try {
-          sessionStorage.setItem('netpulse_refresh_token', res.refreshToken);
+          sessionStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken);
           if (rememberMe) {
-            localStorage.setItem('netpulse_refresh_token', res.refreshToken);
+            localStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken);
           }
         } catch {
           // ignore
@@ -255,10 +258,10 @@ export const api = {
       let storedRefreshToken: string | null = null;
       try {
         storedRefreshToken =
-          sessionStorage.getItem('netpulse_refresh_token') ||
-          localStorage.getItem('netpulse_refresh_token');
-        sessionStorage.removeItem('netpulse_refresh_token');
-        localStorage.removeItem('netpulse_refresh_token');
+          sessionStorage.getItem(REFRESH_TOKEN_KEY) ||
+          localStorage.getItem(REFRESH_TOKEN_KEY);
+        sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
       } catch {
         // ignore
       }

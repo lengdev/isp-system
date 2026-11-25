@@ -105,7 +105,7 @@ export const BulkActionBar: React.FC = () => {
       c.dataUsageGB,
       c.balanceDue,
     ]);
-    downloadCSV(`netpulse-selected-${Date.now()}.csv`, headers, rows);
+    downloadCSV(`nsmisp-selected-${Date.now()}.csv`, headers, rows);
     addToast({
       type: 'success',
       title: 'CSV Exported',

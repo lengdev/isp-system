@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { BRAND_NAME } from '../lib/brand';
 import {
   Activity,
   User,
@@ -146,7 +147,7 @@ export const LoginPage: React.FC = () => {
             <Activity className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-lg font-bold tracking-tight text-slate-900 leading-none">NetPulse</div>
+            <div className="text-lg font-bold tracking-tight text-slate-900 leading-none">{BRAND_NAME}</div>
             <div className="text-[11px] text-slate-500 font-medium tracking-wide">ISP Operations Platform</div>
           </div>
         </div>
@@ -228,7 +229,7 @@ export const LoginPage: React.FC = () => {
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 mx-auto flex items-center justify-center text-white shadow-md shadow-orange-500/30 mb-3">
                   <Activity className="w-6 h-6" />
                 </div>
-                <h2 className="text-2xl font-bold tracking-tight text-slate-900">NetPulse</h2>
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">{BRAND_NAME}</h2>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">Secure Access · Network Management System</p>
               </div>
 
@@ -428,8 +429,8 @@ export const LoginPage: React.FC = () => {
 
       {/* Page Footer */}
       <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 border-t border-slate-200/50 gap-2">
-        <div>© 2026 NetPulse. All rights reserved.</div>
-        <div>Powered by NetPulse ISP Suite</div>
+        <div>© 2026 {BRAND_NAME}. All rights reserved.</div>
+        <div>Powered by {BRAND_NAME} ISP Suite</div>
       </footer>
     </div>
   );

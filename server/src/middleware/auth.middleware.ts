@@ -64,7 +64,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       req.user = {
         userId: 'usr-admin-1',
         username: 'admin',
-        email: 'admin@netpulse.net',
+        email: 'admin@nsmisp.net',
         role: 'SUPER_ADMIN',
         roles: ['SUPER_ADMIN'],
         roleIds: ['role-super-admin-1'],

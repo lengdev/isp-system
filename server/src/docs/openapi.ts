@@ -1,13 +1,13 @@
 export const openApiSpec = {
   openapi: '3.0.3',
   info: {
-    title: 'NetPulse ISP ERP, CRM & Network Operations REST API',
+    title: 'NSMISP ISP ERP, CRM & Network Operations REST API',
     version: '1.0.0',
     description:
-      'Production-grade RESTful API specification for NetPulse: complete ISP business management, FTTH & Wireless CRM, MikroTik RouterOS PPPoE provisioning, VLAN & IPAM, double-entry General Ledger, Inventory & Warehouse, and Automation.',
+      'Production-grade RESTful API specification for NSMISP: complete ISP business management, FTTH & Wireless CRM, MikroTik RouterOS PPPoE provisioning, VLAN & IPAM, double-entry General Ledger, Inventory & Warehouse, and Automation.',
     contact: {
-      name: 'NetPulse Operations',
-      email: 'support@netpulse.net',
+      name: 'NSMISP Operations',
+      email: 'support@nsmisp.net',
     },
   },
   servers: [

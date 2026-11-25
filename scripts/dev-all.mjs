@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import { spawn, execSync } from 'node:child_process';
 
-console.log('\x1b[36m%s\x1b[0m', '⚡ Compiling NetPulse Server...');
+console.log('\x1b[36m%s\x1b[0m', '⚡ Compiling NSMISP Server...');
 try {
   execSync('npm run build:server', { stdio: 'inherit' });
 } catch (e) {
   console.error('Server build failed, proceeding with existing bundle...', e.message);
 }
 
-console.log('\x1b[36m%s\x1b[0m', '⚡ Starting NetPulse ISP System (Backend API + Frontend)...');
+console.log('\x1b[36m%s\x1b[0m', '⚡ Starting NSMISP ISP System (Backend API + Frontend)...');
 
 // 1. Auto-recompile server/ files on change
 const tscWatcher = spawn('npx', ['tsc', '-p', 'server/tsconfig.json', '-w', '--preserveWatchOutput'], {
@@ -35,7 +35,7 @@ const vite = spawn('npx', ['vite'], {
 });
 
 function cleanup() {
-  console.log('\n\x1b[33m%s\x1b[0m', '🛑 Shutting down NetPulse services...');
+  console.log('\n\x1b[33m%s\x1b[0m', '🛑 Shutting down NSMISP services...');
   try { tscWatcher.kill('SIGINT'); } catch {}
   try { server.kill('SIGINT'); } catch {}
   try { vite.kill('SIGINT'); } catch {}

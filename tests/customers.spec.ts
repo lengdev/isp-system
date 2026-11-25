@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('NetPulse ISP Customers Master Spec E2E', () => {
+test.describe('NSMISP ISP Customers Master Spec E2E', () => {
   test('Customers page toolbar and dataset verification', async ({ page }) => {
     await page.goto('/customers');
     await page.waitForLoadState('networkidle');

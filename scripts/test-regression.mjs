@@ -644,7 +644,7 @@ console.log('--- Running DataTable Regression Tests ---');
     new Function(scriptContent);
   }, 'Inline anti-flash script in index.html must have valid JavaScript syntax');
 
-  assert.ok(scriptContent.includes('localStorage.getItem(\'netpulse-storage\')'), 'Reads netpulse-storage');
+  assert.ok(scriptContent.includes("localStorage.getItem('nsmisp-storage')"), 'Reads nsmisp-storage');
   assert.ok(scriptContent.includes('data-comfort'), 'Sets data-comfort');
   assert.ok(scriptContent.includes('data-density'), 'Sets data-density');
   assert.ok(scriptContent.includes('data-motion'), 'Sets data-motion');

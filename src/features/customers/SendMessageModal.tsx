@@ -4,6 +4,7 @@ import { useStore } from '../../store/useStore';
 import { Modal, ModalFooter } from '../../components/ui/Modal';
 import { Field, Input, Textarea } from '../../components/ui/Field';
 import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
+import { BRAND_NAME, BRAND_DOMAIN } from '../../lib/brand';
 
 export const SendMessageModal: React.FC = () => {
   const modalState = useStore((s) => s.modalState.sendMessage);
@@ -15,9 +16,9 @@ export const SendMessageModal: React.FC = () => {
   const [channel, setChannel] = useState<'sms' | 'email'>('sms');
   const [template, setTemplate] = useState('reminder');
   const [recipients, setRecipients] = useState<string[]>([]);
-  const [subject, setSubject] = useState('NetPulse ISP: Monthly Invoice Reminder');
+  const [subject, setSubject] = useState(`${BRAND_NAME} ISP: Monthly Invoice Reminder`);
   const [message, setMessage] = useState(
-    'Hi {Customer_Name}, your NetPulse monthly internet invoice is ready. Please review your balance to avoid service interruption.'
+    `Hi {Customer_Name}, your ${BRAND_NAME} monthly internet invoice is ready. Please review your balance to avoid service interruption.`
   );
   const [isSending, setIsSending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -57,9 +58,9 @@ export const SendMessageModal: React.FC = () => {
   const handleTemplateChange = (tpl: string) => {
     setTemplate(tpl);
     if (tpl === 'reminder') {
-      setSubject('NetPulse ISP: Monthly Invoice Reminder');
+      setSubject(`${BRAND_NAME} ISP: Monthly Invoice Reminder`);
       setMessage(
-        'Hi {Customer_Name}, your NetPulse monthly internet invoice is ready. Please review your balance to avoid service interruption.'
+        `Hi {Customer_Name}, your ${BRAND_NAME} monthly internet invoice is ready. Please review your balance to avoid service interruption.`
       );
     } else if (tpl === 'maintenance') {
       setSubject('Scheduled Network Maintenance Notice');
@@ -67,9 +68,9 @@ export const SendMessageModal: React.FC = () => {
         'Dear Subscriber, we will perform planned optical core network optimization on Sunday between 02:00 and 04:00 AM.'
       );
     } else if (tpl === 'welcome') {
-      setSubject('Welcome to NetPulse High-Speed Fiber!');
+      setSubject(`Welcome to ${BRAND_NAME} High-Speed Fiber!`);
       setMessage(
-        'Welcome {Customer_Name}! Your fiber broadband installation is complete. Download our client app or visit netpulse.net for support.'
+        `Welcome {Customer_Name}! Your fiber broadband installation is complete. Download our client app or visit ${BRAND_DOMAIN} for support.`
       );
     } else if (tpl === 'upgrade') {
       setSubject('Special Offer: Upgrade to Gigabit Fiber');

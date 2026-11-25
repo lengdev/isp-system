@@ -18,6 +18,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { BRAND_NAME, BRAND_LOCAL_DOMAIN } from '../../lib/brand';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../lib/api';
 import { Avatar } from '../ui/Avatar';
@@ -746,7 +747,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onMobileMenuOpen }) => {
               <Avatar name={user?.fullName || 'Admin'} size="sm" online={true} />
               <div className="hidden lg:block text-left pr-1 max-w-[130px]">
                 <div className="text-xs font-semibold text-[var(--text)] leading-tight truncate">
-                  {user?.fullName || 'NetPulse Admin'}
+                  {user?.fullName || `${BRAND_NAME} Admin`}
                 </div>
                 <div className="text-[10px] text-orange-600 dark:text-orange-400 font-medium leading-none truncate">
                   {user?.role?.replace('_', ' ') || 'Admin'}
@@ -769,7 +770,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onMobileMenuOpen }) => {
                       {user?.fullName || 'Administrator'}
                     </div>
                     <div className="text-[11px] text-[var(--text-muted)] truncate">
-                      {user?.email || user?.username || 'admin@netpulse.local'}
+                      {user?.email || user?.username || `admin@${BRAND_LOCAL_DOMAIN}`}
                     </div>
                     <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400">
                       {user?.role || 'SUPER_ADMIN'}

@@ -36,7 +36,7 @@ export function isUsingPostgres(): boolean {
 }
 
 // In-Memory Enterprise ISP Repository Store
-class NetPulseDataStore {
+class NsmispDataStore {
   users = [...SEED_USERS];
   routers = [...SEED_ROUTERS];
   vlans = [...SEED_VLANS];
@@ -160,10 +160,10 @@ class NetPulseDataStore {
     },
   ];
   companySettings = {
-    companyName: 'NetPulse High-Speed Broadband LLC',
+    companyName: 'NSMISP High-Speed Broadband LLC',
     companyAddress: 'Building 42, St. 214, Phnom Penh, Cambodia',
     supportPhone: '+855 23 888 999',
-    supportEmail: 'support@netpulse.net',
+    supportEmail: 'support@nsmisp.net',
     currency: '$',
     timezone: 'Asia/Phnom_Penh',
     invoicePrefix: 'INV',
@@ -242,4 +242,4 @@ class NetPulseDataStore {
   }
 }
 
-export const dbStore = new NetPulseDataStore();
+export const dbStore = new NsmispDataStore();
