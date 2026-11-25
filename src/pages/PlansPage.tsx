@@ -1,17 +1,17 @@
 import React, { useState, useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Wifi,
   Plus,
   Edit2,
   Trash2,
-  Check,
   ArrowDown,
   ArrowUp,
-  Layers,
-  Sparkles,
-  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { api } from '../lib/api';
+import { Can, useCan } from '../lib/permissions';
 import { Plan, ConnectionType } from '../types';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
@@ -21,12 +21,19 @@ import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
 
 export const PlansPage: React.FC = () => {
-  const plans = useStore((s) => s.plans);
-  const addPlan = useStore((s) => s.addPlan);
-  const updatePlan = useStore((s) => s.updatePlan);
-  const deletePlan = useStore((s) => s.deletePlan);
   const currency = useStore((s) => s.currency);
   const addToast = useStore((s) => s.addToast);
+  const canCreatePlan = useCan('packages.create');
+  const canEditPlan = useCan('packages.edit');
+  const canDeletePlan = useCan('packages.delete');
+
+  const plansQuery = useQuery<Plan[], Error>({
+    queryKey: ['packages'],
+    queryFn: () => api.packages.list(),
+    placeholderData: keepPreviousData,
+  });
+
+  const plans = useMemo(() => plansQuery.data ?? [], [plansQuery.data]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -69,34 +76,47 @@ export const PlansPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const payload = {
       name,
+      downloadSpeed: Number(speedMbps),
+      uploadSpeed: Number(uploadMbps),
       speedMbps: Number(speedMbps),
       uploadMbps: Number(uploadMbps),
       monthlyPrice: Number(monthlyPrice),
+      dataAllowanceGB: dataCapGB === '' ? null : Number(dataCapGB),
       dataCapGB: dataCapGB === '' ? null : Number(dataCapGB),
+      technology: type.toUpperCase(),
       type,
       description,
     };
 
-    if (editingPlanId) {
-      updatePlan(editingPlanId, payload);
+    try {
+      if (editingPlanId) {
+        await api.packages.update(editingPlanId, payload);
+        addToast({
+          type: 'success',
+          title: 'Plan Updated',
+          message: `Updated tier configuration for ${name}`,
+        });
+      } else {
+        await api.packages.create(payload);
+        addToast({
+          type: 'success',
+          title: 'Plan Created',
+          message: `New plan ${name} added to catalog`,
+        });
+      }
+      setIsModalOpen(false);
+      plansQuery.refetch();
+    } catch (err: any) {
       addToast({
-        type: 'success',
-        title: 'Plan Updated',
-        message: `Updated tier configuration for ${name}`,
-      });
-    } else {
-      addPlan(payload);
-      addToast({
-        type: 'success',
-        title: 'Plan Created',
-        message: `New plan ${name} added to catalog`,
+        type: 'error',
+        title: 'Save Failed',
+        message: err?.message || 'Unable to save plan changes.',
       });
     }
-    setIsModalOpen(false);
   };
 
   const columns: DataTableColumnDef<Plan>[] = useMemo(
@@ -227,24 +247,41 @@ export const PlansPage: React.FC = () => {
   );
 
   const getRowActions = (p: Plan): RowAction<Plan>[] => [
-    {
-      label: 'Edit Plan Configuration',
-      icon: <Edit2 className="w-3.5 h-3.5" />,
-      onClick: () => handleOpenEdit(p),
-    },
-    {
-      label: 'Delete Plan',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      danger: true,
-      onClick: () => {
-        deletePlan(p.id);
-        addToast({
-          type: 'info',
-          title: 'Plan Removed',
-          message: `Removed ${p.name} from catalog`,
-        });
-      },
-    },
+    ...(canEditPlan
+      ? [
+          {
+            label: 'Edit Plan Configuration',
+            icon: <Edit2 className="w-3.5 h-3.5" />,
+            onClick: () => handleOpenEdit(p),
+          },
+        ]
+      : []),
+    ...(canDeletePlan
+      ? [
+          {
+            label: 'Delete Plan',
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            danger: true,
+            onClick: async () => {
+              try {
+                await api.packages.delete(p.id);
+                addToast({
+                  type: 'info',
+                  title: 'Plan Removed',
+                  message: `Removed ${p.name} from catalog`,
+                });
+                plansQuery.refetch();
+              } catch (err: any) {
+                addToast({
+                  type: 'error',
+                  title: 'Delete Failed',
+                  message: err?.message || 'Unable to remove plan.',
+                });
+              }
+            },
+          },
+        ]
+      : []),
   ];
 
   const renderExpanded = (p: Plan) => (
@@ -305,20 +342,40 @@ export const PlansPage: React.FC = () => {
             {p.type}
           </Chip>
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => handleOpenEdit(p)}
-              className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => deletePlan(p.id)}
-              className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {canEditPlan && (
+              <button
+                type="button"
+                onClick={() => handleOpenEdit(p)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {canDeletePlan && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.packages.delete(p.id);
+                    addToast({
+                      type: 'info',
+                      title: 'Plan Removed',
+                      message: `Removed ${p.name} from catalog`,
+                    });
+                    plansQuery.refetch();
+                  } catch (err: any) {
+                    addToast({
+                      type: 'error',
+                      title: 'Delete Failed',
+                      message: err?.message || 'Unable to remove plan.',
+                    });
+                  }
+                }}
+                className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -385,30 +442,52 @@ export const PlansPage: React.FC = () => {
             Configure speed tiers, bandwidth limits, and subscription pricing
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleOpenAdd}
-          className="h-8 px-3 text-[12px]"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[1.75]" />
-          <span>Add New Plan</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => plansQuery.refetch()}
+            disabled={plansQuery.isFetching}
+            className="h-8 px-3 text-[12px]"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${plansQuery.isFetching ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </Button>
+          <Can permission="packages.create">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAdd}
+              className="h-8 px-3 text-[12px]"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[1.75]" />
+              <span>Add New Plan</span>
+            </Button>
+          </Can>
+        </div>
       </div>
 
       {/* Full-Featured Plans DataTable */}
       <DataTable<Plan>
         columns={columns}
         data={plans}
+        loading={plansQuery.isLoading}
+        fetching={plansQuery.isFetching}
+        error={plansQuery.error ? 'Unable to load internet plans.' : null}
+        onRetry={() => plansQuery.refetch()}
+        onRefresh={() => plansQuery.refetch()}
         rowId={(p) => p.id}
         viewKey="plans_catalog_table"
         enableRowReorder={true}
         rowActions={getRowActions}
         renderExpanded={renderExpanded}
         renderCard={renderCard}
-        emptyTitle="No internet plans configured"
-        emptySubtitle="Create broadband plans to begin subscriber provisioning."
-        onAddNew={handleOpenAdd}
+        noDataTitle="No internet plans configured"
+        noDataDescription="Create broadband plans to begin subscriber provisioning."
+        emptyTitle="No matching internet plans"
+        emptySubtitle="Adjust your search or clear active column filters."
+        emptyActionPermission="packages.create"
+        onAddNew={canCreatePlan ? handleOpenAdd : undefined}
         addNewLabel="Add New Plan"
       />
 

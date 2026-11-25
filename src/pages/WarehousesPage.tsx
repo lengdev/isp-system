@@ -17,6 +17,10 @@ import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
+import { TableStateBody } from '../components/ui/TableState';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Skeleton } from '../components/ui/Skeleton';
+import { Can, useCan } from '../lib/permissions';
 import { useStore } from '../store/useStore';
 import { api } from '../lib/api';
 
@@ -28,11 +32,13 @@ const MOVE_TYPE_OPTIONS: ComboboxOption[] = [
 
 export const WarehousesPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
+  const canManageWarehouses = useCan('warehouses.manage') || useCan('inventory.create');
   const [activeTab, setActiveTab] = useState<'warehouses' | 'serials'>('warehouses');
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [serials, setSerials] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Transfer / Movement Modal
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
@@ -55,19 +61,21 @@ export const WarehousesPage: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [whRes, prodRes, serRes] = await Promise.all([
-        api.inventory.getWarehouses().catch(() => []),
-        api.inventory.getProducts().catch(() => []),
-        api.inventory.getSerials().catch(() => []),
+        api.inventory.getWarehouses(),
+        api.inventory.getProducts(),
+        api.inventory.getSerials(),
       ]);
-      setWarehouses(whRes);
-      setProducts(prodRes);
-      setSerials(serRes);
+      setWarehouses(Array.isArray(whRes) ? whRes : []);
+      setProducts(Array.isArray(prodRes) ? prodRes : []);
+      setSerials(Array.isArray(serRes) ? serRes : []);
       if (prodRes.length > 0 && !selectedProduct) {
         setSelectedProduct(prodRes[0].id);
       }
     } catch (err: any) {
+      setLoadError('Unable to load warehouse and inventory records.');
       addToast({ type: 'error', title: 'Failed to load inventory data', message: err.message });
     } finally {
       setLoading(false);
@@ -117,10 +125,12 @@ export const WarehousesPage: React.FC = () => {
             <RefreshCw className={loading ? 'animate-spin w-4 h-4' : 'w-4 h-4'} />
             <span>Refresh</span>
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setIsMoveModalOpen(true)}>
-            <ArrowRightLeft className="w-4 h-4" />
-            <span>Stock Movement / Transfer</span>
-          </Button>
+          <Can permission="warehouses.manage">
+            <Button variant="primary" size="sm" onClick={() => setIsMoveModalOpen(true)}>
+              <ArrowRightLeft className="w-4 h-4" />
+              <span>Stock Movement / Transfer</span>
+            </Button>
+          </Can>
         </div>
       </div>
 
@@ -145,22 +155,43 @@ export const WarehousesPage: React.FC = () => {
 
       {activeTab === 'warehouses' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {warehouses.map((wh) => (
-              <div key={wh.id} className="p-5 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-[var(--brand)]">{wh.code}</span>
-                  {wh.isDefault && <Chip size="sm" color="secondary">Primary Hub</Chip>}
+          {loading && warehouses.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="p-5 rounded-xl bg-[var(--surface)] border border-[var(--border)] space-y-3">
+                  <Skeleton className="h-4 w-24 rounded" />
+                  <Skeleton className="h-5 w-44 rounded" />
+                  <Skeleton className="h-3 w-56 rounded" />
                 </div>
-                <h3 className="text-base font-bold text-[var(--text)]">{wh.name}</h3>
-                <p className="text-xs text-[var(--text-muted)]">{wh.address}</p>
-                <div className="pt-2 border-t border-[var(--border)] flex justify-between text-xs text-[var(--text-secondary)]">
-                  <span>Manager: <strong>{wh.managerName}</strong></span>
-                  <span>Serialized: <strong>{wh.serializedCount} units</strong></span>
+              ))}
+            </div>
+          ) : warehouses.length === 0 && !loadError ? (
+            <div className="rounded-xl bg-[var(--surface)] border border-[var(--border)]">
+              <EmptyState
+                variant="no-data"
+                icon={<Warehouse className="w-5 h-5" />}
+                title="No warehouses configured yet"
+                description="Stock locations and distribution hubs will appear here once added."
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {warehouses.map((wh) => (
+                <div key={wh.id} className="p-5 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-[var(--brand)]">{wh.code}</span>
+                    {wh.isDefault && <Chip size="sm" color="secondary">Primary Hub</Chip>}
+                  </div>
+                  <h3 className="text-base font-bold text-[var(--text)]">{wh.name}</h3>
+                  <p className="text-xs text-[var(--text-muted)]">{wh.address}</p>
+                  <div className="pt-2 border-t border-[var(--border)] flex justify-between text-xs text-[var(--text-secondary)]">
+                    <span>Manager: <strong>{wh.managerName}</strong></span>
+                    <span>Serialized: <strong>{wh.serializedCount} units</strong></span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div className="p-5 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)]">
             <h3 className="text-sm font-bold text-[var(--text)] uppercase tracking-wider mb-4">On-Hand Stock Directory</h3>
@@ -177,20 +208,39 @@ export const WarehousesPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {products.map((p) => (
-                    <tr key={p.id} className="hover:bg-[var(--surface-hover)]">
-                      <td className="py-2.5 px-3 font-bold text-[var(--brand)]">{p.sku}</td>
-                      <td className="py-2.5 px-3 font-sans font-medium text-[var(--text)]">{p.name}</td>
-                      <td className="py-2.5 px-3 text-[var(--text-secondary)]">{p.categoryName}</td>
-                      <td className="py-2.5 px-3 text-right font-bold text-[var(--text)]">{p.quantity}</td>
-                      <td className="py-2.5 px-3 text-right">${Number(p.costPrice || 0).toFixed(2)}</td>
-                      <td className="py-2.5 px-3">
-                        <Chip size="sm" color={p.quantity <= 0 ? 'danger' : p.quantity <= p.minStockAlert ? 'warning' : 'success'}>
-                          {p.status}
-                        </Chip>
-                      </td>
-                    </tr>
-                  ))}
+                  <TableStateBody
+                    colSpan={6}
+                    loading={loading}
+                    hasData={products.length > 0}
+                    error={loadError}
+                    onRetry={loadData}
+                    emptyTitle="No inventory items yet"
+                    emptyDescription="Receive hardware deliveries or record stock movements to populate stock levels."
+                    primaryAction={
+                      canManageWarehouses
+                        ? {
+                            label: 'Stock Movement / Transfer',
+                            onClick: () => setIsMoveModalOpen(true),
+                            permission: 'warehouses.manage',
+                          }
+                        : undefined
+                    }
+                  >
+                    {products.map((p) => (
+                      <tr key={p.id} className="hover:bg-[var(--surface-hover)]">
+                        <td className="py-2.5 px-3 font-bold text-[var(--brand)]">{p.sku}</td>
+                        <td className="py-2.5 px-3 font-sans font-medium text-[var(--text)]">{p.name}</td>
+                        <td className="py-2.5 px-3 text-[var(--text-secondary)]">{p.categoryName}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-[var(--text)]">{p.quantity}</td>
+                        <td className="py-2.5 px-3 text-right">${Number(p.costPrice || 0).toFixed(2)}</td>
+                        <td className="py-2.5 px-3">
+                          <Chip size="sm" color={p.quantity <= 0 ? 'danger' : p.quantity <= p.minStockAlert ? 'warning' : 'success'}>
+                            {p.status}
+                          </Chip>
+                        </td>
+                      </tr>
+                    ))}
+                  </TableStateBody>
                 </tbody>
               </table>
             </div>
@@ -213,21 +263,31 @@ export const WarehousesPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {serials.map((sn) => (
-                  <tr key={sn.id} className="hover:bg-[var(--surface-hover)]">
-                    <td className="py-2.5 px-3 font-bold text-[var(--brand)]">{sn.serialNumber}</td>
-                    <td className="py-2.5 px-3 text-[var(--text-secondary)]">{sn.macAddress || '-'}</td>
-                    <td className="py-2.5 px-3 font-sans text-[var(--text)]">{sn.productName}</td>
-                    <td className="py-2.5 px-3 font-sans text-[var(--text-secondary)]">
-                      {sn.customerName ? <span className="font-semibold text-emerald-600 dark:text-emerald-400">{sn.customerName}</span> : sn.warehouseName || 'Warehouse'}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <Chip size="sm" color={sn.status === 'INSTALLED' ? 'success' : sn.status === 'RESERVED' ? 'warning' : 'secondary'}>
-                        {sn.status}
-                      </Chip>
-                    </td>
-                  </tr>
-                ))}
+                <TableStateBody
+                  colSpan={5}
+                  loading={loading}
+                  hasData={serials.length > 0}
+                  error={loadError}
+                  onRetry={loadData}
+                  emptyTitle="No serialized hardware registered"
+                  emptyDescription="ONT and CPE serial numbers will appear here once hardware is received."
+                >
+                  {serials.map((sn) => (
+                    <tr key={sn.id} className="hover:bg-[var(--surface-hover)]">
+                      <td className="py-2.5 px-3 font-bold text-[var(--brand)]">{sn.serialNumber}</td>
+                      <td className="py-2.5 px-3 text-[var(--text-secondary)]">{sn.macAddress || '-'}</td>
+                      <td className="py-2.5 px-3 font-sans text-[var(--text)]">{sn.productName}</td>
+                      <td className="py-2.5 px-3 font-sans text-[var(--text-secondary)]">
+                        {sn.customerName ? <span className="font-semibold text-emerald-600 dark:text-emerald-400">{sn.customerName}</span> : sn.warehouseName || 'Warehouse'}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Chip size="sm" color={sn.status === 'INSTALLED' ? 'success' : sn.status === 'RESERVED' ? 'warning' : 'secondary'}>
+                          {sn.status}
+                        </Chip>
+                      </td>
+                    </tr>
+                  ))}
+                </TableStateBody>
               </tbody>
             </table>
           </div>

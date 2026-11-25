@@ -1,28 +1,91 @@
 import React, { useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Wrench,
-  Calendar,
   Phone,
-  Mail,
   Star,
   MapPin,
-  CheckCircle,
   Clock,
-  User,
   Check,
-  ShieldCheck,
-  Truck,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { api } from '../lib/api';
+import { Button } from '../components/ui/Button';
 import { Technician, InstallationSchedule } from '../types';
 import { Avatar } from '../components/ui/Avatar';
 import { Chip } from '../components/ui/Chip';
 import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
 
+function mapApiTechnician(t: any): Technician {
+  const st = String(t.status || 'AVAILABLE').toUpperCase();
+  const status =
+    st === 'ON_JOB' || st === 'BUSY'
+      ? 'On Job'
+      : st === 'OFF_DUTY'
+      ? 'Off Duty'
+      : 'Available';
+  return {
+    ...t,
+    id: String(t.id),
+    name: t.name,
+    email: t.email || `${t.name?.toLowerCase().replace(/\s+/g, '.')}@nsmisp.net`,
+    phone: t.phone || '',
+    zone: t.zone || 'Phnom Penh',
+    rating: Number(t.rating || 5),
+    activeJobs: Number(t.activeJobs || 0),
+    completedJobs: Number(t.completedJobs || 0),
+    status,
+  };
+}
+
+function mapApiSchedule(inst: any): InstallationSchedule {
+  const st = String(inst.status || 'SCHEDULED').toUpperCase();
+  const status =
+    st === 'COMPLETED'
+      ? 'Completed'
+      : st === 'IN_PROGRESS'
+      ? 'In Progress'
+      : 'Scheduled';
+  return {
+    ...inst,
+    id: String(inst.id),
+    customerId: inst.customerId,
+    customerName: inst.customerName || 'Customer',
+    customerPhone: inst.customerPhone || '',
+    address: inst.customerAddress || inst.address || 'Phnom Penh',
+    planName: inst.planName || 'Fiber Broadband',
+    technicianId: inst.technicianId || '',
+    technicianName: inst.technicianName || 'Unassigned',
+    timeSlot: inst.timeSlot || '09:00 - 11:00',
+    scheduledDate: inst.scheduledDate,
+    status,
+  };
+}
+
 export const TechniciansPage: React.FC = () => {
-  const technicians = useStore((s) => s.technicians);
-  const schedules = useStore((s) => s.schedules);
   const addToast = useStore((s) => s.addToast);
+
+  const techQuery = useQuery<Technician[], Error>({
+    queryKey: ['technicians'],
+    queryFn: async () => {
+      const list = await api.operations.getTechnicians();
+      return (Array.isArray(list) ? list : []).map(mapApiTechnician);
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const schedulesQuery = useQuery<InstallationSchedule[], Error>({
+    queryKey: ['installations'],
+    queryFn: async () => {
+      const list = await api.operations.getInstallations();
+      return (Array.isArray(list) ? list : []).map(mapApiSchedule);
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const technicians = useMemo(() => techQuery.data ?? [], [techQuery.data]);
+  const schedules = useMemo(() => schedulesQuery.data ?? [], [schedulesQuery.data]);
 
   // Columns for Today's Scheduled Installations
   const scheduleColumns: DataTableColumnDef<InstallationSchedule>[] = useMemo(
@@ -412,14 +475,33 @@ export const TechniciansPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-4 pb-12 select-none">
-      <div>
-        <h2 className="text-[24px] leading-tight font-semibold text-[var(--text)] tracking-tight">
-          Technicians & Field Installations
-        </h2>
-        <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
-          Manage field engineers, ONT splicing schedules, and service dispatch
-        </p>
+    <div className="space-y-6 pb-12 select-none">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[24px] leading-tight font-semibold text-[var(--text)] tracking-tight">
+            Technicians & Field Installations
+          </h2>
+          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
+            Manage field engineers, ONT splicing schedules, and service dispatch
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            techQuery.refetch();
+            schedulesQuery.refetch();
+          }}
+          disabled={techQuery.isFetching || schedulesQuery.isFetching}
+          className="h-8 px-3 text-[12px]"
+        >
+          <RefreshCw
+            className={`w-3.5 h-3.5 ${
+              techQuery.isFetching || schedulesQuery.isFetching ? 'animate-spin' : ''
+            }`}
+          />
+          <span>Refresh</span>
+        </Button>
       </div>
 
       {/* Field Engineer Roster with DataTable */}
@@ -430,10 +512,17 @@ export const TechniciansPage: React.FC = () => {
         <DataTable<Technician>
           columns={techColumns}
           data={technicians}
+          loading={techQuery.isLoading}
+          fetching={techQuery.isFetching}
+          error={techQuery.error ? 'Unable to load field technicians.' : null}
+          onRetry={() => techQuery.refetch()}
+          onRefresh={() => techQuery.refetch()}
           rowId={(t) => t.id}
           viewKey="technicians_roster_table"
           renderCard={renderTechCard}
-          emptyTitle="No technicians found"
+          noDataTitle="No technicians registered yet"
+          noDataDescription="Field engineers added to operations will appear in this roster."
+          emptyTitle="No matching technicians"
         />
       </div>
 
@@ -445,13 +534,19 @@ export const TechniciansPage: React.FC = () => {
         <DataTable<InstallationSchedule>
           columns={scheduleColumns}
           data={schedules}
+          loading={schedulesQuery.isLoading}
+          fetching={schedulesQuery.isFetching}
+          error={schedulesQuery.error ? 'Unable to load installation schedule.' : null}
+          onRetry={() => schedulesQuery.refetch()}
+          onRefresh={() => schedulesQuery.refetch()}
           rowId={(s) => s.id}
           viewKey="technicians_schedule_table"
           rowActions={getScheduleRowActions}
           renderExpanded={renderScheduleExpanded}
           renderCard={renderScheduleCard}
-          emptyTitle="No installations scheduled today"
-          emptySubtitle="Field engineers have completed all pending drops."
+          noDataTitle="No installations scheduled today"
+          noDataDescription="Field engineers have completed all pending fiber and wireless drops."
+          emptyTitle="No matching installation schedules"
         />
       </div>
     </div>

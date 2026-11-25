@@ -1,31 +1,85 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Receipt,
   Plus,
   Download,
   Check,
   Eye,
-  FileSpreadsheet,
-  FileText,
-  CreditCard,
-  Calendar,
-  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { api } from '../lib/api';
+import { Can, useCan } from '../lib/permissions';
 import { Invoice } from '../types';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { formatDate } from '../lib/utils';
-import { RecordPaymentModal } from '../features/customers/RecordPaymentModal';
 import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
 
+function mapApiInvoice(raw: any): Invoice {
+  const st = String(raw.status || 'UNPAID').toUpperCase();
+  const status =
+    st === 'PAID'
+      ? 'Paid'
+      : st === 'OVERDUE'
+      ? 'Overdue'
+      : st === 'PARTIAL'
+      ? 'Partial'
+      : st === 'CANCELLED'
+      ? 'Cancelled'
+      : 'Pending';
+
+  return {
+    id: String(raw.id),
+    invoiceNumber: raw.invoiceNumber,
+    customerId: raw.customerId,
+    customerName: raw.customerName || raw.customer?.fullName || 'Customer',
+    customerEmail: raw.customerEmail || raw.customer?.email || '',
+    date: raw.issueDate || raw.date || raw.createdAt,
+    dueDate: raw.dueDate,
+    amount: Number(raw.amount || 0),
+    status: status as any,
+    items: Array.isArray(raw.items) ? raw.items : [],
+  };
+}
+
 export const BillingPage: React.FC = () => {
-  const invoices = useStore((s) => s.invoices);
-  const markInvoicePaid = useStore((s) => s.markInvoicePaid);
   const openModal = useStore((s) => s.openModal);
   const openDrawer = useStore((s) => s.openDrawer);
   const addToast = useStore((s) => s.addToast);
   const currency = useStore((s) => s.currency);
+  const canRecordPayment = useCan('payments.record') || useCan('billing.create');
+  const canEditInvoice = useCan('billing.edit') || useCan('payments.record');
+
+  const invoicesQuery = useQuery<Invoice[], Error>({
+    queryKey: ['invoices'],
+    queryFn: async () => {
+      const list = await api.billing.getInvoices();
+      return (Array.isArray(list) ? list : []).map(mapApiInvoice);
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const invoices = useMemo(() => invoicesQuery.data ?? [], [invoicesQuery.data]);
+
+  const handleMarkPaid = async (inv: Invoice) => {
+    try {
+      await api.billing.markPaid(inv.id, 'CASH');
+      addToast({
+        type: 'success',
+        title: 'Invoice Settled',
+        message: `Marked invoice ${inv.invoiceNumber} as paid in full.`,
+      });
+      invoicesQuery.refetch();
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Settlement Failed',
+        message: err?.message || 'Could not settle invoice.',
+      });
+    }
+  };
 
   const totalBilled = invoices.reduce((sum, inv) => sum + inv.amount, 0);
   const totalPaid = invoices
@@ -154,18 +208,13 @@ export const BillingPage: React.FC = () => {
   );
 
   const getRowActions = (inv: Invoice): RowAction<Invoice>[] => [
-    ...(inv.status !== 'Paid'
+    ...(inv.status !== 'Paid' && canEditInvoice
       ? [
         {
           label: 'Mark as Paid',
           icon: <Check className="w-3.5 h-3.5 text-emerald-600" />,
           onClick: () => {
-            markInvoicePaid(inv.id);
-            addToast({
-              type: 'success',
-              title: 'Invoice Settled',
-              message: `Marked invoice ${inv.invoiceNumber} as paid in full.`,
-            });
+            handleMarkPaid(inv);
           },
         },
       ]
@@ -277,11 +326,11 @@ export const BillingPage: React.FC = () => {
         className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-2"
         onClick={(e) => e.stopPropagation()}
       >
-        {inv.status !== 'Paid' && (
+        {inv.status !== 'Paid' && canEditInvoice && (
           <Button
             size="sm"
             variant="outline"
-            onClick={() => markInvoicePaid(inv.id)}
+            onClick={() => handleMarkPaid(inv)}
             className="text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50"
           >
             <Check className="w-3.5 h-3.5" /> Mark Paid
@@ -311,15 +360,29 @@ export const BillingPage: React.FC = () => {
             Automated subscriber billing, payment processing, and ledger history
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => openModal('recordPayment')}
-          className="h-8 px-3 text-[12px]"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[1.75]" />
-          <span>Record Payment</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => invoicesQuery.refetch()}
+            disabled={invoicesQuery.isFetching}
+            className="h-8 px-3 text-[12px]"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${invoicesQuery.isFetching ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </Button>
+          <Can permission="payments.record">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => openModal('recordPayment')}
+              className="h-8 px-3 text-[12px]"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[1.75]" />
+              <span>Record Payment</span>
+            </Button>
+          </Can>
+        </div>
       </div>
 
       {/* 3 Summary Stats */}
@@ -348,15 +411,23 @@ export const BillingPage: React.FC = () => {
       <DataTable<Invoice>
         columns={columns}
         data={invoices}
+        loading={invoicesQuery.isLoading}
+        fetching={invoicesQuery.isFetching}
+        error={invoicesQuery.error ? 'Unable to load invoices.' : null}
+        onRetry={() => invoicesQuery.refetch()}
+        onRefresh={() => invoicesQuery.refetch()}
         rowId={(inv) => inv.id}
         viewKey="billing_invoices_table"
         onRowClick={(inv) => openDrawer(inv.customerId, 'billing')}
         rowActions={getRowActions}
         renderExpanded={renderExpanded}
         renderCard={renderCard}
-        emptyTitle="No invoices found"
-        emptySubtitle="Try adjusting filters or record a new invoice payment."
-        onAddNew={() => openModal('recordPayment')}
+        noDataTitle="No invoices generated yet"
+        noDataDescription="Monthly subscription invoices and setup charges will appear here once generated."
+        emptyTitle="No matching invoices"
+        emptySubtitle="Try adjusting filters or clearing your active search."
+        emptyActionPermission="payments.record"
+        onAddNew={canRecordPayment ? () => openModal('recordPayment') : undefined}
         addNewLabel="Record Payment"
       />
     </div>

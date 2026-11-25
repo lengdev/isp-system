@@ -112,7 +112,7 @@ export interface DataTableProps<T> {
   enableRowReorder?: boolean;
   onReorderRow?: (draggedId: string, targetId: string) => void;
   autoRefreshInterval?: number; // seconds (e.g. 30)
-  onRefresh?: () => Promise<void> | void;
+  onRefresh?: () => Promise<unknown> | void;
   showStatisticsToggle?: boolean;
   showStatistics?: boolean;
   onToggleStatistics?: () => void;

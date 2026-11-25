@@ -16,6 +16,7 @@ import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
+import { TableStateBody } from '../components/ui/TableState';
 import { useStore } from '../store/useStore';
 import { api } from '../lib/api';
 import { BRAND_NAME } from '../lib/brand';
@@ -202,29 +203,37 @@ export const CustomerPortalPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {invoices.map((inv: any) => (
-                <tr key={inv.id} className="hover:bg-[var(--surface-hover)]">
-                  <td className="py-3 px-3 font-bold text-[var(--brand)]">{inv.invoiceNumber}</td>
-                  <td className="py-3 px-3 text-[var(--text)]">{inv.billingPeriod || 'Current'}</td>
-                  <td className="py-3 px-3 text-[var(--text-muted)]">{new Date(inv.dueDate).toLocaleDateString()}</td>
-                  <td className="py-3 px-3 text-right font-bold text-[var(--text)]">{currency}{Number(inv.amount).toFixed(2)}</td>
-                  <td className="py-3 px-3">
-                    <Chip size="sm" color={inv.status === 'PAID' ? 'success' : 'danger'}>
-                      {inv.status}
-                    </Chip>
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    {inv.status !== 'PAID' ? (
-                      <Button variant="outline" size="sm" onClick={() => handlePayInvoice(inv.balanceDue)}>
-                        <QrCode className="w-3 h-3 text-[var(--brand)]" />
-                        <span>Pay KHQR</span>
-                      </Button>
-                    ) : (
-                      <span className="text-emerald-600 font-semibold">Settled</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              <TableStateBody
+                colSpan={6}
+                loading={loading}
+                hasData={invoices.length > 0}
+                emptyTitle="No invoices issued yet"
+                emptyDescription="Your monthly statements and payment receipts will appear here."
+              >
+                {invoices.map((inv: any) => (
+                  <tr key={inv.id} className="hover:bg-[var(--surface-hover)]">
+                    <td className="py-3 px-3 font-bold text-[var(--brand)]">{inv.invoiceNumber}</td>
+                    <td className="py-3 px-3 text-[var(--text)]">{inv.billingPeriod || 'Current'}</td>
+                    <td className="py-3 px-3 text-[var(--text-muted)]">{new Date(inv.dueDate).toLocaleDateString()}</td>
+                    <td className="py-3 px-3 text-right font-bold text-[var(--text)]">{currency}{Number(inv.amount).toFixed(2)}</td>
+                    <td className="py-3 px-3">
+                      <Chip size="sm" color={inv.status === 'PAID' ? 'success' : 'danger'}>
+                        {inv.status}
+                      </Chip>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {inv.status !== 'PAID' ? (
+                        <Button variant="outline" size="sm" onClick={() => handlePayInvoice(inv.balanceDue)}>
+                          <QrCode className="w-3 h-3 text-[var(--brand)]" />
+                          <span>Pay KHQR</span>
+                        </Button>
+                      ) : (
+                        <span className="text-emerald-600 font-semibold">Settled</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </TableStateBody>
             </tbody>
           </table>
         </div>

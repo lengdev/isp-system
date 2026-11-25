@@ -1,17 +1,18 @@
 import React, { useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   LifeBuoy,
   Plus,
   User,
   CheckCircle2,
   Clock,
-  AlertTriangle,
   Eye,
-  MessageSquare,
-  Wrench,
   Check,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { api } from '../lib/api';
+import { Can, useCan } from '../lib/permissions';
 import { SupportTicket } from '../types';
 
 type TicketStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
@@ -19,17 +20,76 @@ type TicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { formatDate, cn } from '../lib/utils';
-import { CreateTicketModal } from '../features/customers/CreateTicketModal';
-import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox } from '../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
+import { DataTableCheckbox } from '../components/ui/DataTable/DataTableCheckbox';
+
+function normalizeTicketStatus(raw?: string): TicketStatus {
+  const up = String(raw || 'OPEN').toUpperCase();
+  if (up === 'IN_PROGRESS' || up === 'IN PROGRESS') return 'In Progress';
+  if (up === 'RESOLVED') return 'Resolved';
+  if (up === 'CLOSED') return 'Closed';
+  return 'Open';
+}
+
+function normalizeTicketPriority(raw?: string): TicketPriority {
+  const up = String(raw || 'MEDIUM').toUpperCase();
+  if (up === 'CRITICAL') return 'Critical';
+  if (up === 'HIGH') return 'High';
+  if (up === 'LOW') return 'Low';
+  return 'Medium';
+}
+
+function toApiTicketStatus(st: string): string {
+  return st.toUpperCase().replace(/\s+/g, '_');
+}
 
 export const TicketsPage: React.FC = () => {
-  const tickets = useStore((s) => s.tickets);
-  const technicians = useStore((s) => s.technicians);
-  const updateTicketStatus = useStore((s) => s.updateTicketStatus);
   const assignTicketTechnician = useStore((s) => s.assignTicketTechnician);
   const openModal = useStore((s) => s.openModal);
   const openDrawer = useStore((s) => s.openDrawer);
   const addToast = useStore((s) => s.addToast);
+  const canCreateTicket = useCan('tickets.create');
+  const canEditTicket = useCan('tickets.edit');
+
+  const ticketsQuery = useQuery<SupportTicket[], Error>({
+    queryKey: ['tickets'],
+    queryFn: async () => {
+      const list = await api.operations.getTickets();
+      return (Array.isArray(list) ? list : []).map((t: any) => ({
+        ...t,
+        status: normalizeTicketStatus(t.status),
+        priority: normalizeTicketPriority(t.priority),
+      }));
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const techniciansQuery = useQuery<any[], Error>({
+    queryKey: ['technicians'],
+    queryFn: () => api.operations.getTechnicians(),
+    staleTime: 60_000,
+  });
+
+  const tickets = useMemo(() => ticketsQuery.data ?? [], [ticketsQuery.data]);
+  const technicians = useMemo(() => techniciansQuery.data ?? [], [techniciansQuery.data]);
+
+  const handleTicketStatusUpdate = async (id: string, nextStatus: TicketStatus, ticketNum?: string) => {
+    try {
+      await api.operations.updateTicket(id, toApiTicketStatus(nextStatus));
+      addToast({
+        type: 'success',
+        title: 'Ticket Updated',
+        message: `Ticket ${ticketNum || id} is now marked ${nextStatus}.`,
+      });
+      ticketsQuery.refetch();
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Ticket Update Failed',
+        message: err?.message || 'Unable to update ticket status.',
+      });
+    }
+  };
 
   const technicianOptions = useMemo(
     () =>
@@ -150,18 +210,15 @@ export const TicketsPage: React.FC = () => {
         sortable: true,
         priority: 1,
         filter: { type: 'select', options: statusOptions },
-        editable: {
-          type: 'select',
-          options: statusOptions,
-          onSave: async (val, row) => {
-            updateTicketStatus(row.id, val as TicketStatus);
-            addToast({
-              type: 'success',
-              title: 'Ticket Updated',
-              message: `Ticket ${row.ticketNumber} is now marked ${val}.`,
-            });
-          },
-        },
+        editable: canEditTicket
+          ? {
+              type: 'select',
+              options: statusOptions,
+              onSave: async (val, row) => {
+                await handleTicketStatusUpdate(row.id, val as TicketStatus, row.ticketNumber);
+              },
+            }
+          : undefined,
         cell: ({ row }) => {
           const st = row.original.status;
           const color =
@@ -223,7 +280,7 @@ export const TicketsPage: React.FC = () => {
         ),
       },
     ],
-    [priorityOptions, statusOptions, technicianOptions, openDrawer, updateTicketStatus, assignTicketTechnician, addToast]
+    [priorityOptions, statusOptions, technicianOptions, canEditTicket, openDrawer, assignTicketTechnician, addToast]
   );
 
   const getRowActions = (t: SupportTicket): RowAction<SupportTicket>[] => [
@@ -232,50 +289,33 @@ export const TicketsPage: React.FC = () => {
       icon: <Eye className="w-3.5 h-3.5" />,
       onClick: () => openDrawer(t.customerId, 'tickets'),
     },
-    ...(t.status !== 'In Progress' && t.status !== 'Resolved'
+    ...(canEditTicket && t.status !== 'In Progress' && t.status !== 'Resolved'
       ? [
         {
           label: 'Mark In Progress',
           icon: <Clock className="w-3.5 h-3.5 text-blue-500" />,
-          onClick: () => {
-            updateTicketStatus(t.id, 'In Progress');
-            addToast({
-              type: 'info',
-              title: 'Ticket In Progress',
-              message: `Status updated for ${t.ticketNumber}`,
-            });
-          },
+          onClick: () => handleTicketStatusUpdate(t.id, 'In Progress', t.ticketNumber),
         },
       ]
       : []),
-    ...(t.status !== 'Resolved'
+    ...(canEditTicket && t.status !== 'Resolved'
       ? [
         {
           label: 'Mark Resolved',
           icon: <Check className="w-3.5 h-3.5 text-emerald-600" />,
-          onClick: () => {
-            updateTicketStatus(t.id, 'Resolved');
-            addToast({
-              type: 'success',
-              title: 'Ticket Resolved',
-              message: `Marked ${t.ticketNumber} as resolved.`,
-            });
-          },
+          onClick: () => handleTicketStatusUpdate(t.id, 'Resolved', t.ticketNumber),
         },
       ]
       : []),
-    {
-      label: 'Close Ticket',
-      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-      onClick: () => {
-        updateTicketStatus(t.id, 'Closed');
-        addToast({
-          type: 'info',
-          title: 'Ticket Closed',
-          message: `Closed ticket ${t.ticketNumber}`,
-        });
-      },
-    },
+    ...(canEditTicket
+      ? [
+          {
+            label: 'Close Ticket',
+            icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+            onClick: () => handleTicketStatusUpdate(t.id, 'Closed', t.ticketNumber),
+          },
+        ]
+      : []),
   ];
 
   const renderExpanded = (t: SupportTicket) => (
@@ -400,69 +440,52 @@ export const TicketsPage: React.FC = () => {
     </div>
   );
 
-  const renderBulkActions = (selectedRows: SupportTicket[], clearSelection: () => void) => (
-    <div className="flex items-center gap-2">
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => {
-          selectedRows.forEach((t) => updateTicketStatus(t.id, 'In Progress'));
-          addToast({
-            type: 'info',
-            title: 'Tickets In Progress',
-            message: `Marked ${selectedRows.length} ticket(s) as In Progress.`,
-          });
-          clearSelection();
-        }}
-        className="h-8 text-xs"
-      >
-        <Clock className="w-3.5 h-3.5 text-blue-500" />
-        <span>Mark In Progress</span>
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => {
-          selectedRows.forEach((t) => updateTicketStatus(t.id, 'Resolved'));
-          addToast({
-            type: 'success',
-            title: 'Tickets Resolved',
-            message: `Resolved ${selectedRows.length} ticket(s).`,
-          });
-          clearSelection();
-        }}
-        className="h-8 text-xs"
-      >
-        <Check className="w-3.5 h-3.5 text-emerald-600" />
-        <span>Mark Resolved</span>
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => {
-          selectedRows.forEach((t) => updateTicketStatus(t.id, 'Closed'));
-          addToast({
-            type: 'info',
-            title: 'Tickets Closed',
-            message: `Closed ${selectedRows.length} ticket(s).`,
-          });
-          clearSelection();
-        }}
-        className="h-8 text-xs"
-      >
-        <CheckCircle2 className="w-3.5 h-3.5" />
-        <span>Close Tickets</span>
-      </Button>
-    </div>
-  );
-
-  const handleRefresh = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
+  const handleBulkStatus = async (selectedRows: SupportTicket[], nextStatus: TicketStatus, clearSelection: () => void) => {
+    await Promise.all(selectedRows.map((t) => api.operations.updateTicket(t.id, toApiTicketStatus(nextStatus)).catch(() => null)));
     addToast({
-      type: 'info',
-      title: 'Tickets Synchronized',
-      message: 'Support queue and field dispatch status refreshed.',
+      type: 'success',
+      title: `Tickets ${nextStatus}`,
+      message: `Updated ${selectedRows.length} ticket(s).`,
     });
+    clearSelection();
+    ticketsQuery.refetch();
+  };
+
+  const renderBulkActions = (selectedRows: SupportTicket[], clearSelection: () => void) =>
+    canEditTicket ? (
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatus(selectedRows, 'In Progress', clearSelection)}
+          className="h-8 text-xs"
+        >
+          <Clock className="w-3.5 h-3.5 text-blue-500" />
+          <span>Mark In Progress</span>
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatus(selectedRows, 'Resolved', clearSelection)}
+          className="h-8 text-xs"
+        >
+          <Check className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Mark Resolved</span>
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatus(selectedRows, 'Closed', clearSelection)}
+          className="h-8 text-xs"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Close Tickets</span>
+        </Button>
+      </div>
+    ) : null;
+
+  const handleRefresh = () => {
+    ticketsQuery.refetch();
   };
 
   return (
@@ -477,21 +500,39 @@ export const TicketsPage: React.FC = () => {
             Resolve network incidents, signal quality complaints, and dispatch field crews
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => openModal('createTicket')}
-          className="h-8 px-3 text-[12px]"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[1.75]" />
-          <span>Open Support Ticket</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={ticketsQuery.isFetching}
+            className="h-8 px-3 text-[12px]"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${ticketsQuery.isFetching ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </Button>
+          <Can permission="tickets.create">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => openModal('createTicket')}
+              className="h-8 px-3 text-[12px]"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[1.75]" />
+              <span>Open Support Ticket</span>
+            </Button>
+          </Can>
+        </div>
       </div>
 
       {/* Full-Featured Tickets DataTable */}
       <DataTable<SupportTicket>
         columns={columns}
         data={tickets}
+        loading={ticketsQuery.isLoading}
+        fetching={ticketsQuery.isFetching}
+        error={ticketsQuery.error ? 'Unable to load support tickets.' : null}
+        onRetry={handleRefresh}
         rowId={(t) => t.id}
         viewKey="support_tickets_table"
         onRowClick={(t) => openDrawer(t.customerId, 'tickets')}
@@ -501,9 +542,12 @@ export const TicketsPage: React.FC = () => {
         bulkActions={renderBulkActions}
         autoRefreshInterval={30}
         onRefresh={handleRefresh}
-        emptyTitle="No support tickets found"
-        emptySubtitle="All network incidents and subscriber issues are currently resolved."
-        onAddNew={() => openModal('createTicket')}
+        noDataTitle="No support tickets yet"
+        noDataDescription="All network incidents and subscriber inquiries have been resolved."
+        emptyTitle="No matching support tickets"
+        emptySubtitle="Try adjusting filters or clearing your active search."
+        emptyActionPermission="tickets.create"
+        onAddNew={canCreateTicket ? () => openModal('createTicket') : undefined}
         addNewLabel="Open Support Ticket"
       />
     </div>

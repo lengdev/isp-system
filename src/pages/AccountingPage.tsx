@@ -22,15 +22,22 @@ import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
+import { TableStateBody } from '../components/ui/TableState';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Skeleton } from '../components/ui/Skeleton';
+import { Can, useCan } from '../lib/permissions';
 import { useStore } from '../store/useStore';
 import { api } from '../lib/api';
 
 export const AccountingPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
   const currency = useStore((s) => s.currency) || '$';
+  const canCreateJournal = useCan('accounting.create');
+  const canDeleteJournal = useCan('accounting.delete');
 
   const [activeTab, setActiveTab] = useState<'overview' | 'journal' | 'ledger' | 'reports'>('overview');
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<any>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [ledger, setLedger] = useState<any[]>([]);
@@ -57,15 +64,16 @@ export const AccountingPage: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [dashRes, accRes, tbRes, pnlRes, bsRes, arRes, ledgerRes] = await Promise.all([
-        api.accounting.getDashboard().catch(() => null),
-        api.accounting.getAccounts().catch(() => []),
-        api.accounting.getTrialBalance().catch(() => null),
-        api.accounting.getPnL().catch(() => null),
-        api.accounting.getBalanceSheet().catch(() => null),
-        api.accounting.getArAging().catch(() => null),
-        api.accounting.getLedger().catch(() => []),
+        api.accounting.getDashboard(),
+        api.accounting.getAccounts(),
+        api.accounting.getTrialBalance(),
+        api.accounting.getPnL(),
+        api.accounting.getBalanceSheet(),
+        api.accounting.getArAging(),
+        api.accounting.getLedger(),
       ]);
 
       if (dashRes) setDashboard(dashRes);
@@ -76,6 +84,7 @@ export const AccountingPage: React.FC = () => {
       if (arRes) setArAging(arRes);
       if (ledgerRes) setLedger(ledgerRes);
     } catch (err: any) {
+      setLoadError('Unable to load accounting ledger data.');
       addToast({ type: 'error', title: 'Failed to load accounting data', message: err.message });
     } finally {
       setLoading(false);
@@ -160,10 +169,12 @@ export const AccountingPage: React.FC = () => {
             <RefreshCw className={loading ? 'animate-spin w-4 h-4' : 'w-4 h-4'} />
             <span>Refresh Ledger</span>
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setIsNewJournalOpen(true)}>
-            <Plus className="w-4 h-4" />
-            <span>Post Manual Journal</span>
-          </Button>
+          <Can permission="accounting.create">
+            <Button variant="primary" size="sm" onClick={() => setIsNewJournalOpen(true)}>
+              <Plus className="w-4 h-4" />
+              <span>Post Manual Journal</span>
+            </Button>
+          </Can>
         </div>
       </div>
 
@@ -261,20 +272,30 @@ export const AccountingPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)] font-mono">
-                  {accounts.map((acc) => (
-                    <tr key={acc.code} className="hover:bg-[var(--surface-hover)]">
-                      <td className="py-2.5 px-3 font-bold text-[var(--brand)]">{acc.code}</td>
-                      <td className="py-2.5 px-3 font-sans font-medium text-[var(--text)]">{acc.name}</td>
-                      <td className="py-2.5 px-3">
-                        <Chip size="sm" color={acc.type === 'ASSET' ? 'secondary' : acc.type === 'REVENUE' ? 'success' : acc.type === 'EXPENSE' ? 'danger' : 'default'}>
-                          {acc.type}
-                        </Chip>
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-bold text-[var(--text)]">
-                        {currency}{Number(acc.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
+                  <TableStateBody
+                    colSpan={4}
+                    loading={loading}
+                    hasData={accounts.length > 0}
+                    error={loadError}
+                    onRetry={loadData}
+                    emptyTitle="No chart of accounts configured"
+                    emptyDescription="GL accounts will appear here once initialized."
+                  >
+                    {accounts.map((acc) => (
+                      <tr key={acc.code} className="hover:bg-[var(--surface-hover)]">
+                        <td className="py-2.5 px-3 font-bold text-[var(--brand)]">{acc.code}</td>
+                        <td className="py-2.5 px-3 font-sans font-medium text-[var(--text)]">{acc.name}</td>
+                        <td className="py-2.5 px-3">
+                          <Chip size="sm" color={acc.type === 'ASSET' ? 'secondary' : acc.type === 'REVENUE' ? 'success' : acc.type === 'EXPENSE' ? 'danger' : 'default'}>
+                            {acc.type}
+                          </Chip>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-[var(--text)]">
+                          {currency}{Number(acc.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </TableStateBody>
                 </tbody>
               </table>
             </div>
@@ -291,37 +312,67 @@ export const AccountingPage: React.FC = () => {
               <span className="text-xs text-[var(--text-muted)]">Immutable Double-Entry Ledger</span>
             </div>
 
-            <div className="divide-y divide-[var(--border)]">
-              {(dashboard?.recentJournals || []).map((je: any) => (
-                <div key={je.id} className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-[var(--brand)]">{je.entryNumber}</span>
-                      {je.isReversed ? (
-                        <Chip size="sm" color="danger">Reversed ({je.reversalEntryId})</Chip>
-                      ) : (
-                        <Chip size="sm" color="success">Posted & Locked</Chip>
-                      )}
-                      <span className="text-xs text-[var(--text-muted)]">{new Date(je.entryDate).toLocaleDateString()}</span>
+            {loading && !(dashboard?.recentJournals?.length) ? (
+              <div className="space-y-3 py-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : loadError && !(dashboard?.recentJournals?.length) ? (
+              <EmptyState
+                variant="error"
+                title="Unable to load journal entries"
+                description="Failed to fetch double-entry journal records."
+                primaryAction={{ label: 'Retry', onClick: loadData }}
+              />
+            ) : !(dashboard?.recentJournals?.length) ? (
+              <EmptyState
+                variant="no-data"
+                title="No journal entries posted yet"
+                description="Invoices, customer payments, and manual adjustments create immutable journal entries here."
+                primaryAction={
+                  canCreateJournal
+                    ? {
+                        label: 'Post Manual Journal',
+                        onClick: () => setIsNewJournalOpen(true),
+                        permission: 'accounting.create',
+                      }
+                    : undefined
+                }
+              />
+            ) : (
+              <div className="divide-y divide-[var(--border)]">
+                {(dashboard?.recentJournals || []).map((je: any) => (
+                  <div key={je.id} className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-[var(--brand)]">{je.entryNumber}</span>
+                        {je.isReversed ? (
+                          <Chip size="sm" color="danger">Reversed ({je.reversalEntryId})</Chip>
+                        ) : (
+                          <Chip size="sm" color="success">Posted & Locked</Chip>
+                        )}
+                        <span className="text-xs text-[var(--text-muted)]">{new Date(je.entryDate).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-sm font-medium text-[var(--text)] mt-1">{je.description}</p>
+                      {je.reference && <span className="font-mono text-[11px] text-[var(--text-muted)]">Source Ref: {je.reference}</span>}
                     </div>
-                    <p className="text-sm font-medium text-[var(--text)] mt-1">{je.description}</p>
-                    {je.reference && <span className="font-mono text-[11px] text-[var(--text-muted)]">Source Ref: {je.reference}</span>}
-                  </div>
 
-                  <div className="flex items-center gap-4 shrink-0">
-                    <span className="font-mono text-sm font-bold text-[var(--text)]">
-                      {currency}{Number(je.totalAmount || 0).toFixed(2)}
-                    </span>
-                    {!je.isReversed && (
-                      <Button variant="outline" size="sm" onClick={() => handleReverseJournal(je.entryNumber)}>
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Reverse</span>
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-4 shrink-0">
+                      <span className="font-mono text-sm font-bold text-[var(--text)]">
+                        {currency}{Number(je.totalAmount || 0).toFixed(2)}
+                      </span>
+                      {!je.isReversed && canDeleteJournal && (
+                        <Button variant="outline" size="sm" onClick={() => handleReverseJournal(je.entryNumber)}>
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Reverse</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -343,20 +394,30 @@ export const AccountingPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {ledger.map((row: any) => (
-                  <tr key={row.id} className="hover:bg-[var(--surface-hover)]">
-                    <td className="py-2 px-3 text-[var(--text-muted)]">{new Date(row.entryDate).toLocaleDateString()}</td>
-                    <td className="py-2 px-3 text-[var(--brand)] font-bold">{row.entryNumber}</td>
-                    <td className="py-2 px-3 text-[var(--text)] font-semibold">{row.accountCode} - {row.accountName}</td>
-                    <td className="py-2 px-3 font-sans text-[var(--text-secondary)]">{row.description}</td>
-                    <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400 font-bold">
-                      {row.debit > 0 ? `${currency}${Number(row.debit).toFixed(2)}` : '-'}
-                    </td>
-                    <td className="py-2 px-3 text-right text-rose-600 dark:text-rose-400 font-bold">
-                      {row.credit > 0 ? `${currency}${Number(row.credit).toFixed(2)}` : '-'}
-                    </td>
-                  </tr>
-                ))}
+                <TableStateBody
+                  colSpan={6}
+                  loading={loading}
+                  hasData={ledger.length > 0}
+                  error={loadError}
+                  onRetry={loadData}
+                  emptyTitle="No ledger transactions yet"
+                  emptyDescription="General ledger debit and credit postings will appear here."
+                >
+                  {ledger.map((row: any) => (
+                    <tr key={row.id} className="hover:bg-[var(--surface-hover)]">
+                      <td className="py-2 px-3 text-[var(--text-muted)]">{new Date(row.entryDate).toLocaleDateString()}</td>
+                      <td className="py-2 px-3 text-[var(--brand)] font-bold">{row.entryNumber}</td>
+                      <td className="py-2 px-3 text-[var(--text)] font-semibold">{row.accountCode} - {row.accountName}</td>
+                      <td className="py-2 px-3 font-sans text-[var(--text-secondary)]">{row.description}</td>
+                      <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400 font-bold">
+                        {row.debit > 0 ? `${currency}${Number(row.debit).toFixed(2)}` : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-right text-rose-600 dark:text-rose-400 font-bold">
+                        {row.credit > 0 ? `${currency}${Number(row.credit).toFixed(2)}` : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </TableStateBody>
               </tbody>
             </table>
           </div>
@@ -389,23 +450,33 @@ export const AccountingPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {(trialBalance?.rows || []).map((r: any) => (
-                    <tr key={r.code}>
-                      <td className="py-2 px-3 font-bold text-[var(--brand)]">{r.code}</td>
-                      <td className="py-2 px-3 font-sans">{r.name}</td>
-                      <td className="py-2 px-3 text-right">{r.debit > 0 ? `${currency}${r.debit.toFixed(2)}` : '-'}</td>
-                      <td className="py-2 px-3 text-right">{r.credit > 0 ? `${currency}${r.credit.toFixed(2)}` : '-'}</td>
+                  <TableStateBody
+                    colSpan={4}
+                    loading={loading}
+                    hasData={Boolean(trialBalance?.rows?.length)}
+                    error={loadError}
+                    onRetry={loadData}
+                    emptyTitle="No trial balance entries yet"
+                    emptyDescription="Trial balance rows appear after ledger postings."
+                  >
+                    {(trialBalance?.rows || []).map((r: any) => (
+                      <tr key={r.code}>
+                        <td className="py-2 px-3 font-bold text-[var(--brand)]">{r.code}</td>
+                        <td className="py-2 px-3 font-sans">{r.name}</td>
+                        <td className="py-2 px-3 text-right">{r.debit > 0 ? `${currency}${r.debit.toFixed(2)}` : '-'}</td>
+                        <td className="py-2 px-3 text-right">{r.credit > 0 ? `${currency}${r.credit.toFixed(2)}` : '-'}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-[var(--border)] font-bold text-sm bg-[var(--surface-hover)]">
+                      <td colSpan={2} className="py-3 px-3">RECONCILED TOTALS</td>
+                      <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400">
+                        {currency}{Number(trialBalance?.totalDebit ?? 0).toFixed(2)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-rose-600 dark:text-rose-400">
+                        {currency}{Number(trialBalance?.totalCredit ?? 0).toFixed(2)}
+                      </td>
                     </tr>
-                  ))}
-                  <tr className="border-t-2 border-[var(--border)] font-bold text-sm bg-[var(--surface-hover)]">
-                    <td colSpan={2} className="py-3 px-3">RECONCILED TOTALS</td>
-                    <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400">
-                      {currency}{trialBalance?.totalDebit?.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-rose-600 dark:text-rose-400">
-                      {currency}{trialBalance?.totalCredit?.toFixed(2)}
-                    </td>
-                  </tr>
+                  </TableStateBody>
                 </tbody>
               </table>
             </div>

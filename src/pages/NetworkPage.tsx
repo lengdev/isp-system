@@ -1,33 +1,47 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
-  Radio,
   RefreshCw,
   Server,
-  Cpu,
-  HardDrive,
-  Wifi,
-  CheckCircle2,
-  AlertTriangle,
   RotateCw,
   Activity,
-  Zap,
-  Layers,
-  Network,
   Plus,
-  ShieldCheck,
-  User,
   Power,
+  Wifi,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { Can, useCan } from '../lib/permissions';
 import { NetworkDevice } from '../types';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
-import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox } from '../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
+import { DataTableCheckbox } from '../components/ui/DataTable/DataTableCheckbox';
+import { TableStateBody } from '../components/ui/TableState';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
+
+function mapApiRouter(r: any): NetworkDevice {
+  const st = String(r.status || 'ONLINE').toUpperCase();
+  const status = st === 'OFFLINE' ? 'Offline' : st === 'WARNING' ? 'Warning' : 'Online';
+  return {
+    id: String(r.id),
+    name: r.name,
+    ipAddress: r.managementIp || r.ipAddress || '10.0.0.1',
+    type: r.type || 'Core Router',
+    location: r.location || 'Phnom Penh Core POP',
+    status,
+    lastPingMs: typeof r.lastPingMs === 'number' ? r.lastPingMs : 2,
+    connectedClients: Number(r.activeSubscribers ?? r.connectedClients ?? 0),
+    cpuLoadPercent: Number(r.cpuLoad ?? r.cpuLoadPercent ?? 14),
+    firmwareVersion: r.firmwareVersion || 'RouterOS v7.14',
+    uptimeDays: Number(r.uptimeDays ?? 45),
+  };
+}
 
 const VLAN_PURPOSE_OPTIONS: ComboboxOption[] = [
   { value: 'FIBER_INTERNET', label: 'Fiber Internet' },
@@ -48,18 +62,15 @@ const VLAN_INTERFACE_OPTIONS: ComboboxOption[] = [
 ];
 
 export const NetworkPage: React.FC = () => {
-  const devices = useStore((s) => s.devices);
-  const rebootDevice = useStore((s) => s.rebootDevice);
   const addToast = useStore((s) => s.addToast);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const canManageRouters = useCan('routers.manage');
+  const canRebootRouter = useCan('routers.reboot');
+  const canManagePPPoE = useCan('pppoe.manage');
+  const canManageVlans = useCan('vlans.manage');
+  const canManageIpam = useCan('ipam.manage');
 
   // Tabs: fleet, pppoe, vlans, ipam
   const [networkTab, setNetworkTab] = useState<'fleet' | 'pppoe' | 'vlans' | 'ipam'>('fleet');
-
-  // PPPoE, VLAN, IPAM State
-  const [pppoeAccounts, setPppoeAccounts] = useState<any[]>([]);
-  const [vlans, setVlans] = useState<any[]>([]);
-  const [ipPools, setIpPools] = useState<any[]>([]);
 
   // Add VLAN Modal
   const [isVlanModalOpen, setIsVlanModalOpen] = useState(false);
@@ -75,29 +86,70 @@ export const NetworkPage: React.FC = () => {
   const [selectedPoolId, setSelectedPoolId] = useState('pool-fiber-1');
   const [targetCustId, setTargetCustId] = useState('cust-1001');
 
+  const routersQuery = useQuery<NetworkDevice[], Error>({
+    queryKey: ['network-routers'],
+    queryFn: async () => {
+      const list = await api.network.getRouters();
+      return (Array.isArray(list) ? list : []).map(mapApiRouter);
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const pppoeQuery = useQuery<any[], Error>({
+    queryKey: ['network-pppoe'],
+    queryFn: () => api.network.getPPPoE(),
+    placeholderData: keepPreviousData,
+  });
+
+  const vlansQuery = useQuery<any[], Error>({
+    queryKey: ['network-vlans'],
+    queryFn: () => api.network.getVlans(),
+    placeholderData: keepPreviousData,
+  });
+
+  const ipamQuery = useQuery<any[], Error>({
+    queryKey: ['network-ipam'],
+    queryFn: () => api.network.getIpPools(),
+    placeholderData: keepPreviousData,
+  });
+
+  const devices = useMemo(() => routersQuery.data ?? [], [routersQuery.data]);
+  const pppoeAccounts = useMemo(() => pppoeQuery.data ?? [], [pppoeQuery.data]);
+  const vlans = useMemo(() => vlansQuery.data ?? [], [vlansQuery.data]);
+  const ipPools = useMemo(() => ipamQuery.data ?? [], [ipamQuery.data]);
+  const isRefreshing =
+    routersQuery.isFetching ||
+    pppoeQuery.isFetching ||
+    vlansQuery.isFetching ||
+    ipamQuery.isFetching;
+
   const ipPoolOptions: ComboboxOption[] = useMemo(
     () => (ipPools || []).map((p) => ({ value: p.id, label: `${p.name} (${p.availableIps} free)` })),
     [ipPools]
   );
 
   const loadNetworkData = async () => {
-    try {
-      const [pppoeRes, vlanRes, poolRes] = await Promise.all([
-        api.network.getPPPoE().catch(() => []),
-        api.network.getVlans().catch(() => []),
-        api.network.getIpPools().catch(() => []),
-      ]);
-      setPppoeAccounts(Array.isArray(pppoeRes) ? pppoeRes : []);
-      setVlans(Array.isArray(vlanRes) ? vlanRes : []);
-      setIpPools(Array.isArray(poolRes) ? poolRes : []);
-    } catch (err: any) {
-      console.warn('Network data load error:', err);
-    }
+    await Promise.all([
+      routersQuery.refetch(),
+      pppoeQuery.refetch(),
+      vlansQuery.refetch(),
+      ipamQuery.refetch(),
+    ]);
   };
 
-  useEffect(() => {
-    loadNetworkData();
-  }, []);
+  const handleRebootDevice = async (dev: NetworkDevice) => {
+    try {
+      await api.network.rebootRouter(dev.id);
+      addToast({
+        type: 'info',
+        title: 'Device Reboot Initiated',
+        message: `Sent soft reboot signal to ${dev.name} (${dev.ipAddress})`,
+      });
+      routersQuery.refetch();
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Reboot Failed', message: err.message });
+    }
+  };
 
   const handleCreateVlan = async () => {
     try {
@@ -111,7 +163,7 @@ export const NetworkPage: React.FC = () => {
       });
       addToast({ type: 'success', title: 'VLAN Created', message: `VLAN ${vlanIdInput} provisioned on ${vlanInterface}.` });
       setIsVlanModalOpen(false);
-      loadNetworkData();
+      vlansQuery.refetch();
     } catch (err: any) {
       addToast({ type: 'error', title: 'VLAN Conflict', message: err.message });
     }
@@ -122,22 +174,22 @@ export const NetworkPage: React.FC = () => {
       const res = await api.network.allocateIp({ poolId: selectedPoolId, customerId: targetCustId, isStatic: true });
       addToast({ type: 'success', title: 'IP Allocated', message: `Assigned ${res.ipAddress} from ${res.poolName}.` });
       setIsIpModalOpen(false);
-      loadNetworkData();
+      ipamQuery.refetch();
     } catch (err: any) {
       addToast({ type: 'error', title: 'Allocation Failed', message: err.message });
     }
   };
 
-  const handleTogglePPPoE = async (username: string, currentStatus: string) => {
+  const handleTogglePPPoE = async (customerId: string, username: string, currentStatus: string) => {
     const targetStatus = currentStatus === 'Online' ? 'SUSPENDED' : 'ACTIVE';
     try {
-      await api.customers.setStatus('cust-1001', targetStatus, 'Network operations manual toggle');
+      await api.customers.setStatus(customerId || 'cust-1001', targetStatus, 'Network operations manual toggle');
       addToast({
         type: 'info',
         title: 'PPPoE State Changed',
         message: `${username} set to ${targetStatus} on MikroTik Core Router.`,
       });
-      loadNetworkData();
+      pppoeQuery.refetch();
     } catch (err: any) {
       addToast({ type: 'error', title: 'Failed to toggle subscriber', message: err.message });
     }
@@ -296,18 +348,15 @@ export const NetworkPage: React.FC = () => {
   );
 
   const getRowActions = (dev: NetworkDevice): RowAction<NetworkDevice>[] => [
-    {
-      label: 'Reboot Device',
-      icon: <RotateCw className="w-3.5 h-3.5 text-amber-600" />,
-      onClick: () => {
-        rebootDevice(dev.id);
-        addToast({
-          type: 'info',
-          title: 'Device Reboot Initiated',
-          message: `Sent soft reboot signal to ${dev.name} (${dev.ipAddress})`,
-        });
-      },
-    },
+    ...(canRebootRouter || canManageRouters
+      ? [
+          {
+            label: 'Reboot Device',
+            icon: <RotateCw className="w-3.5 h-3.5 text-amber-600" />,
+            onClick: () => handleRebootDevice(dev),
+          },
+        ]
+      : []),
     {
       label: 'Ping Telemetry Probe',
       icon: <Activity className="w-3.5 h-3.5" />,
@@ -426,36 +475,26 @@ export const NetworkPage: React.FC = () => {
           </div>
         </div>
 
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={(e) => {
-            e.stopPropagation();
-            rebootDevice(dev.id);
-            addToast({
-              type: 'info',
-              title: 'Device Rebooting',
-              message: `Sent reboot command to ${dev.name}`,
-            });
-          }}
-          className="w-full text-xs"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Reboot Device</span>
-        </Button>
+        {(canRebootRouter || canManageRouters) && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRebootDevice(dev);
+            }}
+            className="w-full text-xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reboot Device</span>
+          </Button>
+        )}
       </div>
     );
   };
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
     await loadNetworkData();
-    setIsRefreshing(false);
-    addToast({
-      type: 'success',
-      title: 'Telemetry Refreshed',
-      message: 'All OLTs, core routers, and PPPoE subscribers inspected.',
-    });
   };
 
   return (
@@ -510,15 +549,21 @@ export const NetworkPage: React.FC = () => {
         <DataTable<NetworkDevice>
           columns={columns}
           data={devices}
+          loading={routersQuery.isLoading}
+          fetching={routersQuery.isFetching}
+          error={routersQuery.error ? 'Unable to load network routers.' : null}
+          onRetry={() => routersQuery.refetch()}
           rowId={(dev) => dev.id}
           viewKey="network_devices_table"
           rowActions={getRowActions}
           renderExpanded={renderExpanded}
           renderCard={renderCard}
           autoRefreshInterval={30}
-          onRefresh={handleRefresh}
-          emptyTitle="No network devices found"
-          emptySubtitle="Check device provisioning or network discovery status."
+          onRefresh={() => routersQuery.refetch()}
+          noDataTitle="No network routers registered"
+          noDataDescription="Provisioned MikroTik core routers and OLTs will appear here."
+          emptyTitle="No matching network devices"
+          emptySubtitle="Try adjusting search or column filters."
         />
       )}
 
@@ -544,30 +589,42 @@ export const NetworkPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {pppoeAccounts.map((p) => (
-                  <tr key={p.id} className="hover:bg-[var(--surface-hover)]">
-                    <td className="py-3 px-3 font-bold text-[var(--brand)]">{p.username}</td>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{p.customerName}</td>
-                    <td className="py-3 px-3">{p.ipAddress}</td>
-                    <td className="py-3 px-3 text-[var(--text-muted)]">{p.macAddress || '-'}</td>
-                    <td className="py-3 px-3 font-bold text-emerald-600 dark:text-emerald-400">{p.rateLimit}</td>
-                    <td className="py-3 px-3">
-                      <Chip size="sm" color={p.status === 'Online' ? 'success' : 'danger'}>
-                        {p.status}
-                      </Chip>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleTogglePPPoE(p.username, p.status)}
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                        <span>{p.status === 'Online' ? 'Suspend Secret' : 'Enable & Kick'}</span>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                <TableStateBody
+                  colSpan={7}
+                  loading={pppoeQuery.isLoading}
+                  hasData={pppoeAccounts.length > 0}
+                  error={pppoeQuery.error ? 'Unable to load PPPoE sessions.' : null}
+                  onRetry={() => pppoeQuery.refetch()}
+                  emptyTitle="No active PPPoE accounts"
+                  emptyDescription="PPPoE secrets provisioned for subscriber lines will appear here."
+                >
+                  {pppoeAccounts.map((p) => (
+                    <tr key={p.id} className="hover:bg-[var(--surface-hover)]">
+                      <td className="py-3 px-3 font-bold text-[var(--brand)]">{p.username}</td>
+                      <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{p.customerName}</td>
+                      <td className="py-3 px-3">{p.ipAddress}</td>
+                      <td className="py-3 px-3 text-[var(--text-muted)]">{p.macAddress || '-'}</td>
+                      <td className="py-3 px-3 font-bold text-emerald-600 dark:text-emerald-400">{p.rateLimit}</td>
+                      <td className="py-3 px-3">
+                        <Chip size="sm" color={p.status === 'Online' ? 'success' : 'danger'}>
+                          {p.status}
+                        </Chip>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        {canManagePPPoE && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleTogglePPPoE(p.customerId, p.username, p.status)}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            <span>{p.status === 'Online' ? 'Suspend Secret' : 'Enable & Kick'}</span>
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </TableStateBody>
               </tbody>
             </table>
           </div>
@@ -582,10 +639,12 @@ export const NetworkPage: React.FC = () => {
               <h3 className="text-sm font-bold text-[var(--text)] uppercase tracking-wider">VLAN Inventory & Interface Mapping</h3>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Segregate management, FTTH residential, and corporate DIA traffic</p>
             </div>
-            <Button variant="primary" size="sm" onClick={() => setIsVlanModalOpen(true)}>
-              <Plus className="w-4 h-4" />
-              <span>Add VLAN</span>
-            </Button>
+            <Can permission="vlans.manage">
+              <Button variant="primary" size="sm" onClick={() => setIsVlanModalOpen(true)}>
+                <Plus className="w-4 h-4" />
+                <span>Add VLAN</span>
+              </Button>
+            </Can>
           </div>
 
           <div className="overflow-x-auto">
@@ -602,23 +661,38 @@ export const NetworkPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {vlans.map((v) => (
-                  <tr key={v.id} className="hover:bg-[var(--surface-hover)]">
-                    <td className="py-3 px-3 font-bold text-[var(--brand)] text-sm">{v.vlanId}</td>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{v.name}</td>
-                    <td className="py-3 px-3">
-                      <Chip size="sm" color={v.purpose === 'FIBER_INTERNET' ? 'secondary' : v.purpose === 'MANAGEMENT' ? 'default' : 'warning'}>
-                        {v.purpose}
-                      </Chip>
-                    </td>
-                    <td className="py-3 px-3 text-[var(--text-secondary)]">{v.interface} ({v.tagged ? 'Tagged' : 'Access'})</td>
-                    <td className="py-3 px-3">{v.subnet || '-'}</td>
-                    <td className="py-3 px-3 font-bold text-[var(--text)]">{v.subscribersCount}</td>
-                    <td className="py-3 px-3">
-                      <Chip size="sm" color="success">Active</Chip>
-                    </td>
-                  </tr>
-                ))}
+                <TableStateBody
+                  colSpan={7}
+                  loading={vlansQuery.isLoading}
+                  hasData={vlans.length > 0}
+                  error={vlansQuery.error ? 'Unable to load VLAN configurations.' : null}
+                  onRetry={() => vlansQuery.refetch()}
+                  emptyTitle="No VLANs configured yet"
+                  emptyDescription="Create a VLAN ID to isolate broadband, management, and DIA traffic."
+                  primaryAction={
+                    canManageVlans
+                      ? { label: 'Add VLAN', onClick: () => setIsVlanModalOpen(true), permission: 'vlans.manage' }
+                      : undefined
+                  }
+                >
+                  {vlans.map((v) => (
+                    <tr key={v.id} className="hover:bg-[var(--surface-hover)]">
+                      <td className="py-3 px-3 font-bold text-[var(--brand)] text-sm">{v.vlanId}</td>
+                      <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{v.name}</td>
+                      <td className="py-3 px-3">
+                        <Chip size="sm" color={v.purpose === 'FIBER_INTERNET' ? 'secondary' : v.purpose === 'MANAGEMENT' ? 'default' : 'warning'}>
+                          {v.purpose}
+                        </Chip>
+                      </td>
+                      <td className="py-3 px-3 text-[var(--text-secondary)]">{v.interface} ({v.tagged ? 'Tagged' : 'Access'})</td>
+                      <td className="py-3 px-3">{v.subnet || '-'}</td>
+                      <td className="py-3 px-3 font-bold text-[var(--text)]">{v.subscribersCount}</td>
+                      <td className="py-3 px-3">
+                        <Chip size="sm" color="success">Active</Chip>
+                      </td>
+                    </tr>
+                  ))}
+                </TableStateBody>
               </tbody>
             </table>
           </div>
@@ -633,14 +707,46 @@ export const NetworkPage: React.FC = () => {
               <h3 className="text-sm font-bold text-[var(--text)] uppercase tracking-wider">IPv4 Address Pools & Subnet Pools</h3>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Dynamic DHCP/PPPoE pools and fixed static assignment allocation</p>
             </div>
-            <Button variant="primary" size="sm" onClick={() => setIsIpModalOpen(true)}>
-              <Plus className="w-4 h-4" />
-              <span>Allocate Static IP</span>
-            </Button>
+            <Can permission="ipam.manage">
+              <Button variant="primary" size="sm" onClick={() => setIsIpModalOpen(true)}>
+                <Plus className="w-4 h-4" />
+                <span>Allocate Static IP</span>
+              </Button>
+            </Can>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {ipPools.map((pool) => (
+          {ipamQuery.isLoading && ipPools.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[0, 1].map((idx) => (
+                <div key={idx} className="p-4 rounded-xl bg-[var(--surface-hover)] border border-[var(--border)] space-y-3">
+                  <Skeleton className="h-4 w-40 rounded" />
+                  <Skeleton className="h-3 w-56 rounded" />
+                  <Skeleton className="h-2 w-full rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : ipamQuery.error && ipPools.length === 0 ? (
+            <EmptyState
+              variant="error"
+              title="Unable to load IP pools"
+              description="Failed to fetch IPAM subnet pools. Please try again."
+              primaryAction={{ label: 'Retry', onClick: () => ipamQuery.refetch() }}
+            />
+          ) : ipPools.length === 0 ? (
+            <EmptyState
+              variant="no-data"
+              icon={<Wifi className="w-5 h-5" />}
+              title="No IP pools configured"
+              description="Add subscriber IPv4 pools to manage dynamic and static leases."
+              primaryAction={
+                canManageIpam
+                  ? { label: 'Allocate Static IP', onClick: () => setIsIpModalOpen(true), permission: 'ipam.manage' }
+                  : undefined
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {ipPools.map((pool) => (
               <div key={pool.id} className="p-4 rounded-xl bg-[var(--surface-hover)] border border-[var(--border)] space-y-3 font-mono text-xs">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-[var(--brand)] text-sm">{pool.name}</span>
@@ -664,6 +770,7 @@ export const NetworkPage: React.FC = () => {
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

@@ -16,18 +16,23 @@ import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
+import { TableStateBody } from '../components/ui/TableState';
+import { Can, useCan } from '../lib/permissions';
 import { useStore } from '../store/useStore';
 import { api } from '../lib/api';
 
 export const ProcurementPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
   const currency = useStore((s) => s.currency) || '$';
+  const canCreatePo = useCan('procurement.create');
+  const canEditPo = useCan('procurement.edit');
 
   const [activeTab, setActiveTab] = useState<'orders' | 'suppliers'>('orders');
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // New PO Modal
   const [isPoModalOpen, setIsPoModalOpen] = useState(false);
@@ -53,18 +58,20 @@ export const ProcurementPage: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [supRes, ordRes, prodRes] = await Promise.all([
-        api.procurement.getSuppliers().catch(() => []),
-        api.procurement.getOrders().catch(() => []),
-        api.inventory.getProducts().catch(() => []),
+        api.procurement.getSuppliers(),
+        api.procurement.getOrders(),
+        api.inventory.getProducts(),
       ]);
-      setSuppliers(supRes);
-      setOrders(ordRes);
-      setProducts(prodRes);
+      setSuppliers(Array.isArray(supRes) ? supRes : []);
+      setOrders(Array.isArray(ordRes) ? ordRes : []);
+      setProducts(Array.isArray(prodRes) ? prodRes : []);
       if (supRes.length > 0 && !poSupplierId) setPoSupplierId(supRes[0].id);
       if (prodRes.length > 0 && !poProductId) setPoProductId(prodRes[0].id);
     } catch (err: any) {
+      setLoadError('Unable to load procurement orders and vendors.');
       addToast({ type: 'error', title: 'Failed to load procurement data', message: err.message });
     } finally {
       setLoading(false);
@@ -135,10 +142,12 @@ export const ProcurementPage: React.FC = () => {
             <RefreshCw className={loading ? 'animate-spin w-4 h-4' : 'w-4 h-4'} />
             <span>Refresh</span>
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setIsPoModalOpen(true)}>
-            <Plus className="w-4 h-4" />
-            <span>Create Purchase Order</span>
-          </Button>
+          <Can permission="procurement.create">
+            <Button variant="primary" size="sm" onClick={() => setIsPoModalOpen(true)}>
+              <Plus className="w-4 h-4" />
+              <span>Create Purchase Order</span>
+            </Button>
+          </Can>
         </div>
       </div>
 
@@ -176,33 +185,52 @@ export const ProcurementPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {orders.map((po) => (
-                  <tr key={po.id} className="hover:bg-[var(--surface-hover)]">
-                    <td className="py-3 px-3 font-bold text-[var(--brand)]">{po.poNumber}</td>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{po.supplierName}</td>
-                    <td className="py-3 px-3 text-[var(--text-muted)]">{new Date(po.issuedDate).toLocaleDateString()}</td>
-                    <td className="py-3 px-3 text-right font-bold text-[var(--text)]">
-                      {currency}{Number(po.totalAmount || 0).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3">
-                      <Chip size="sm" color={po.status === 'COMPLETED' ? 'success' : 'secondary'}>
-                        {po.status === 'COMPLETED' ? 'Received (In Stock)' : 'Approved & Pending Delivery'}
-                      </Chip>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      {po.status !== 'COMPLETED' && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleReceiveGoods(po.id)}
-                        >
-                          <PackageCheck className="w-3.5 h-3.5" />
-                          <span>Receive Goods (GRN)</span>
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                <TableStateBody
+                  colSpan={6}
+                  loading={loading}
+                  hasData={orders.length > 0}
+                  error={loadError}
+                  onRetry={loadData}
+                  emptyTitle="No purchase orders yet"
+                  emptyDescription="Draft vendor purchase orders to procure routers, ONTs, and fiber supplies."
+                  primaryAction={
+                    canCreatePo
+                      ? {
+                          label: 'Create Purchase Order',
+                          onClick: () => setIsPoModalOpen(true),
+                          permission: 'procurement.create',
+                        }
+                      : undefined
+                  }
+                >
+                  {orders.map((po) => (
+                    <tr key={po.id} className="hover:bg-[var(--surface-hover)]">
+                      <td className="py-3 px-3 font-bold text-[var(--brand)]">{po.poNumber}</td>
+                      <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{po.supplierName}</td>
+                      <td className="py-3 px-3 text-[var(--text-muted)]">{new Date(po.issuedDate).toLocaleDateString()}</td>
+                      <td className="py-3 px-3 text-right font-bold text-[var(--text)]">
+                        {currency}{Number(po.totalAmount || 0).toFixed(2)}
+                      </td>
+                      <td className="py-3 px-3">
+                        <Chip size="sm" color={po.status === 'COMPLETED' ? 'success' : 'secondary'}>
+                          {po.status === 'COMPLETED' ? 'Received (In Stock)' : 'Approved & Pending Delivery'}
+                        </Chip>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        {po.status !== 'COMPLETED' && canEditPo && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleReceiveGoods(po.id)}
+                          >
+                            <PackageCheck className="w-3.5 h-3.5" />
+                            <span>Receive Goods (GRN)</span>
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </TableStateBody>
               </tbody>
             </table>
           </div>
@@ -225,31 +253,43 @@ export const ProcurementPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {suppliers.map((sup) => (
-                  <tr key={sup.id} className="hover:bg-[var(--surface-hover)]">
-                    <td className="py-3 px-3 font-bold text-[var(--brand)]">{sup.code}</td>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{sup.name}</td>
-                    <td className="py-3 px-3 font-sans text-[var(--text-secondary)]">{sup.contactPerson}</td>
-                    <td className="py-3 px-3 text-[var(--text-muted)]">{sup.phone}</td>
-                    <td className="py-3 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
-                      {currency}{Number(sup.balancePayable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setPaySupplierId(sup.id);
-                          setPayAmount(sup.balancePayable);
-                          setIsPayModalOpen(true);
-                        }}
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        <span>Settle AP Bill</span>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                <TableStateBody
+                  colSpan={6}
+                  loading={loading}
+                  hasData={suppliers.length > 0}
+                  error={loadError}
+                  onRetry={loadData}
+                  emptyTitle="No suppliers registered yet"
+                  emptyDescription="Upstream vendors and hardware distributors will appear here."
+                >
+                  {suppliers.map((sup) => (
+                    <tr key={sup.id} className="hover:bg-[var(--surface-hover)]">
+                      <td className="py-3 px-3 font-bold text-[var(--brand)]">{sup.code}</td>
+                      <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{sup.name}</td>
+                      <td className="py-3 px-3 font-sans text-[var(--text-secondary)]">{sup.contactPerson}</td>
+                      <td className="py-3 px-3 text-[var(--text-muted)]">{sup.phone}</td>
+                      <td className="py-3 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
+                        {currency}{Number(sup.balancePayable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        {canEditPo && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setPaySupplierId(sup.id);
+                              setPayAmount(sup.balancePayable);
+                              setIsPayModalOpen(true);
+                            }}
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Settle AP Bill</span>
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </TableStateBody>
               </tbody>
             </table>
           </div>

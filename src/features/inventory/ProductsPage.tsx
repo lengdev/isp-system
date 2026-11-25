@@ -1,25 +1,24 @@
 import React, { useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
   Boxes,
   Plus,
-  Eye,
-  EyeOff,
   AlertTriangle,
   CheckCircle2,
   DollarSign,
   Edit2,
   Trash2,
   History,
-  Tag,
   Warehouse,
-  FolderTree,
   ChevronRight,
-  TrendingUp,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { Product, ProductStatus } from '../../types';
+import { api } from '../../lib/api';
+import { Can, useCan } from '../../lib/permissions';
+import { Product } from '../../types';
 import { StatCard } from '../../components/ui/StatCard';
 import { Button } from '../../components/ui/Button';
 import { Chip } from '../../components/ui/Chip';
@@ -30,14 +29,53 @@ import { DeleteProductModal } from './DeleteProductModal';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { formatCurrency, cn } from '../../lib/utils';
 
+function mapApiProduct(raw: any): Product {
+  const st = String(raw.status || 'IN_STOCK').toUpperCase();
+  const status =
+    st === 'LOW_STOCK'
+      ? 'Low Stock'
+      : st === 'OUT_OF_STOCK'
+      ? 'Out of Stock'
+      : st === 'DISCONTINUED'
+      ? 'Discontinued'
+      : 'In Stock';
+  return {
+    ...raw,
+    id: String(raw.id),
+    name: raw.name,
+    sku: raw.sku || `SKU-${raw.id}`,
+    category: raw.categoryName || raw.category || 'Accessories',
+    quantity: Number(raw.quantity ?? 0),
+    minStockAlert: Number(raw.minStockAlert ?? 10),
+    unitPrice: Number(raw.unitPrice ?? raw.costPrice ?? 0),
+    status,
+    location: raw.location || raw.warehouse || 'Phnom Penh Hub',
+    supplier: raw.supplier || 'Primary Vendor',
+    updatedAt: raw.updatedAt ? String(raw.updatedAt).slice(0, 10) : '',
+  };
+}
+
 export const ProductsPage: React.FC = () => {
-  const products = useStore((s) => s.products);
   const showProductStats = useStore((s) => s.showProductStats);
   const toggleProductStats = useStore((s) => s.toggleProductStats);
   const openModal = useStore((s) => s.openModal);
   const currency = useStore((s) => s.currency);
   const bulkDeleteProducts = useStore((s) => s.bulkDeleteProducts);
   const addToast = useStore((s) => s.addToast);
+  const canCreateProduct = useCan('inventory.create');
+  const canEditProduct = useCan('inventory.edit');
+  const canDeleteProduct = useCan('inventory.delete');
+
+  const productsQuery = useQuery<Product[], Error>({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const list = await api.inventory.getProducts();
+      return (Array.isArray(list) ? list : []).map(mapApiProduct);
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
 
   // Live calculated stats
   const totalProducts = products.length;
@@ -261,23 +299,31 @@ export const ProductsPage: React.FC = () => {
 
   // Row actions: edit, delete, log
   const getRowActions = (product: Product): RowAction<Product>[] => [
-    {
-      label: 'Edit Product',
-      icon: <Edit2 className="w-3.5 h-3.5" />,
-      onClick: () => openModal('addEditProduct', { productId: product.id }),
-    },
+    ...(canEditProduct
+      ? [
+          {
+            label: 'Edit Product',
+            icon: <Edit2 className="w-3.5 h-3.5" />,
+            onClick: () => openModal('addEditProduct', { productId: product.id }),
+          },
+        ]
+      : []),
     {
       label: 'Stock & Activity Log',
       icon: <History className="w-3.5 h-3.5" />,
       onClick: () => openModal('productLog', { productId: product.id }),
     },
-    { divider: true, label: '', onClick: () => {} },
-    {
-      label: 'Delete Product',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      danger: true,
-      onClick: () => openModal('deleteProduct', { productId: product.id }),
-    },
+    ...(canDeleteProduct
+      ? [
+          { divider: true, label: '', onClick: () => {} },
+          {
+            label: 'Delete Product',
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            danger: true,
+            onClick: () => openModal('deleteProduct', { productId: product.id }),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -304,17 +350,29 @@ export const ProductsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          {/* New Product Button */}
           <Button
-            variant="primary"
+            variant="outline"
             size="sm"
-            onClick={() => openModal('addEditProduct')}
+            onClick={() => productsQuery.refetch()}
+            disabled={productsQuery.isFetching}
             className="h-8 px-3 text-[12px] font-semibold gap-1.5 shrink-0"
-            title="Create New Product"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Product</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${productsQuery.isFetching ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </Button>
+          {/* New Product Button */}
+          <Can permission="inventory.create">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => openModal('addEditProduct')}
+              className="h-8 px-3 text-[12px] font-semibold gap-1.5 shrink-0"
+              title="Create New Product"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Product</span>
+            </Button>
+          </Can>
         </div>
       </div>
 
@@ -382,35 +440,49 @@ export const ProductsPage: React.FC = () => {
       <DataTable<Product>
         columns={columns}
         data={products}
+        loading={productsQuery.isLoading}
+        fetching={productsQuery.isFetching}
+        error={productsQuery.error ? 'Unable to load inventory catalog.' : null}
+        onRetry={() => productsQuery.refetch()}
+        onRefresh={() => productsQuery.refetch()}
         viewKey="inventory_products_view"
         searchPlaceholder="Search products…"
         rowActions={getRowActions}
         rowId={(p) => p.id}
-        onAddNew={() => openModal('addEditProduct')}
+        noDataTitle="No inventory products yet"
+        noDataDescription="Add ONUs, routers, fiber cables, or hardware SKUs to track warehouse stock."
+        emptyTitle="No matching products"
+        emptySubtitle="Adjust your search or clear active column filters."
+        emptyActionPermission="inventory.create"
+        onAddNew={canCreateProduct ? () => openModal('addEditProduct') : undefined}
         addNewLabel="New Product"
         showStatisticsToggle={true}
         showStatistics={showProductStats}
         onToggleStatistics={toggleProductStats}
-        bulkActions={(selectedRows, clearSelection) => (
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => {
-              const ids = selectedRows.map((r) => r.id);
-              bulkDeleteProducts(ids);
-              clearSelection();
-              addToast({
-                type: 'info',
-                title: 'Bulk Deletion',
-                message: `Removed ${ids.length} products from inventory.`,
-              });
-            }}
-            className="h-7 px-2.5 text-[11px] font-semibold gap-1.5 bg-red-600 text-white"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete Selected ({selectedRows.length})
-          </Button>
-        )}
+        bulkActions={
+          canDeleteProduct
+            ? (selectedRows, clearSelection) => (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    const ids = selectedRows.map((r) => r.id);
+                    bulkDeleteProducts(ids);
+                    clearSelection();
+                    addToast({
+                      type: 'info',
+                      title: 'Bulk Deletion',
+                      message: `Removed ${ids.length} products from inventory.`,
+                    });
+                  }}
+                  className="h-7 px-2.5 text-[11px] font-semibold gap-1.5 bg-red-600 text-white"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete Selected ({selectedRows.length})
+                </Button>
+              )
+            : undefined
+        }
         renderCard={(product, isSelected, onSelect) => (
           <div
             data-testid="product-card"
