@@ -10,6 +10,7 @@
     "watch:server": "tsc -p server/tsconfig.json -w --preserveWatchOutput",
     "dev:all": "node scripts/dev-all.mjs",
     "db:seed": "node --experimental-strip-types prisma/seed.ts",
+    "db:diagram": "node --experimental-strip-types scripts/generate-erd.ts",
     "start": "node dist-server/server.js",
     "build:server": "tsc -p server/tsconfig.json",
     "build": "tsc -b && vite build",
