@@ -5,6 +5,9 @@ import type {
   RoleItem,
   RolesMatrixResponse,
   UserWithRoles,
+  UsersListParams,
+  UsersListResponse,
+  UserLogsResponse,
   UserPermissionsDetailResponse,
   UpdateUserPermissionsPayload,
   CreateRolePayload,
@@ -294,13 +297,49 @@ export const api = {
       });
     },
     getHealth: () => fetchJson<{ status: string }>('/health'),
-    getUsers: () => fetchJson<any[]>('/auth/users'),
+    getUsers: (params?: UsersListParams) => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+      if (params?.search) qs.set('search', params.search);
+      if (params?.roles && params.roles.length > 0) qs.set('role', params.roles.join(','));
+      if (params?.status && params.status.length > 0) qs.set('status', params.status.join(','));
+      if (params?.sortBy) qs.set('sortBy', params.sortBy);
+      if (params?.sortDir) qs.set('sortDir', params.sortDir);
+      const q = qs.toString();
+      return fetchJson<UsersListResponse>(`/auth/users${q ? `?${q}` : ''}`);
+    },
     createUser: async (data: any) => {
       const payload = { ...data };
       if (payload.password) {
         payload.password = await hashPasswordClient(payload.password);
       }
-      return fetchJson<any>('/auth/users', { method: 'POST', body: JSON.stringify(payload) });
+      return fetchJson<UserWithRoles>('/auth/users', { method: 'POST', body: JSON.stringify(payload) });
+    },
+    updateUser: (
+      id: string,
+      data: { fullName?: string; email?: string; phone?: string | null; roles?: string[]; isActive?: boolean }
+    ) =>
+      fetchJson<UserWithRoles>(`/auth/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    deleteUser: (id: string) =>
+      fetchJson<{ success: boolean; softDeleted: boolean; message: string }>(`/auth/users/${id}`, {
+        method: 'DELETE',
+      }),
+    resetUserPassword: (id: string) =>
+      fetchJson<{ message: string; email?: string }>(`/auth/users/${id}/reset-password`, {
+        method: 'POST',
+      }),
+    getUserLogs: (id: string, params?: { page?: number; pageSize?: number; from?: string; to?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+      if (params?.from) qs.set('from', params.from);
+      if (params?.to) qs.set('to', params.to);
+      const q = qs.toString();
+      return fetchJson<UserLogsResponse>(`/auth/users/${id}/logs${q ? `?${q}` : ''}`);
     },
     getNavigation: () => fetchJson<{ navigation: NavigationItem[] }>('/auth/navigation'),
     getFeatures: () => fetchJson<{ features: FeatureItem[] }>('/auth/features'),
@@ -468,7 +507,13 @@ export const api = {
   settings: {
     getCompany: () => fetchJson<any>('/settings/company'),
     updateCompany: (data: any) => fetchJson<any>('/settings/company', { method: 'PUT', body: JSON.stringify(data) }),
-    getAuditLogs: () => fetchJson<any[]>('/settings/audit-logs'),
+    getAuditLogs: (params?: { actorId?: string; actor?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.actorId) qs.set('actorId', params.actorId);
+      if (params?.actor) qs.set('actor', params.actor);
+      const q = qs.toString();
+      return fetchJson<any[]>(`/settings/audit-logs${q ? `?${q}` : ''}`);
+    },
     getNotifications: () => fetchJson<any[]>('/settings/notifications'),
     markNotificationRead: (id: string) => fetchJson<any>(`/settings/notifications/${id}/read`, { method: 'PUT' }),
   },
@@ -509,7 +554,10 @@ export const api = {
       fetchJson<RoleItem>(`/auth/roles/${id}/duplicate`, {
         method: 'POST',
       }),
-    getUsers: () => fetchJson<UserWithRoles[]>('/auth/users'),
+    getUsers: async () => {
+      const res = await fetchJson<UsersListResponse | UserWithRoles[]>('/auth/users?page=1&pageSize=200');
+      return Array.isArray(res) ? res : res.items || [];
+    },
     updateUserRoles: (userId: string, roles: string[]) =>
       fetchJson<{ id: string; username: string; roles: string[] }>(`/auth/users/${userId}/roles`, {
         method: 'PATCH',

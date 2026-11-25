@@ -37,9 +37,44 @@ export interface UserWithRoles {
   grantCount?: number;
   denyCount?: number;
   isActive: boolean;
+  hasAuditHistory?: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UsersListParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  roles?: string[];
+  status?: string[];
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
+}
+
+export interface UsersListResponse {
+  items: UserWithRoles[];
+  total: number;
+}
+
+export interface UserAuditLogItem {
+  id: string;
+  action: string;
+  resource: string;
+  resourceId: string | null;
+  details: string | null;
+  actor: string;
+  ip: string;
+  ipAddress: string;
+  time: string;
+  timestamp: string;
+  createdAt: string;
+}
+
+export interface UserLogsResponse {
+  items: UserAuditLogItem[];
+  total: number;
 }
 
 export interface UserPermissionsDetailResponse {

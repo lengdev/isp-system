@@ -209,23 +209,129 @@ router.post('/change-password', authenticate, validateBody(changePasswordSchema)
   }
 });
 
-// GET /api/v1/auth/users (for Users tab and admin user management)
-router.get('/users', authenticate, authorize('users.view', 'users.manage', 'roles.manage'), async (_req, res) => {
+// Helper to parse multi-value query params (?role=A,B or ?role=A&role=B)
+function parseMultiQuery(val: any): string[] {
+  if (!val) return [];
+  const raw = Array.isArray(val) ? val : [val];
+  return raw
+    .flatMap((v) => String(v).split(','))
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// GET /api/v1/auth/users -> Paginated, sorted, searchable, filterable list { items, total }
+router.get('/users', authenticate, authorize('users.view'), async (req, res) => {
   try {
-    const users = await RbacService.listUsersWithRoles();
-    res.json(users);
+    const page = Number(req.query.page) || 1;
+    const pageSize = Number(req.query.pageSize || req.query.limit) || 10;
+    const search = typeof req.query.search === 'string' ? req.query.search : '';
+    const roles = parseMultiQuery(req.query.role ?? req.query.roles);
+    const status = parseMultiQuery(req.query.status);
+
+    let sortBy = typeof req.query.sortBy === 'string' ? req.query.sortBy : 'createdAt';
+    let sortDir: 'asc' | 'desc' = req.query.sortDir === 'desc' ? 'desc' : 'asc';
+    if (typeof req.query.sort === 'string' && req.query.sort.includes(':')) {
+      const [col, dir] = req.query.sort.split(':');
+      if (col) sortBy = col;
+      if (dir === 'desc' || dir === 'asc') sortDir = dir;
+    }
+
+    const result = await RbacService.listUsers({
+      page,
+      pageSize,
+      search,
+      roles,
+      status,
+      sortBy,
+      sortDir,
+    });
+    res.json(result);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 // POST /api/v1/auth/users
-router.post('/users', authenticate, authorize('users.manage', 'roles.manage'), async (req, res) => {
+router.post('/users', authenticate, authorize('users.manage'), async (req, res) => {
   try {
-    const user = await AuthService.createUser(req.body);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      role: req.user!.role,
+      roles: req.user!.roles,
+      ip: getClientIp(req),
+    };
+    const user = await AuthService.createUser(req.body, actor);
     res.status(201).json(user);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/v1/auth/users/:id -> Edit fullName, email, phone, roles, isActive
+router.patch('/users/:id', authenticate, authorize('users.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      role: req.user!.role,
+      roles: req.user!.roles,
+      ip: getClientIp(req),
+    };
+    const updated = await RbacService.updateUser(id, req.body || {}, actor);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/auth/users/:id/reset-password -> Generate/send reset link reusing forgot-password flow
+router.post('/users/:id/reset-password', authenticate, authorize('users.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const result = await AuthService.adminResetPassword(id, actor);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/v1/auth/users/:id -> Delete (hard-delete or soft-delete with audit history)
+router.delete('/users/:id', authenticate, authorize('users.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      role: req.user!.role,
+      roles: req.user!.roles,
+      ip: getClientIp(req),
+    };
+    const result = await RbacService.deleteUser(id, actor);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// GET /api/v1/auth/users/:id/logs -> Paginated audit events for user with date range filter
+router.get('/users/:id/logs', authenticate, authorize('audit.view'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const page = Number(req.query.page) || 1;
+    const pageSize = Number(req.query.pageSize || req.query.limit) || 20;
+    const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+    const result = await RbacService.getUserAuditLogs(id, { page, pageSize, from, to });
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
@@ -243,6 +349,8 @@ router.patch('/users/:id/roles', authenticate, authorize('roles.manage'), async 
     const actor = {
       id: req.user!.userId,
       username: req.user!.username,
+      role: req.user!.role,
+      roles: req.user!.roles,
       ip: getClientIp(req),
     };
     const result = await RbacService.updateUserRoles(id, roles, actor);

@@ -997,41 +997,145 @@ export class RbacService {
   }
 
   /**
-   * GET /users - For Users tab
+   * GET /users - Paginated, sorted, searchable, filterable users list
    */
-  static async listUsersWithRoles() {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        fullName: true,
-        phone: true,
-        avatarUrl: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        userRoles: {
-          include: {
-            role: {
-              select: { id: true, name: true, isSystem: true },
-            },
-          },
-        },
-        userPermissions: {
-          include: {
-            permission: {
-              select: { key: true, isActive: true },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+  static async listUsers(params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    roles?: string[];
+    status?: string[];
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+  } = {}) {
+    const page = Math.max(1, Number(params.page) || 1);
+    const pageSize = Math.min(200, Math.max(1, Number(params.pageSize) || 10));
+    const search = (params.search || '').trim().normalize('NFC');
+    const roleFilters = (params.roles || []).map((r) => r.trim()).filter(Boolean);
+    const statusFilters = (params.status || []).map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const sortDir: 'asc' | 'desc' = params.sortDir === 'desc' ? 'desc' : 'asc';
+    const sortBy = (params.sortBy || 'createdAt').trim();
 
-    return users.map((u) => {
+    const andConditions: any[] = [];
+
+    if (search) {
+      andConditions.push({
+        OR: [
+          { fullName: { contains: search, mode: 'insensitive' } },
+          { username: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (roleFilters.length > 0) {
+      const validEnums = [
+        'SUPER_ADMIN', 'ADMINISTRATOR', 'MANAGER', 'ACCOUNTANT', 'CASHIER',
+        'BILLING_CASHIER', 'NETWORK_ENGINEER', 'TECHNICIAN', 'FIELD_TECHNICIAN',
+        'SUPPORT_AGENT', 'SALES_STAFF', 'WAREHOUSE_MANAGER', 'PROCUREMENT_OFFICER', 'CUSTOMER',
+      ];
+      const matchedEnums = roleFilters.filter((r) => validEnums.includes(r));
+      andConditions.push({
+        OR: [
+          {
+            userRoles: {
+              some: {
+                role: {
+                  OR: [{ name: { in: roleFilters } }, { id: { in: roleFilters } }],
+                },
+              },
+            },
+          },
+          ...(matchedEnums.length > 0
+            ? [{ AND: [{ userRoles: { none: {} } }, { role: { in: matchedEnums as any } }] }]
+            : []),
+        ],
+      });
+    }
+
+    if (statusFilters.length > 0) {
+      const wantsActive = statusFilters.some((s) => s === 'active' || s === 'true' || s === 'enabled');
+      const wantsDisabled = statusFilters.some((s) => s === 'disabled' || s === 'inactive' || s === 'false');
+      if (wantsActive && !wantsDisabled) {
+        andConditions.push({ isActive: true });
+      } else if (wantsDisabled && !wantsActive) {
+        andConditions.push({ isActive: false });
+      }
+    }
+
+    const where = andConditions.length > 0 ? { AND: andConditions } : {};
+
+    let orderBy: any = { createdAt: 'asc' };
+    switch (sortBy) {
+      case 'fullName':
+      case 'user':
+        orderBy = { fullName: sortDir };
+        break;
+      case 'username':
+        orderBy = { username: sortDir };
+        break;
+      case 'email':
+        orderBy = { email: sortDir };
+        break;
+      case 'status':
+      case 'isActive':
+        orderBy = { isActive: sortDir };
+        break;
+      case 'roles':
+      case 'role':
+        orderBy = { role: sortDir };
+        break;
+      case 'lastLoginAt':
+        orderBy = { lastLoginAt: { sort: sortDir, nulls: 'last' } };
+        break;
+      case 'createdAt':
+        orderBy = { createdAt: sortDir };
+        break;
+      default:
+        orderBy = { createdAt: sortDir };
+    }
+
+    const [total, users] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy,
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          fullName: true,
+          phone: true,
+          avatarUrl: true,
+          role: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          userRoles: {
+            include: {
+              role: {
+                select: { id: true, name: true, isSystem: true },
+              },
+            },
+          },
+          userPermissions: {
+            include: {
+              permission: {
+                select: { key: true, isActive: true },
+              },
+            },
+          },
+          _count: {
+            select: { auditLogs: true },
+          },
+        },
+      }),
+    ]);
+
+    const items = users.map((u) => {
       const assignedRoles = u.userRoles.map((ur) => ur.role.name);
       const primaryRole = assignedRoles[0] || u.role;
       const grants = u.userPermissions
@@ -1055,11 +1159,582 @@ export class RbacService {
         grantCount: grants.length,
         denyCount: denies.length,
         isActive: u.isActive,
+        hasAuditHistory: u._count.auditLogs > 0,
         lastLoginAt: u.lastLoginAt?.toISOString() || null,
         createdAt: u.createdAt.toISOString(),
         updatedAt: u.updatedAt.toISOString(),
       };
     });
+
+    return { items, total };
+  }
+
+  /**
+   * Backward-compatible wrapper returning all users array
+   */
+  static async listUsersWithRoles() {
+    const { items } = await this.listUsers({ page: 1, pageSize: 200 });
+    return items;
+  }
+
+  /**
+   * Helper: find distinct user IDs currently holding SUPER_ADMIN (optionally only active accounts)
+   */
+  private static async getSuperAdminUserIds(activeOnly: boolean = false): Promise<Set<string>> {
+    const superAdminRole = await prisma.role.findUnique({
+      where: { name: 'SUPER_ADMIN' },
+      include: {
+        userRoles: {
+          include: {
+            user: { select: { id: true, isActive: true } },
+          },
+        },
+      },
+    });
+
+    const ids = new Set<string>();
+    for (const ur of superAdminRole?.userRoles || []) {
+      if (!activeOnly || ur.user.isActive) {
+        ids.add(ur.userId);
+      }
+    }
+
+    const legacySuperAdmins = await prisma.user.findMany({
+      where: {
+        role: 'SUPER_ADMIN',
+        userRoles: { none: {} },
+        ...(activeOnly ? { isActive: true } : {}),
+      },
+      select: { id: true },
+    });
+    for (const lsa of legacySuperAdmins) ids.add(lsa.id);
+
+    return ids;
+  }
+
+  /**
+   * PATCH /users/:id - Update profile, roles, and/or active status
+   */
+  static async updateUser(
+    targetUserId: string,
+    data: {
+      fullName?: string;
+      email?: string;
+      phone?: string | null;
+      roles?: string[];
+      isActive?: boolean;
+    },
+    actor: { id: string; username: string; role?: string; roles?: string[]; ip: string }
+  ) {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        userRoles: {
+          include: { role: true },
+        },
+      },
+    });
+
+    if (!targetUser) {
+      const err: any = new Error('User not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const actorIsSuperAdmin =
+      actor.role === 'SUPER_ADMIN' || Boolean(actor.roles?.includes('SUPER_ADMIN'));
+
+    const currentRoles = targetUser.userRoles.map((ur) => ur.role.name);
+    const effectiveCurrentRoles = currentRoles.length > 0 ? currentRoles : [targetUser.role];
+    const hasCurrentSuperAdmin =
+      effectiveCurrentRoles.includes('SUPER_ADMIN') || targetUser.role === 'SUPER_ADMIN';
+
+    const updateFields: {
+      fullName?: string;
+      email?: string;
+      phone?: string | null;
+      isActive?: boolean;
+      role?: any;
+    } = {};
+    const profileBefore: Record<string, any> = {};
+    const profileAfter: Record<string, any> = {};
+
+    if (data.fullName !== undefined) {
+      const trimmed = String(data.fullName).trim().normalize('NFC');
+      if (!trimmed) {
+        const err: any = new Error('Full name cannot be empty');
+        err.status = 400;
+        throw err;
+      }
+      if (trimmed !== targetUser.fullName) {
+        updateFields.fullName = trimmed;
+        profileBefore.fullName = targetUser.fullName;
+        profileAfter.fullName = trimmed;
+      }
+    }
+
+    if (data.email !== undefined) {
+      const trimmedEmail = String(data.email).trim();
+      if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        const err: any = new Error('Please provide a valid email address');
+        err.status = 400;
+        throw err;
+      }
+      if (trimmedEmail.toLowerCase() !== targetUser.email.toLowerCase()) {
+        const duplicateEmail = await prisma.user.findFirst({
+          where: {
+            email: { equals: trimmedEmail, mode: 'insensitive' },
+            id: { not: targetUserId },
+          },
+        });
+        if (duplicateEmail) {
+          const err: any = new Error('Email address is already in use by another account.');
+          err.status = 409;
+          throw err;
+        }
+        updateFields.email = trimmedEmail;
+        profileBefore.email = targetUser.email;
+        profileAfter.email = trimmedEmail;
+      }
+    }
+
+    if (data.phone !== undefined) {
+      const normalizedPhone = data.phone === null ? null : String(data.phone).trim() || null;
+      if (normalizedPhone !== (targetUser.phone || null)) {
+        updateFields.phone = normalizedPhone;
+        profileBefore.phone = targetUser.phone || null;
+        profileAfter.phone = normalizedPhone;
+      }
+    }
+
+    let resolvedRoles: { id: string; name: string }[] | null = null;
+    let rolesChanged = false;
+    if (data.roles !== undefined) {
+      if (!Array.isArray(data.roles) || data.roles.length === 0) {
+        const err: any = new Error('At least one role must be assigned to the user');
+        err.status = 400;
+        throw err;
+      }
+      const roleInputs = Array.from(new Set(data.roles.map((r) => String(r).trim()).filter(Boolean)));
+      const foundRoles = await prisma.role.findMany({
+        where: {
+          OR: [{ id: { in: roleInputs } }, { name: { in: roleInputs } }],
+        },
+        select: { id: true, name: true },
+      });
+      if (foundRoles.length === 0) {
+        const err: any = new Error('No valid roles found');
+        err.status = 400;
+        throw err;
+      }
+
+      const willHaveSuperAdmin = foundRoles.some((r) => r.name === 'SUPER_ADMIN');
+      if (!actorIsSuperAdmin && hasCurrentSuperAdmin !== willHaveSuperAdmin) {
+        const err: any = new Error('Only SUPER_ADMIN can assign or remove the SUPER_ADMIN role.');
+        err.status = 403;
+        throw err;
+      }
+
+      if (actor.id === targetUserId && hasCurrentSuperAdmin && !willHaveSuperAdmin) {
+        const err: any = new Error('You cannot remove the SUPER_ADMIN role from your own account.');
+        err.status = 400;
+        throw err;
+      }
+
+      if (hasCurrentSuperAdmin && !willHaveSuperAdmin) {
+        const superAdminIds = await this.getSuperAdminUserIds(false);
+        if (superAdminIds.size <= 1 && superAdminIds.has(targetUserId)) {
+          const err: any = new Error('Cannot remove the last SUPER_ADMIN from the system.');
+          err.status = 409;
+          throw err;
+        }
+      }
+
+      const prevSorted = [...effectiveCurrentRoles].sort().join(',');
+      const nextSorted = [...foundRoles.map((r) => r.name)].sort().join(',');
+      if (prevSorted !== nextSorted) {
+        rolesChanged = true;
+        resolvedRoles = foundRoles;
+        const validEnumRoles = [
+          'SUPER_ADMIN', 'ADMINISTRATOR', 'MANAGER', 'ACCOUNTANT', 'CASHIER',
+          'BILLING_CASHIER', 'NETWORK_ENGINEER', 'TECHNICIAN', 'FIELD_TECHNICIAN',
+          'SUPPORT_AGENT', 'SALES_STAFF', 'WAREHOUSE_MANAGER', 'PROCUREMENT_OFFICER', 'CUSTOMER',
+        ];
+        const matchedEnumRole = foundRoles.find((r) => validEnumRoles.includes(r.name));
+        if (matchedEnumRole) {
+          updateFields.role = matchedEnumRole.name as any;
+        }
+      }
+    }
+
+    let statusChanged = false;
+    if (data.isActive !== undefined) {
+      const nextActive = Boolean(data.isActive);
+      if (nextActive !== targetUser.isActive) {
+        if (!nextActive) {
+          if (actor.id === targetUserId) {
+            const err: any = new Error('You cannot deactivate your own account.');
+            err.status = 400;
+            throw err;
+          }
+          if (!actorIsSuperAdmin && hasCurrentSuperAdmin) {
+            const err: any = new Error('Only SUPER_ADMIN can deactivate a SUPER_ADMIN account.');
+            err.status = 403;
+            throw err;
+          }
+          if (hasCurrentSuperAdmin) {
+            const activeSuperAdmins = await this.getSuperAdminUserIds(true);
+            if (activeSuperAdmins.size <= 1 && activeSuperAdmins.has(targetUserId)) {
+              const err: any = new Error('Cannot deactivate the last active SUPER_ADMIN account.');
+              err.status = 409;
+              throw err;
+            }
+          }
+        }
+        statusChanged = true;
+        updateFields.isActive = nextActive;
+      }
+    }
+
+    const shouldRevokeSessions = rolesChanged || (statusChanged && updateFields.isActive === false);
+
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(updateFields).length > 0) {
+        await tx.user.update({
+          where: { id: targetUserId },
+          data: updateFields,
+        });
+      }
+
+      if (rolesChanged && resolvedRoles) {
+        await tx.userRole.deleteMany({ where: { userId: targetUserId } });
+        for (const r of resolvedRoles) {
+          await tx.userRole.create({
+            data: { userId: targetUserId, roleId: r.id },
+          });
+        }
+      }
+
+      if (shouldRevokeSessions) {
+        await tx.session.updateMany({
+          where: { userId: targetUserId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+    });
+
+    this.invalidateCache();
+    this.invalidateUserCache(targetUserId);
+
+    const targetSummary = {
+      id: targetUser.id,
+      username: targetUser.username,
+      email: updateFields.email || targetUser.email,
+    };
+
+    if (Object.keys(profileAfter).length > 0) {
+      await AuthService.logAudit(
+        'USER_UPDATE',
+        'User',
+        targetUserId,
+        JSON.stringify({
+          actor: actor.username,
+          target: targetSummary,
+          before: profileBefore,
+          after: profileAfter,
+        }),
+        actor.username,
+        actor.ip,
+        actor.id
+      );
+    }
+
+    if (rolesChanged && resolvedRoles) {
+      await AuthService.logAudit(
+        'USER_ROLE_UPDATE',
+        'User',
+        targetUserId,
+        JSON.stringify({
+          actor: actor.username,
+          target: targetSummary,
+          before: { roles: effectiveCurrentRoles },
+          after: { roles: resolvedRoles.map((r) => r.name) },
+        }),
+        actor.username,
+        actor.ip,
+        actor.id
+      );
+    }
+
+    if (statusChanged) {
+      await AuthService.logAudit(
+        updateFields.isActive ? 'USER_ACTIVATE' : 'USER_DEACTIVATE',
+        'User',
+        targetUserId,
+        JSON.stringify({
+          actor: actor.username,
+          target: targetSummary,
+          before: { isActive: targetUser.isActive },
+          after: { isActive: updateFields.isActive },
+        }),
+        actor.username,
+        actor.ip,
+        actor.id
+      );
+    }
+
+    const updatedList = await this.listUsers({ page: 1, pageSize: 1, search: targetSummary.username });
+    const updatedUser = updatedList.items.find((u) => u.id === targetUserId);
+    if (updatedUser) return updatedUser;
+
+    const refreshed = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: { userRoles: { include: { role: true } } },
+    });
+    const refreshedRoles = refreshed!.userRoles.map((ur) => ur.role.name);
+    return {
+      id: refreshed!.id,
+      username: refreshed!.username,
+      email: refreshed!.email,
+      fullName: refreshed!.fullName,
+      phone: refreshed!.phone,
+      role: refreshedRoles[0] || refreshed!.role,
+      roles: refreshedRoles.length > 0 ? refreshedRoles : [refreshed!.role],
+      roleIds: refreshed!.userRoles.map((ur) => ur.role.id),
+      isActive: refreshed!.isActive,
+      lastLoginAt: refreshed!.lastLoginAt?.toISOString() || null,
+      createdAt: refreshed!.createdAt.toISOString(),
+      updatedAt: refreshed!.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * DELETE /users/:id - Hard-delete if no audit history; soft-delete (isActive=false) otherwise
+   */
+  static async deleteUser(
+    targetUserId: string,
+    actor: { id: string; username: string; role?: string; roles?: string[]; ip: string }
+  ) {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        userRoles: { include: { role: true } },
+      },
+    });
+
+    if (!targetUser) {
+      const err: any = new Error('User not found');
+      err.status = 404;
+      throw err;
+    }
+
+    if (actor.id === targetUserId) {
+      const err: any = new Error('You cannot delete your own account.');
+      err.status = 400;
+      throw err;
+    }
+
+    const currentRoles = targetUser.userRoles.map((ur) => ur.role.name);
+    const effectiveRoles = currentRoles.length > 0 ? currentRoles : [targetUser.role];
+    const targetIsSuperAdmin =
+      effectiveRoles.includes('SUPER_ADMIN') || targetUser.role === 'SUPER_ADMIN';
+    const actorIsSuperAdmin =
+      actor.role === 'SUPER_ADMIN' || Boolean(actor.roles?.includes('SUPER_ADMIN'));
+
+    if (!actorIsSuperAdmin && targetIsSuperAdmin) {
+      const err: any = new Error('Only SUPER_ADMIN can delete a SUPER_ADMIN account.');
+      err.status = 403;
+      throw err;
+    }
+
+    if (targetIsSuperAdmin) {
+      const allSuperAdmins = await this.getSuperAdminUserIds(false);
+      const activeSuperAdmins = await this.getSuperAdminUserIds(true);
+      if (
+        (allSuperAdmins.size <= 1 && allSuperAdmins.has(targetUserId)) ||
+        (targetUser.isActive && activeSuperAdmins.size <= 1 && activeSuperAdmins.has(targetUserId))
+      ) {
+        const err: any = new Error('Cannot delete the last SUPER_ADMIN account.');
+        err.status = 409;
+        throw err;
+      }
+    }
+
+    const auditHistoryCount = await prisma.auditLog.count({
+      where: {
+        OR: [
+          { userId: targetUserId },
+          { userEmail: targetUser.username },
+          { userEmail: targetUser.email },
+        ],
+      },
+    });
+
+    const targetSummary = {
+      id: targetUser.id,
+      username: targetUser.username,
+      email: targetUser.email,
+    };
+
+    if (auditHistoryCount > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: targetUserId },
+          data: { isActive: false },
+        });
+        await tx.session.updateMany({
+          where: { userId: targetUserId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      });
+
+      this.invalidateCache();
+      this.invalidateUserCache(targetUserId);
+
+      await AuthService.logAudit(
+        'USER_DELETE',
+        'User',
+        targetUserId,
+        JSON.stringify({
+          actor: actor.username,
+          target: targetSummary,
+          softDeleted: true,
+          before: { isActive: targetUser.isActive },
+          after: { isActive: false },
+        }),
+        actor.username,
+        actor.ip,
+        actor.id
+      );
+
+      return {
+        success: true,
+        softDeleted: true,
+        message: `User "${targetUser.fullName}" has audit history and was deactivated instead of permanently deleted.`,
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.session.updateMany({
+        where: { userId: targetUserId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.user.delete({ where: { id: targetUserId } });
+    });
+
+    this.invalidateCache();
+    this.invalidateUserCache(targetUserId);
+
+    await AuthService.logAudit(
+      'USER_DELETE',
+      'User',
+      targetUserId,
+      JSON.stringify({
+        actor: actor.username,
+        target: targetSummary,
+        softDeleted: false,
+        before: {
+          fullName: targetUser.fullName,
+          username: targetUser.username,
+          email: targetUser.email,
+          roles: effectiveRoles,
+          isActive: targetUser.isActive,
+        },
+        after: null,
+      }),
+      actor.username,
+      actor.ip,
+      actor.id
+    );
+
+    return {
+      success: true,
+      softDeleted: false,
+      message: `User "${targetUser.fullName}" deleted permanently.`,
+    };
+  }
+
+  /**
+   * GET /users/:id/logs - Paginated user audit log events with optional date range
+   */
+  static async getUserAuditLogs(
+    targetUserId: string,
+    params: { page?: number; pageSize?: number; from?: string; to?: string } = {}
+  ) {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, username: true, email: true },
+    });
+
+    if (!targetUser) {
+      const err: any = new Error('User not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const page = Math.max(1, Number(params.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(params.pageSize) || 20));
+
+    const dateFilter: { gte?: Date; lte?: Date } = {};
+    if (params.from) {
+      const fromStr = params.from.trim();
+      const parsedFrom = /^\d{4}-\d{2}-\d{2}$/.test(fromStr)
+        ? new Date(`${fromStr}T00:00:00.000Z`)
+        : new Date(fromStr);
+      if (!isNaN(parsedFrom.getTime())) {
+        dateFilter.gte = parsedFrom;
+      }
+    }
+    if (params.to) {
+      const toStr = params.to.trim();
+      const parsedTo = /^\d{4}-\d{2}-\d{2}$/.test(toStr)
+        ? new Date(`${toStr}T23:59:59.999Z`)
+        : new Date(toStr);
+      if (!isNaN(parsedTo.getTime())) {
+        dateFilter.lte = parsedTo;
+      }
+    }
+
+    const where: any = {
+      AND: [
+        {
+          OR: [
+            { userId: targetUser.id },
+            { userEmail: targetUser.username },
+            { userEmail: targetUser.email },
+            { AND: [{ resource: 'User' }, { resourceId: targetUser.id }] },
+          ],
+        },
+        ...(Object.keys(dateFilter).length > 0 ? [{ createdAt: dateFilter }] : []),
+      ],
+    };
+
+    const [total, logs] = await Promise.all([
+      prisma.auditLog.count({ where }),
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      items: logs.map((log) => ({
+        id: log.id,
+        action: log.action,
+        resource: log.resource,
+        resourceId: log.resourceId,
+        details: log.details,
+        actor: log.userEmail || 'system',
+        ip: log.ipAddress || log.ip || '127.0.0.1',
+        ipAddress: log.ipAddress || log.ip || '127.0.0.1',
+        time: log.createdAt.toISOString(),
+        timestamp: log.createdAt.toISOString(),
+        createdAt: log.createdAt.toISOString(),
+      })),
+      total,
+    };
   }
 
   /**
@@ -1068,7 +1743,7 @@ export class RbacService {
   static async updateUserRoles(
     targetUserId: string,
     roleIdsOrNames: string[],
-    actor: { id: string; username: string; ip: string }
+    actor: { id: string; username: string; role?: string; roles?: string[]; ip: string }
   ) {
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
@@ -1101,6 +1776,16 @@ export class RbacService {
     const currentRoleNames = targetUser.userRoles.map((ur) => ur.role.name);
     const hasCurrentSuperAdmin = currentRoleNames.includes('SUPER_ADMIN') || targetUser.role === 'SUPER_ADMIN';
     const willHaveSuperAdmin = targetRoles.some((r) => r.name === 'SUPER_ADMIN');
+    const actorIsSuperAdmin =
+      !actor.role && !actor.roles
+        ? true
+        : actor.role === 'SUPER_ADMIN' || Boolean(actor.roles?.includes('SUPER_ADMIN'));
+
+    if (!actorIsSuperAdmin && hasCurrentSuperAdmin !== willHaveSuperAdmin) {
+      const err: any = new Error('Only SUPER_ADMIN can assign or remove the SUPER_ADMIN role.');
+      err.status = 403;
+      throw err;
+    }
 
     // Rule: Cannot demote yourself
     if (actor.id === targetUserId) {
@@ -1133,7 +1818,7 @@ export class RbacService {
       }
     }
 
-    // Update in transaction
+    // Update in transaction and revoke existing sessions so role changes take effect on next refresh
     await prisma.$transaction(async (tx) => {
       await tx.userRole.deleteMany({
         where: { userId: targetUserId },
@@ -1149,7 +1834,6 @@ export class RbacService {
       }
 
       // Sync User.role enum if one of the roles matches UserRoleType
-      const primaryRole = targetRoles[0];
       const validEnumRoles = [
         'SUPER_ADMIN',
         'ADMINISTRATOR',
@@ -1174,6 +1858,11 @@ export class RbacService {
           data: { role: matchedEnumRole.name as any },
         });
       }
+
+      await tx.session.updateMany({
+        where: { userId: targetUserId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
 
     this.invalidateCache();
@@ -1182,7 +1871,12 @@ export class RbacService {
       'USER_ROLE_UPDATE',
       'User',
       targetUserId,
-      `Updated roles for user ${targetUser.username} to [${targetRoles.map((r) => r.name).join(', ')}]`,
+      JSON.stringify({
+        actor: actor.username,
+        target: { id: targetUser.id, username: targetUser.username, email: targetUser.email },
+        before: { roles: currentRoleNames.length > 0 ? currentRoleNames : [targetUser.role] },
+        after: { roles: targetRoles.map((r) => r.name) },
+      }),
       actor.username,
       actor.ip,
       actor.id

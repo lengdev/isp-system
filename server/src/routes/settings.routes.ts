@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma, logAudit } from '../db/store.js';
+import { authorize } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -56,9 +57,33 @@ router.put('/company', async (req, res) => {
 });
 
 // GET /api/v1/settings/audit-logs
-router.get('/audit-logs', async (_req, res) => {
+router.get('/audit-logs', authorize('audit.view'), async (req, res) => {
   try {
+    const actorId = typeof req.query.actorId === 'string' ? req.query.actorId.trim() : '';
+    const actor = typeof req.query.actor === 'string' ? req.query.actor.trim() : '';
+    const where: any = {};
+
+    if (actorId) {
+      const user = await prisma.user.findUnique({
+        where: { id: actorId },
+        select: { id: true, username: true, email: true },
+      });
+      if (user) {
+        where.OR = [
+          { userId: user.id },
+          { userEmail: user.username },
+          { userEmail: user.email },
+          { AND: [{ resource: 'User' }, { resourceId: user.id }] },
+        ];
+      } else {
+        where.userId = actorId;
+      }
+    } else if (actor) {
+      where.userEmail = { equals: actor, mode: 'insensitive' };
+    }
+
     const logs = await prisma.auditLog.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       take: 250,
     });

@@ -417,6 +417,11 @@ export class AuthService {
       throw new Error('Invalid refresh token');
     }
 
+    const user = session.user;
+    if (!user || !user.isActive) {
+      throw new Error('User account not found or deactivated');
+    }
+
     // Reuse detection: If token was already revoked, check grace window for concurrent requests
     if (session.revokedAt) {
       const revokedAtMs = new Date(session.revokedAt).getTime();
@@ -531,7 +536,6 @@ export class AuthService {
       throw new Error('Refresh token has expired. Please log in again.');
     }
 
-    const user = session.user;
     if (!user || !user.isActive) {
       throw new Error('User account not found or deactivated');
     }
@@ -639,6 +643,44 @@ export class AuthService {
   }
 
   /**
+   * Revoke all active refresh sessions for a user
+   */
+  static async revokeUserSessions(userId: string) {
+    await prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  /**
+   * Shared helper: generate and store a one-time password reset token (30-min TTL)
+   * Used by forgotPassword, adminResetPassword, and invite-by-reset-link user creation.
+   */
+  static async issuePasswordResetToken(user: { id: string; username: string; email: string }) {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
+    const resetExpires = new Date(Date.now() + 30 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordTokenHash: tokenHash,
+        resetPasswordExpiresAt: resetExpires,
+      },
+    });
+
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${rawToken}`;
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`\n======================================================`);
+      console.log(`[DEV AUTH] Password reset link for ${user.email} (${user.username}):`);
+      console.log(`  ${resetLink}`);
+      console.log(`======================================================\n`);
+    }
+
+    return { expiresAt: resetExpires };
+  }
+
+  /**
    * Request password reset token (Generic response to prevent user enumeration)
    */
   static async forgotPassword(emailOrUsername: string, ip: string = '127.0.0.1') {
@@ -659,31 +701,53 @@ export class AuthService {
     });
 
     if (user) {
-      const rawToken = crypto.randomBytes(32).toString('hex');
-      const tokenHash = this.hashToken(rawToken);
-      const resetExpires = new Date(Date.now() + 30 * 60 * 1000);
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          resetPasswordTokenHash: tokenHash,
-          resetPasswordExpiresAt: resetExpires,
-        },
-      });
-
-      // Log link to server console in dev if no SMTP email configured
-      const resetLink = `http://localhost:5173/reset-password/${rawToken}`;
-      console.log(`\n======================================================`);
-      console.log(`[DEV AUTH] Password reset link for ${user.email} (${user.username}):`);
-      console.log(`  ${resetLink}`);
-      console.log(`======================================================\n`);
-
+      await this.issuePasswordResetToken(user);
       await this.logAudit('PASSWORD_RESET_REQUESTED', 'User', user.id, 'Password reset token generated', user.username, ip, user.id);
     } else {
       await this.logAudit('PASSWORD_RESET_ATTEMPT_UNKNOWN', 'Auth', null, `Reset requested for non-existent user: ${emailOrUsername}`, 'system', ip);
     }
 
     return genericResponse;
+  }
+
+  /**
+   * Admin-initiated password reset link generation (reuses forgot-password token flow)
+   */
+  static async adminResetPassword(
+    targetUserId: string,
+    actor: { id: string; username: string; ip: string }
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, username: true, email: true, isActive: true },
+    });
+    if (!user) {
+      const err: any = new Error('User not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const { expiresAt } = await this.issuePasswordResetToken(user);
+
+    await this.logAudit(
+      'USER_PASSWORD_RESET',
+      'User',
+      user.id,
+      JSON.stringify({
+        actor: actor.username,
+        target: { id: user.id, username: user.username, email: user.email },
+        before: { resetRequested: false },
+        after: { resetRequested: true, expiresAt: expiresAt.toISOString() },
+      }),
+      actor.username,
+      actor.ip,
+      actor.id
+    );
+
+    return {
+      message: `Password reset link sent to ${user.email}.`,
+      email: user.email,
+    };
   }
 
   /**
@@ -880,57 +944,114 @@ export class AuthService {
   }
 
   /**
-   * Create new user in PostgreSQL and link their RBAC role via UserRole
+   * Create new user in PostgreSQL and link their RBAC role(s) via UserRole
    */
-  static async createUser(data: {
-    username: string;
-    email: string;
-    password: string;
-    fullName: string;
-    role?: string;
-    roleId?: string;
-    phone?: string;
-  }) {
+  static async createUser(
+    data: {
+      username: string;
+      email: string;
+      password?: string;
+      inviteByResetLink?: boolean;
+      fullName: string;
+      role?: string;
+      roleId?: string;
+      roles?: string[];
+      phone?: string;
+      isActive?: boolean;
+    },
+    actor?: { id: string; username: string; role?: string; roles?: string[]; ip: string }
+  ) {
+    const username = (data.username || '').trim();
+    const email = (data.email || '').trim();
+    const fullName = (data.fullName || '').trim().normalize('NFC');
+    const phone = data.phone?.trim() || null;
+
+    if (!fullName) {
+      const err: any = new Error('Full name is required');
+      err.status = 400;
+      throw err;
+    }
+    if (!username || username.length < 2) {
+      const err: any = new Error('Username must be at least 2 characters');
+      err.status = 400;
+      throw err;
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      const err: any = new Error('Please provide a valid email address');
+      err.status = 400;
+      throw err;
+    }
+
     const existing = await prisma.user.findFirst({
       where: {
-        OR: [{ username: data.username }, { email: data.email }],
+        OR: [
+          { username: { equals: username, mode: 'insensitive' } },
+          { email: { equals: email, mode: 'insensitive' } },
+        ],
       },
     });
 
     if (existing) {
-      throw new Error('Username or email already in use');
+      const err: any = new Error('Username or email already in use');
+      err.status = 409;
+      throw err;
     }
 
-    const roleInput = (data.roleId || data.role || '').trim();
-    if (!roleInput) {
-      throw new Error('Role is required');
+    const rawRoleInputs = Array.isArray(data.roles) && data.roles.length > 0
+      ? data.roles.map((r) => String(r).trim()).filter(Boolean)
+      : [data.roleId || data.role || ''].map((r) => String(r).trim()).filter(Boolean);
+
+    if (rawRoleInputs.length === 0) {
+      const err: any = new Error('At least one role is required');
+      err.status = 400;
+      throw err;
     }
 
-    const dbRole = await prisma.role.findFirst({
+    const dbRoles = await prisma.role.findMany({
       where: {
-        OR: [{ id: roleInput }, { name: roleInput }],
+        OR: [{ id: { in: rawRoleInputs } }, { name: { in: rawRoleInputs } }],
       },
     });
 
-    if (!dbRole) {
-      throw new Error(`Role "${roleInput}" not found`);
+    if (dbRoles.length === 0) {
+      const err: any = new Error(`Role "${rawRoleInputs[0]}" not found`);
+      err.status = 400;
+      throw err;
     }
 
-    const legacyEnumRole = (VALID_USER_ROLE_ENUMS.has(dbRole.name) ? dbRole.name : 'SALES_STAFF') as any;
-    const passwordHash = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
+    const actorIsSuperAdmin = !actor || actor.role === 'SUPER_ADMIN' || Boolean(actor.roles?.includes('SUPER_ADMIN'));
+    if (!actorIsSuperAdmin && dbRoles.some((r) => r.name === 'SUPER_ADMIN')) {
+      const err: any = new Error('Only SUPER_ADMIN can assign the SUPER_ADMIN role.');
+      err.status = 403;
+      throw err;
+    }
+
+    const inviteByResetLink = Boolean(data.inviteByResetLink) || !data.password;
+    if (!data.inviteByResetLink && (!data.password || data.password.length < 8)) {
+      const err: any = new Error('Initial password must be at least 8 characters long');
+      err.status = 400;
+      throw err;
+    }
+
+    const passwordSource = data.password || crypto.randomBytes(32).toString('hex');
+    const passwordHash = await bcrypt.hash(passwordSource, BCRYPT_SALT_ROUNDS);
+
+    const matchedEnumRole = dbRoles.find((r) => VALID_USER_ROLE_ENUMS.has(r.name));
+    const legacyEnumRole = (matchedEnumRole ? matchedEnumRole.name : 'SALES_STAFF') as any;
+    const isActive = data.isActive !== undefined ? Boolean(data.isActive) : true;
 
     const newUser = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
-          username: data.username,
-          email: data.email,
+          username,
+          email,
           passwordHash,
-          fullName: data.fullName,
-          phone: data.phone || null,
+          fullName,
+          phone,
           role: legacyEnumRole,
-          isActive: true,
+          isActive,
           failedLoginAttempts: 0,
-          mustChangePassword: false,
+          mustChangePassword: inviteByResetLink,
         },
         select: {
           id: true,
@@ -948,23 +1069,57 @@ export class AuthService {
         },
       });
 
-      await tx.userRole.create({
-        data: {
-          userId: created.id,
-          roleId: dbRole.id,
-        },
-      });
+      for (const dbRole of dbRoles) {
+        await tx.userRole.create({
+          data: {
+            userId: created.id,
+            roleId: dbRole.id,
+          },
+        });
+      }
 
       return created;
     });
 
-    await this.logAudit('CREATE_USER', 'User', newUser.id, `Created user ${newUser.username} (${dbRole.name})`);
+    if (inviteByResetLink) {
+      await this.issuePasswordResetToken(newUser);
+    }
+
+    const roleNames = dbRoles.map((r) => r.name);
+    const roleIds = dbRoles.map((r) => r.id);
+
+    await this.logAudit(
+      'USER_CREATE',
+      'User',
+      newUser.id,
+      JSON.stringify({
+        actor: actor?.username || 'system',
+        target: { id: newUser.id, username: newUser.username, email: newUser.email },
+        before: null,
+        after: {
+          fullName: newUser.fullName,
+          username: newUser.username,
+          email: newUser.email,
+          phone: newUser.phone,
+          roles: roleNames,
+          isActive: newUser.isActive,
+          inviteByResetLink,
+        },
+      }),
+      actor?.username || 'system',
+      actor?.ip || '127.0.0.1',
+      actor?.id || null
+    );
 
     return {
       ...newUser,
-      role: dbRole.name,
-      roles: [dbRole.name],
-      roleIds: [dbRole.id],
+      lastLoginAt: newUser.lastLoginAt?.toISOString() || null,
+      createdAt: newUser.createdAt.toISOString(),
+      updatedAt: newUser.updatedAt.toISOString(),
+      role: roleNames[0] || newUser.role,
+      roles: roleNames,
+      roleIds,
+      inviteSent: inviteByResetLink,
     };
   }
 }
