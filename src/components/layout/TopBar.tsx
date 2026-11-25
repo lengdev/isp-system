@@ -716,13 +716,24 @@ export const TopBar: React.FC<TopBarProps> = ({ onMobileMenuOpen }) => {
             type="button"
             onClick={toggleDarkMode}
             title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className="p-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--surface)] transition-colors"
+            className="p-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--surface)] transition-colors relative flex items-center justify-center w-9 h-9 overflow-hidden"
           >
-            {darkMode ? (
-              <Sun className="w-5 h-5 text-amber-400 hover:rotate-45 transition-transform" />
-            ) : (
-              <Moon className="w-5 h-5 hover:-rotate-12 transition-transform" />
-            )}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={darkMode ? 'dark' : 'light'}
+                initial={{ rotate: -45, opacity: 0, scale: 0.7 }}
+                animate={{ rotate: 0, opacity: 1, scale: 1 }}
+                exit={{ rotate: 45, opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="flex items-center justify-center"
+              >
+                {darkMode ? (
+                  <Sun className="w-5 h-5 text-amber-400" />
+                ) : (
+                  <Moon className="w-5 h-5" />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </button>
 
           {/* Date Chip */}

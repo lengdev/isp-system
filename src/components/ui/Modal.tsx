@@ -154,16 +154,20 @@ export const Modal: React.FC<ModalProps> = ({
           {isOpen && (
             <motion.div
               key="modal-portal-wrapper"
-              initial={{ opacity: 0 }}
+              initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
+              exit={{ opacity: 0, transition: { duration: 0.18, delay: 0.02 } }}
               className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden select-none"
             >
-              {/* Backdrop with 6px blur */}
-              <div
+              {/* Backdrop with smooth fluid blur and opacity transition */}
+              <motion.div
+                key="modal-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                 onClick={handleAttemptClose}
-                className="fixed inset-0 bg-[var(--backdrop)] backdrop-blur-[6px] transition-opacity"
+                className="fixed inset-0 bg-[var(--backdrop)] backdrop-blur-[8px]"
                 aria-hidden="true"
               />
 
@@ -280,23 +284,35 @@ export const Modal: React.FC<ModalProps> = ({
         createPortal(
           <AnimatePresence>
             {showDiscardConfirm && (
-              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 select-none">
+              <motion.div
+                key="discard-confirm-wrapper"
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.16 } }}
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4 select-none"
+              >
                 {/* Scrim covering parent modal and page */}
                 <motion.div
+                  key="discard-backdrop"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                   onClick={() => setShowDiscardConfirm(false)}
                   className="fixed inset-0 bg-black/50 backdrop-blur-sm"
                 />
 
                 {/* Centered card min(400px, 100vw-32px), rounded-2xl, solid background, 1px --border, strong shadow, p-5 */}
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.12 }}
+                  key="discard-dialog"
+                  initial={{ opacity: 0, scale: 0.94, y: 6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 4 }}
+                  transition={{
+                    scale: { type: 'spring', stiffness: 360, damping: 28, mass: 0.75 },
+                    y: { type: 'spring', stiffness: 360, damping: 28, mass: 0.75 },
+                    opacity: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+                  }}
                   role="alertdialog"
                   aria-modal="true"
                   aria-labelledby="discard-confirm-title"
@@ -347,7 +363,7 @@ export const Modal: React.FC<ModalProps> = ({
                     </Button>
                   </div>
                 </motion.div>
-              </div>
+              </motion.div>
             )}
           </AnimatePresence>,
           document.body

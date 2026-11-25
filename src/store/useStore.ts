@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { api } from '../lib/api';
 import { queryClient } from '../lib/queryClient';
 import { getInitials } from '../lib/utils';
+import { executeDiagonalThemeTransition } from '../lib/themeTransition';
 import { migrateLegacyStorage, STORAGE_PREFIX, STORE_PERSIST_KEY } from '../lib/storageMigration';
 
 migrateLegacyStorage();
@@ -393,20 +394,29 @@ export const useStore = create<AppStore>()(
 
       toggleDarkMode: () => {
         const nextDark = !get().darkMode;
-        set({ darkMode: nextDark });
-        if (nextDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        executeDiagonalThemeTransition(() => {
+          set({ darkMode: nextDark, themeMode: nextDark ? 'dark' : 'light' });
+          if (typeof document !== 'undefined') {
+            if (nextDark) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          }
+        });
       },
       setDarkMode: (enabled) => {
-        set({ darkMode: enabled, themeMode: enabled ? 'dark' : 'light' });
-        if (enabled) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        if (enabled === get().darkMode) return;
+        executeDiagonalThemeTransition(() => {
+          set({ darkMode: enabled, themeMode: enabled ? 'dark' : 'light' });
+          if (typeof document !== 'undefined') {
+            if (enabled) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          }
+        });
       },
       setThemeMode: (themeMode) => {
         const isDark =
@@ -414,13 +424,19 @@ export const useStore = create<AppStore>()(
           (themeMode === 'system' &&
             typeof window !== 'undefined' &&
             window.matchMedia('(prefers-color-scheme: dark)').matches);
-        set({ themeMode, darkMode: isDark });
-        if (typeof document !== 'undefined') {
-          if (isDark) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
+        if (isDark !== get().darkMode) {
+          executeDiagonalThemeTransition(() => {
+            set({ themeMode, darkMode: isDark });
+            if (typeof document !== 'undefined') {
+              if (isDark) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+            }
+          });
+        } else {
+          set({ themeMode });
         }
       },
       setComfort: (comfort) => {

@@ -731,3 +731,39 @@ input[type="number"] {
   animation: none !important;
   background-image: none !important;
 }
+
+/* =========================================================
+   DIAGONAL THEME REVEAL (Bottom-Left to Top-Right)
+========================================================= */
+
+::view-transition-group(root) {
+  animation-duration: 0.65s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+  display: block;
+  position: fixed;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* Prevent competing CSS transitions from flickering during theme snapshot */
+.theme-transitioning,
+.theme-transitioning *,
+.theme-transitioning *::before,
+.theme-transitioning *::after {
+  transition: none !important;
+}
