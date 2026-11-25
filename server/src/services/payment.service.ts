@@ -10,26 +10,30 @@ export interface RecordPaymentInput {
   transactionRef?: string;
   notes?: string;
   recordedBy?: string;
+  // Internal seed options
+  paidAt?: Date;
+  periodId?: string;
 }
 
-async function nextPaymentNumber(tx: Prisma.TransactionClient): Promise<string> {
+async function nextPaymentNumber(tx: Prisma.TransactionClient): Promise<{ paymentNumber: string; seq: number }> {
   const year = new Date().getFullYear();
   const prefix = `PAY-${year}-`;
-  const existing = await tx.payment.findMany({
+  const latest = await tx.payment.findFirst({
     where: { paymentNumber: { startsWith: prefix } },
+    orderBy: { paymentNumber: 'desc' },
     select: { paymentNumber: true },
   });
   let maxSeq = 0;
-  for (const row of existing) {
-    const seq = parseInt(row.paymentNumber.slice(prefix.length), 10);
+  if (latest) {
+    const seq = parseInt(latest.paymentNumber.slice(prefix.length), 10);
     if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
   }
-  let candidate = `${prefix}${(maxSeq + 1).toString().padStart(4, '0')}`;
+  let candidate = `${prefix}${(maxSeq + 1).toString().padStart(5, '0')}`;
   while (await tx.payment.findUnique({ where: { paymentNumber: candidate } })) {
     maxSeq++;
-    candidate = `${prefix}${(maxSeq + 1).toString().padStart(4, '0')}`;
+    candidate = `${prefix}${(maxSeq + 1).toString().padStart(5, '0')}`;
   }
-  return candidate;
+  return { paymentNumber: candidate, seq: maxSeq + 1 };
 }
 
 export class PaymentService {
@@ -92,9 +96,8 @@ export class PaymentService {
       });
       if (!customer) throw new Error(`Customer ${input.customerId} not found.`);
 
-      const paymentNumber = await nextPaymentNumber(tx);
-      const count = await tx.payment.count();
-      const receiptNumber = `RCPT-${new Date().getFullYear()}-${(count + 1001).toString()}`;
+      const { paymentNumber, seq } = await nextPaymentNumber(tx);
+      const receiptNumber = `RCPT-${new Date().getFullYear()}-${(seq + 1000).toString()}`;
       const transactionRef = input.transactionRef || `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
       let unallocated = paymentAmount;
@@ -112,12 +115,13 @@ export class PaymentService {
         const nextDue = Math.round((currentDue - toPay) * 100) / 100;
         const settled = nextDue <= 0.001;
 
+        const paidAtDate = input.paidAt || new Date();
         await tx.invoice.update({
           where: { id: inv.id },
           data: {
             paidAmount: new Prisma.Decimal(nextPaid),
             balanceDue: new Prisma.Decimal(settled ? 0 : nextDue),
-            ...(settled ? { status: 'PAID', paidAt: new Date(), paymentMethod: input.method } : {}),
+            ...(settled ? { status: 'PAID', paidAt: paidAtDate, paymentMethod: input.method } : {}),
           },
         });
 
@@ -159,6 +163,7 @@ export class PaymentService {
           receiptNumber,
           notes: input.notes || null,
           recordedBy: input.recordedBy || 'Staff',
+          ...(input.paidAt ? { createdAt: input.paidAt } : {}),
           allocations: {
             create: allocations.map((a) => ({
               invoiceId: a.invoiceId,
@@ -191,6 +196,8 @@ export class PaymentService {
             },
           ],
           createdBy: input.recordedBy || 'Cashier',
+          periodId: input.periodId,
+          entryDate: input.paidAt,
         },
         tx
       );

@@ -14,6 +14,7 @@ export interface PostJournalInput {
   lines: JournalLineInput[];
   createdBy?: string;
   periodId?: string;
+  entryDate?: Date;
 }
 
 async function resolveOrCreatePeriod(tx: Prisma.TransactionClient, periodInput?: string): Promise<string | null> {
@@ -47,13 +48,14 @@ async function resolveOrCreatePeriod(tx: Prisma.TransactionClient, periodInput?:
 async function nextEntryNumber(tx: Prisma.TransactionClient): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `JE-${year}-`;
-  const existing = await tx.journalEntry.findMany({
+  const latest = await tx.journalEntry.findFirst({
     where: { entryNumber: { startsWith: prefix } },
+    orderBy: { entryNumber: 'desc' },
     select: { entryNumber: true },
   });
   let maxSeq = 0;
-  for (const row of existing) {
-    const num = parseInt(row.entryNumber.slice(prefix.length), 10);
+  if (latest) {
+    const num = parseInt(latest.entryNumber.slice(prefix.length), 10);
     if (!isNaN(num) && num > maxSeq) maxSeq = num;
   }
   let candidate = `${prefix}${(maxSeq + 1).toString().padStart(5, '0')}`;
@@ -121,6 +123,7 @@ export class AccountingService {
           isReversed: false,
           reversalEntryId: null,
           createdBy: input.createdBy || 'System',
+          ...(input.entryDate ? { entryDate: input.entryDate } : {}),
         },
       });
 

@@ -9,24 +9,28 @@ export interface CreateInvoiceInput {
   dueDate?: string;
   items: { description: string; amount: number; packageId?: string }[];
   taxRatePercent?: number;
+  // Internal seed/automation options (never accepted from public API body)
+  issueDate?: Date;
+  statusOverride?: 'PENDING' | 'OVERDUE';
 }
 
 async function nextInvoiceNumber(tx: Prisma.TransactionClient): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `INV-${year}-`;
-  const existing = await tx.invoice.findMany({
+  const latest = await tx.invoice.findFirst({
     where: { invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: 'desc' },
     select: { invoiceNumber: true },
   });
   let maxSeq = 100;
-  for (const inv of existing) {
-    const seq = parseInt(inv.invoiceNumber.slice(prefix.length), 10);
+  if (latest) {
+    const seq = parseInt(latest.invoiceNumber.slice(prefix.length), 10);
     if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
   }
-  let candidate = `${prefix}${(maxSeq + 1).toString().padStart(4, '0')}`;
+  let candidate = `${prefix}${(maxSeq + 1).toString().padStart(5, '0')}`;
   while (await tx.invoice.findUnique({ where: { invoiceNumber: candidate } })) {
     maxSeq++;
-    candidate = `${prefix}${(maxSeq + 1).toString().padStart(4, '0')}`;
+    candidate = `${prefix}${(maxSeq + 1).toString().padStart(5, '0')}`;
   }
   return candidate;
 }
@@ -111,7 +115,8 @@ export class BillingService {
       const totalAmount = Math.round((itemsTotal + taxAmount) * 100) / 100;
 
       const invoiceNumber = await nextInvoiceNumber(tx);
-      const dueDate = input.dueDate ? new Date(input.dueDate) : new Date(Date.now() + 14 * 24 * 3600 * 1000);
+      const issueDate = input.issueDate || new Date();
+      const dueDate = input.dueDate ? new Date(input.dueDate) : new Date(issueDate.getTime() + 14 * 24 * 3600 * 1000);
 
       const newInvoice = await tx.invoice.create({
         data: {
@@ -121,8 +126,9 @@ export class BillingService {
           amount: new Prisma.Decimal(totalAmount),
           paidAmount: new Prisma.Decimal(0.0),
           balanceDue: new Prisma.Decimal(totalAmount),
-          status: 'PENDING',
+          status: input.statusOverride || 'PENDING',
           billingPeriod: input.billingPeriod,
+          issueDate,
           dueDate,
           items: {
             create: input.items.map((it) => ({
@@ -177,6 +183,7 @@ export class BillingService {
           lines,
           createdBy: 'Billing Automation',
           periodId: input.billingPeriod,
+          entryDate: issueDate,
         },
         tx
       );
@@ -262,5 +269,92 @@ export class BillingService {
       dueDate: result.dueDate.toISOString(),
       paidAt: result.paidAt?.toISOString() || null,
     };
+  }
+
+  // 4. Void/Cancel an Unpaid Invoice with GL Reversal
+  static async voidInvoice(invoiceId: string, reason: string = 'Invoice voided', voidedAt?: Date) {
+    return prisma.$transaction(async (tx) => {
+      const inv = await tx.invoice.findFirst({
+        where: { OR: [{ id: invoiceId }, { invoiceNumber: invoiceId }] },
+        include: {
+          customer: true,
+          items: true,
+          subscription: true,
+        },
+      });
+      if (!inv) throw new Error(`Invoice ${invoiceId} not found.`);
+      if (inv.status === 'CANCELLED') throw new Error(`Invoice ${inv.invoiceNumber} is already cancelled.`);
+      if (Number(inv.paidAmount) > 0) {
+        throw new Error(`Cannot void invoice ${inv.invoiceNumber} with existing payments.`);
+      }
+
+      const totalAmount = Number(inv.amount);
+      const balanceToClear = Number(inv.balanceDue);
+      const itemsTotal =
+        Math.round(inv.items.reduce((sum, it) => sum + Number(it.amount), 0) * 100) / 100 || totalAmount;
+      const taxAmount = Math.max(0, Math.round((totalAmount - itemsTotal) * 100) / 100);
+      const revenueAccountCode = inv.subscription?.technology === 'WIRELESS' ? '4020' : '4010';
+
+      const updated = await tx.invoice.update({
+        where: { id: inv.id },
+        data: {
+          status: 'CANCELLED',
+          balanceDue: new Prisma.Decimal(0),
+        },
+      });
+
+      if (inv.customer && balanceToClear > 0) {
+        const nextBalance = Math.max(
+          0,
+          Math.round((Number(inv.customer.balanceDue) - balanceToClear) * 100) / 100
+        );
+        await tx.customer.update({
+          where: { id: inv.customer.id },
+          data: { balanceDue: new Prisma.Decimal(nextBalance) },
+        });
+      }
+
+      const lines = [
+        {
+          accountCode: revenueAccountCode,
+          debit: itemsTotal,
+          credit: 0,
+          description: `Reverse revenue for voided invoice ${inv.invoiceNumber}`,
+        },
+        {
+          accountCode: '1100',
+          debit: 0,
+          credit: totalAmount,
+          description: `Reverse AR for voided invoice ${inv.invoiceNumber}`,
+        },
+      ];
+      if (taxAmount > 0) {
+        lines.push({
+          accountCode: '2200',
+          debit: taxAmount,
+          credit: 0,
+          description: `Reverse VAT for voided invoice ${inv.invoiceNumber}`,
+        });
+      }
+
+      await AccountingService.postJournalEntry(
+        {
+          description: `Void Invoice ${inv.invoiceNumber}: ${reason}`,
+          reference: `VOID-${inv.invoiceNumber}`,
+          lines,
+          createdBy: 'Billing Automation',
+          periodId: inv.billingPeriod,
+          entryDate: voidedAt || new Date(),
+        },
+        tx
+      );
+
+      return {
+        ...updated,
+        amount: Number(updated.amount),
+        paidAmount: Number(updated.paidAmount),
+        balanceDue: Number(updated.balanceDue),
+      };
+    });
   }
 }

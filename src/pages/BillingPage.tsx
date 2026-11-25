@@ -24,10 +24,10 @@ function mapApiInvoice(raw: any): Invoice {
       ? 'Paid'
       : st === 'OVERDUE'
       ? 'Overdue'
-      : st === 'PARTIAL'
-      ? 'Partial'
       : st === 'CANCELLED'
       ? 'Cancelled'
+      : Number(raw.paidAmount || 0) > 0 && Number(raw.balanceDue || 0) > 0
+      ? 'Partial'
       : 'Pending';
 
   return {

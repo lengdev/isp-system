@@ -11,6 +11,7 @@
     "dev:all": "node scripts/dev-all.mjs",
     "db:seed": "node --experimental-strip-types prisma/seed.ts",
     "db:seed:customers": "node --experimental-strip-types prisma/seed-customers.ts",
+    "db:seed:billing": "node --experimental-strip-types scripts/seed-billing-demo.ts",
     "db:reset:customers": "node --experimental-strip-types scripts/reset-customers.ts",
     "db:diagram": "node --experimental-strip-types scripts/generate-erd.ts",
     "start": "node dist-server/server.js",
