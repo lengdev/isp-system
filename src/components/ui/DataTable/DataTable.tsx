@@ -887,7 +887,12 @@ export const DataTable = <T extends Record<string, any>>({
     onRowSelectionChange: setRowSelection,
     onExpandedChange: setExpanded,
     onGroupingChange: setGrouping,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      pendingQueryChangeRef.current = true;
+      setShowSkeleton(true);
+      skeletonShownAtRef.current = Date.now();
+      setPagination(updater);
+    },
     manualPagination: serverMode,
     manualSorting: serverMode,
     manualFiltering: serverMode,
@@ -1337,7 +1342,9 @@ export const DataTable = <T extends Record<string, any>>({
     if (resolvedVisual === 'skeleton') {
       clearHide();
       if (!showSkeleton && !delayTimerRef.current) {
-        if (skeletonDelayMs <= 0) {
+        // Immediate skeleton for user query/pagination changes to avoid orange overlay bar & flicker
+        const delay = pendingQueryChangeRef.current ? 0 : skeletonDelayMs;
+        if (delay <= 0) {
           skeletonShownAtRef.current = Date.now();
           setShowSkeleton(true);
         } else {
@@ -1345,7 +1352,7 @@ export const DataTable = <T extends Record<string, any>>({
             delayTimerRef.current = null;
             skeletonShownAtRef.current = Date.now();
             setShowSkeleton(true);
-          }, skeletonDelayMs);
+          }, delay);
         }
       }
     } else {
@@ -1383,7 +1390,7 @@ export const DataTable = <T extends Record<string, any>>({
     };
   }, []);
 
-  const isOverlayLoading = isBusy && !showSkeleton && hasDataOnScreen;
+  const isOverlayLoading = isBusy && resolvedVisual === 'overlay' && !showSkeleton && hasDataOnScreen;
   const isWaitingForInitialSkeleton = resolvedVisual === 'skeleton' && !showSkeleton && !hasDataOnScreen;
   const isTotalUnknownWhileLoading = showSkeleton && total === undefined;
 
@@ -1574,7 +1581,7 @@ export const DataTable = <T extends Record<string, any>>({
       {isOverlayLoading && (
         <div
           data-overlay-progress="true"
-          className="w-full h-1 bg-[var(--brand-soft)] overflow-hidden rounded-full"
+          className="w-full h-0.5 -mb-0.5 bg-[var(--brand-soft)] overflow-hidden rounded-full relative z-20"
           aria-hidden="true"
         >
           <div className="w-1/3 h-full bg-[var(--brand)] animate-pulse rounded-full" />
@@ -2329,7 +2336,12 @@ export const DataTable = <T extends Record<string, any>>({
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => table.setPageIndex(0)}
+                onClick={() => {
+                  pendingQueryChangeRef.current = true;
+                  setShowSkeleton(true);
+                  skeletonShownAtRef.current = Date.now();
+                  table.setPageIndex(0);
+                }}
                 disabled={showSkeleton || !table.getCanPreviousPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="First Page"
@@ -2338,7 +2350,12 @@ export const DataTable = <T extends Record<string, any>>({
               </button>
               <button
                 type="button"
-                onClick={() => table.previousPage()}
+                onClick={() => {
+                  pendingQueryChangeRef.current = true;
+                  setShowSkeleton(true);
+                  skeletonShownAtRef.current = Date.now();
+                  table.previousPage();
+                }}
                 disabled={showSkeleton || !table.getCanPreviousPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="Previous Page"
@@ -2357,7 +2374,12 @@ export const DataTable = <T extends Record<string, any>>({
 
               <button
                 type="button"
-                onClick={() => table.nextPage()}
+                onClick={() => {
+                  pendingQueryChangeRef.current = true;
+                  setShowSkeleton(true);
+                  skeletonShownAtRef.current = Date.now();
+                  table.nextPage();
+                }}
                 disabled={showSkeleton || !table.getCanNextPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="Next Page"
@@ -2366,7 +2388,12 @@ export const DataTable = <T extends Record<string, any>>({
               </button>
               <button
                 type="button"
-                onClick={() => table.setPageIndex(totalPages - 1)}
+                onClick={() => {
+                  pendingQueryChangeRef.current = true;
+                  setShowSkeleton(true);
+                  skeletonShownAtRef.current = Date.now();
+                  table.setPageIndex(totalPages - 1);
+                }}
                 disabled={showSkeleton || !table.getCanNextPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="Last Page"
