@@ -46,6 +46,7 @@ export interface DataTableColumnDef<T> {
     header: string;
     getValue: (row: T) => string | number | null | undefined;
   }[];
+  skeleton?: 'text' | 'avatar-text' | 'badge' | 'number' | 'none';
   priority?: number; // 1 (critical/always show), 2 (hide < 1100px), 3 (hide < 860px)
 }
 
@@ -82,6 +83,7 @@ export interface RowAction<T> {
   danger?: boolean;
   divider?: boolean;
   disabled?: boolean;
+  tooltip?: string;
   onClick: (row: T) => void;
 }
 
@@ -89,6 +91,10 @@ export interface DataTableProps<T> {
   columns: DataTableColumnDef<T>[];
   data: T[];
   loading?: boolean;
+  fetching?: boolean;
+  loadingMode?: 'skeleton' | 'overlay';
+  skeletonDelayMs?: number;
+  skeletonMinDurationMs?: number;
   error?: string | null;
   onRetry?: () => void;
   rowId?: (row: T) => string;
@@ -115,6 +121,12 @@ export interface DataTableProps<T> {
   emptyIllustration?: React.ReactNode;
   emptyTitle?: string;
   emptySubtitle?: string;
+  noDataTitle?: string;
+  noDataDescription?: string;
+  emptyActionPermission?: string;
+  isFilterActive?: boolean;
+  initialFilters?: Record<string, any>;
+  onClearFilters?: () => void;
   onAddNew?: () => void;
   addNewLabel?: string;
   className?: string;

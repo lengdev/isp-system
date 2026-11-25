@@ -69,6 +69,7 @@ export interface DataTableToolbarProps<T> {
   lastUpdatedSeconds?: number;
   toolbarExtras?: React.ReactNode;
   searchPlaceholder?: string;
+  isLoadingTotal?: boolean;
   onToast: (toast: { type: 'success' | 'info' | 'error'; title: string; message: string }) => void;
 }
 
@@ -121,6 +122,7 @@ export function DataTableToolbar<T extends Record<string, any>>({
   lastUpdatedSeconds = 0,
   toolbarExtras,
   searchPlaceholder,
+  isLoadingTotal = false,
   onToast,
 }: DataTableToolbarProps<T>) {
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -263,7 +265,11 @@ export function DataTableToolbar<T extends Record<string, any>>({
 
         {/* Result count beside it */}
         <span className="text-[13px] text-[var(--text-muted)] font-normal whitespace-nowrap tabular-nums shrink-0 ml-3">
-          {filteredCount} results
+          {isLoadingTotal ? (
+            <span className="inline-block skeleton-shimmer h-3.5 w-16 rounded align-middle" aria-hidden="true" />
+          ) : (
+            `${filteredCount} results`
+          )}
         </span>
 
         {/* Spacer */}

@@ -40,6 +40,7 @@ const generateMockItems = (count: number): MockDemoItem[] => {
 export const DevTablePage: React.FC = () => {
   const [rowCount, setRowCount] = useState<number>(240);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
   const [hasError, setHasError] = useState<boolean>(false);
   const [isEmpty, setIsEmpty] = useState<boolean>(false);
 
@@ -197,6 +198,14 @@ export const DevTablePage: React.FC = () => {
 
           <Button
             size="sm"
+            variant={isFetching ? 'primary' : 'outline'}
+            onClick={() => setIsFetching(!isFetching)}
+          >
+            Toggle Fetching
+          </Button>
+
+          <Button
+            size="sm"
             variant={hasError ? 'danger' : 'outline'}
             onClick={() => setHasError(!hasError)}
           >
@@ -218,6 +227,8 @@ export const DevTablePage: React.FC = () => {
         columns={columns}
         data={data}
         loading={isLoading}
+        fetching={isFetching}
+        onRefresh={() => {}}
         error={hasError ? 'Simulated query connection timeout (HTTP 504).' : null}
         onRetry={() => setHasError(false)}
         viewKey="dev_table_benchmark"

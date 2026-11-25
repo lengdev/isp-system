@@ -59,8 +59,17 @@ import { DataTableCheckbox } from './DataTableCheckbox';
 import { MultiSortRule } from './DataTableMultiSort';
 import { Combobox } from '../Combobox';
 import { Button } from '../Button';
+import { EmptyState } from '../EmptyState';
 import { Skeleton } from '../Skeleton';
 import { Tooltip } from '../Tooltip';
+import {
+  SKELETON_DELAY_MS,
+  SKELETON_MIN_VISIBLE_MS,
+  getColumnSkeletonShape,
+  getDeterministicSkeletonWidth,
+  getSpecialColumnKind,
+  resolveLoadingVisual,
+} from './loadingUtils';
 import { useStore } from '../../../store/useStore';
 import { cn } from '../../../lib/utils';
 import { RowAction } from './types';
@@ -225,31 +234,43 @@ const ActionMenuButton = <T,>({
                   />
                 );
               }
+              const btn = (
+                <button
+                  type="button"
+                  disabled={act.disabled}
+                  title={act.tooltip}
+                  onClick={() => {
+                    if (act.disabled) return;
+                    act.onClick(row.original);
+                    onClose();
+                  }}
+                  className={cn(
+                    'w-full h-9 flex items-center gap-2.5 px-3 text-left transition-colors duration-150 text-[13px] font-medium rounded-xl group',
+                    act.disabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer',
+                    act.danger
+                      ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 [&>svg]:text-red-500'
+                      : 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/[0.08] hover:text-zinc-900 dark:hover:text-white [&>svg]:text-zinc-400 [&>svg]:group-hover:text-zinc-700 dark:[&>svg]:group-hover:text-zinc-200'
+                  )}
+                >
+                  <span className="shrink-0 flex items-center justify-center [&>svg]:w-4 [&>svg]:h-4 [&>svg]:transition-colors">
+                    {act.icon}
+                  </span>
+                  <span className="truncate">{act.label}</span>
+                </button>
+              );
+
               return (
                 <React.Fragment key={i}>
                   {act.divider && (
                     <div className="my-1 border-t border-zinc-100 dark:border-white/[0.08]" />
                   )}
-                  <button
-                    type="button"
-                    disabled={act.disabled}
-                    onClick={() => {
-                      act.onClick(row.original);
-                      onClose();
-                    }}
-                    className={cn(
-                      'w-full h-9 flex items-center gap-2.5 px-3 text-left transition-colors duration-150 text-[13px] font-medium rounded-xl group cursor-pointer',
-                      act.disabled && 'opacity-40 cursor-not-allowed',
-                      act.danger
-                        ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 [&>svg]:text-red-500'
-                        : 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/[0.08] hover:text-zinc-900 dark:hover:text-white [&>svg]:text-zinc-400 [&>svg]:group-hover:text-zinc-700 dark:[&>svg]:group-hover:text-zinc-200'
-                    )}
-                  >
-                    <span className="shrink-0 flex items-center justify-center [&>svg]:w-4 [&>svg]:h-4 [&>svg]:transition-colors">
-                      {act.icon}
-                    </span>
-                    <span className="truncate">{act.label}</span>
-                  </button>
+                  {act.tooltip ? (
+                    <Tooltip content={act.tooltip} side="left" className="w-full">
+                      {btn}
+                    </Tooltip>
+                  ) : (
+                    btn
+                  )}
                 </React.Fragment>
               );
             })}
@@ -265,6 +286,10 @@ export const DataTable = <T extends Record<string, any>>({
   columns,
   data,
   loading = false,
+  fetching = false,
+  loadingMode,
+  skeletonDelayMs = SKELETON_DELAY_MS,
+  skeletonMinDurationMs = SKELETON_MIN_VISIBLE_MS,
   error = null,
   onRetry,
   rowId,
@@ -289,8 +314,14 @@ export const DataTable = <T extends Record<string, any>>({
   enableImport = false,
   onImport,
   emptyIllustration,
-  emptyTitle = 'No records found',
-  emptySubtitle = 'Try adjusting your filters, clearing search, or creating a new record.',
+  emptyTitle = 'No matching records',
+  emptySubtitle = 'Try adjusting your search or clearing active filters.',
+  noDataTitle,
+  noDataDescription,
+  emptyActionPermission,
+  isFilterActive,
+  initialFilters,
+  onClearFilters,
   onAddNew,
   addNewLabel = 'Add New',
   className,
@@ -356,19 +387,29 @@ export const DataTable = <T extends Record<string, any>>({
   // Search & Filters
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() => {
-    if (typeof window === 'undefined') return [];
-    const params = new URLSearchParams(window.location.search);
     const initialColFilters: ColumnFiltersState = [];
-    columns.forEach((col) => {
-      const val = params.get(col.id);
-      if (val) {
-        if (col.filter?.type === 'multi' || col.filter?.type === 'select') {
-          initialColFilters.push({ id: col.id, value: val.split(',').filter(Boolean) });
-        } else {
-          initialColFilters.push({ id: col.id, value: val });
+    const seen = new Set<string>();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      columns.forEach((col) => {
+        const val = params.get(col.id);
+        if (val) {
+          seen.add(col.id);
+          if (col.filter?.type === 'multi' || col.filter?.type === 'select') {
+            initialColFilters.push({ id: col.id, value: val.split(',').filter(Boolean) });
+          } else {
+            initialColFilters.push({ id: col.id, value: val });
+          }
         }
-      }
-    });
+      });
+    }
+    if (initialFilters) {
+      Object.entries(initialFilters).forEach(([k, v]) => {
+        if (!seen.has(k) && v !== undefined && v !== null && (!Array.isArray(v) || v.length > 0)) {
+          initialColFilters.push({ id: k, value: v });
+        }
+      });
+    }
     return initialColFilters;
   });
 
@@ -505,13 +546,17 @@ export const DataTable = <T extends Record<string, any>>({
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number>(0);
+  const isAutoRefreshingRef = useRef(false);
 
-  // Auto-refresh timer for live tables (30s)
+  // Auto-refresh timer for live tables (30s) - stays strictly background overlay
   useEffect(() => {
     if (!autoRefreshInterval || !onRefresh) return;
     const interval = setInterval(() => {
       if (!isMountedRef.current) return;
-      onRefresh();
+      isAutoRefreshingRef.current = true;
+      Promise.resolve(onRefresh()).finally(() => {
+        isAutoRefreshingRef.current = false;
+      });
       setLastUpdated(0);
     }, autoRefreshInterval * 1000);
 
@@ -842,6 +887,10 @@ export const DataTable = <T extends Record<string, any>>({
     onExpandedChange: setExpanded,
     onGroupingChange: setGrouping,
     onPaginationChange: setPagination,
+    manualPagination: serverMode,
+    manualSorting: serverMode,
+    manualFiltering: serverMode,
+    pageCount: serverMode ? Math.max(1, Math.ceil((total ?? data.length) / pageSize)) : undefined,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -1004,7 +1053,18 @@ export const DataTable = <T extends Record<string, any>>({
     table.setPageIndex(0);
 
     // Update URL query parameters
-    ['status', 'plan', 'planName', 'city', 'type', 'connectionType', 'technician', 'assignedTechnician'].forEach((p) => {
+    const keysToClear = new Set([
+      'status',
+      'plan',
+      'planName',
+      'city',
+      'type',
+      'connectionType',
+      'technician',
+      'assignedTechnician',
+      ...columns.filter((c) => c.filter).map((c) => c.id),
+    ]);
+    keysToClear.forEach((p) => {
       urlParams.delete(p);
     });
 
@@ -1021,25 +1081,27 @@ export const DataTable = <T extends Record<string, any>>({
     const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams.toString()}` : ''}`;
     window.history.replaceState(null, '', newUrl);
 
-    // Sync with useStore.filters if on Customers page
-    try {
-      const storeState = useStore.getState();
-      if (storeState?.filters && storeState?.setFilters) {
-        const updates: any = {};
-        if (newFilters['status']) updates.status = newFilters['status'];
-        if (newFilters['planName'] || newFilters['plan']) updates.plan = newFilters['planName'] || newFilters['plan'];
-        if (newFilters['city']) updates.city = newFilters['city'];
-        if (newFilters['connectionType'] || newFilters['type']) updates.connectionType = newFilters['connectionType'] || newFilters['type'];
-        if (newFilters['balanceDue']) {
-          updates.minBalance = newFilters['balanceDue'].min;
-          updates.maxBalance = newFilters['balanceDue'].max;
+    // Sync with useStore.filters only on Customers page
+    if (viewKey === 'customers_master_table') {
+      try {
+        const storeState = useStore.getState();
+        if (storeState?.filters && storeState?.setFilters) {
+          const updates: any = {};
+          if (newFilters['status']) updates.status = newFilters['status'];
+          if (newFilters['planName'] || newFilters['plan']) updates.plan = newFilters['planName'] || newFilters['plan'];
+          if (newFilters['city']) updates.city = newFilters['city'];
+          if (newFilters['connectionType'] || newFilters['type']) updates.connectionType = newFilters['connectionType'] || newFilters['type'];
+          if (newFilters['balanceDue']) {
+            updates.minBalance = newFilters['balanceDue'].min;
+            updates.maxBalance = newFilters['balanceDue'].max;
+          }
+          storeState.setFilters(updates);
         }
-        storeState.setFilters(updates);
+      } catch (e) {
+        void e;
       }
-    } catch (e) {
-      void e;
     }
-  }, [table]);
+  }, [table, columns, viewKey]);
 
 
 
@@ -1189,22 +1251,217 @@ export const DataTable = <T extends Record<string, any>>({
     localStorage.setItem(storageKeyDensity, d);
   };
 
-  // Total pages
+  // Total pages & query serialization
   const totalPages = table.getPageCount();
-  const totalRecords = total ?? data.length;
-  const filteredRecords = table.getFilteredRowModel().rows.length;
+  const totalRecords = serverMode && total !== undefined ? total : (total ?? data.length);
+  const filteredRecords =
+    serverMode && total !== undefined ? total : table.getFilteredRowModel().rows.length;
+
+  const currentServerQuery = useMemo<TableQuery>(
+    () => ({
+      page: pageIndex + 1,
+      pageSize,
+      search: globalFilter,
+      sort: currentSortRules,
+      filters: activeFiltersMap,
+      groupBy: grouping[0],
+    }),
+    [pageIndex, pageSize, globalFilter, currentSortRules, activeFiltersMap, grouping]
+  );
+
+  const serializedServerQuery = useMemo(
+    () => JSON.stringify(currentServerQuery),
+    [currentServerQuery]
+  );
+  const prevServerQueryRef = useRef<string | null>(null);
+  const pendingQueryChangeRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!serverMode || !onQueryChange) return;
+    if (prevServerQueryRef.current !== serializedServerQuery) {
+      if (prevServerQueryRef.current !== null) {
+        pendingQueryChangeRef.current = true;
+      }
+      prevServerQueryRef.current = serializedServerQuery;
+      onQueryChange(currentServerQuery);
+    }
+  }, [serverMode, onQueryChange, serializedServerQuery, currentServerQuery]);
+
+  const isBusy = Boolean(loading || fetching);
+  useEffect(() => {
+    if (!isBusy) {
+      pendingQueryChangeRef.current = false;
+      isAutoRefreshingRef.current = false;
+    }
+  }, [isBusy]);
+
+  const hasDataOnScreen = data.length > 0;
+  const resolvedVisual = resolveLoadingVisual({
+    loading,
+    fetching,
+    loadingMode,
+    hasDataOnScreen,
+    queryChanged: pendingQueryChangeRef.current,
+    isAutoRefresh: isAutoRefreshingRef.current,
+    hasError: Boolean(error),
+  });
+
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const skeletonShownAtRef = useRef<number | null>(null);
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const clearDelay = () => {
+      if (delayTimerRef.current) {
+        clearTimeout(delayTimerRef.current);
+        delayTimerRef.current = null;
+      }
+    };
+    const clearHide = () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+    };
+
+    if (error) {
+      clearDelay();
+      clearHide();
+      skeletonShownAtRef.current = null;
+      setShowSkeleton(false);
+      return;
+    }
+
+    if (resolvedVisual === 'skeleton') {
+      clearHide();
+      if (!showSkeleton && !delayTimerRef.current) {
+        if (skeletonDelayMs <= 0) {
+          skeletonShownAtRef.current = Date.now();
+          setShowSkeleton(true);
+        } else {
+          delayTimerRef.current = setTimeout(() => {
+            delayTimerRef.current = null;
+            skeletonShownAtRef.current = Date.now();
+            setShowSkeleton(true);
+          }, skeletonDelayMs);
+        }
+      }
+    } else {
+      clearDelay();
+      if (showSkeleton) {
+        const elapsed = skeletonShownAtRef.current
+          ? Date.now() - skeletonShownAtRef.current
+          : skeletonMinDurationMs;
+        const remaining = Math.max(0, skeletonMinDurationMs - elapsed);
+        if (remaining <= 0) {
+          clearHide();
+          skeletonShownAtRef.current = null;
+          setShowSkeleton(false);
+        } else if (!hideTimerRef.current) {
+          hideTimerRef.current = setTimeout(() => {
+            hideTimerRef.current = null;
+            skeletonShownAtRef.current = null;
+            setShowSkeleton(false);
+          }, remaining);
+        }
+      }
+    }
+  }, [resolvedVisual, error, showSkeleton, skeletonDelayMs, skeletonMinDurationMs]);
+
+  useEffect(() => {
+    return () => {
+      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
+
+  const isOverlayLoading = isBusy && !showSkeleton && hasDataOnScreen;
+  const isWaitingForInitialSkeleton = resolvedVisual === 'skeleton' && !showSkeleton && !hasDataOnScreen;
+  const isTotalUnknownWhileLoading = showSkeleton && total === undefined;
+
+  const hasInternalFilters = Boolean(globalFilter.trim() || columnFilters.length > 0);
+  const filtersActive = Boolean(isFilterActive ?? hasInternalFilters);
+
+  const handleResetAllFilters = useCallback(() => {
+    table.resetColumnFilters();
+    setGlobalFilter('');
+    handleApplyFilters({});
+    onClearFilters?.();
+  }, [table, handleApplyFilters, onClearFilters]);
+
+  const renderEmptyOrErrorState = () => {
+    if (error) {
+      return (
+        <EmptyState
+          variant="error"
+          title="Unable to load records"
+          description="Something went wrong while retrieving this data. Please try again."
+          primaryAction={
+            onRetry
+              ? {
+                  label: 'Retry',
+                  onClick: onRetry,
+                  icon: <RotateCcw className="w-3.5 h-3.5" />,
+                }
+              : undefined
+          }
+        />
+      );
+    }
+
+    if (filtersActive) {
+      return (
+        <EmptyState
+          variant="no-results"
+          title={emptyTitle}
+          description={emptySubtitle}
+          primaryAction={{
+            label: 'Clear filters',
+            onClick: handleResetAllFilters,
+          }}
+        />
+      );
+    }
+
+    return (
+      <EmptyState
+        variant="no-data"
+        illustration={emptyIllustration}
+        title={noDataTitle || emptyTitle}
+        description={noDataDescription || emptySubtitle}
+        primaryAction={
+          onAddNew
+            ? {
+                label: addNewLabel,
+                onClick: onAddNew,
+                permission: emptyActionPermission,
+                icon: <Plus className="w-3.5 h-3.5" />,
+              }
+            : undefined
+        }
+      />
+    );
+  };
 
   return (
     <div
       onKeyDown={handleKeyDown}
+      aria-busy={isBusy ? 'true' : undefined}
       className={cn('w-full space-y-3.5 select-none', className)}
     >
+      {isBusy && (
+        <span className="sr-only" role="status" aria-live="polite">
+          Loading...
+        </span>
+      )}
       {/* 1. Unified 36px / 14px Toolbar */}
       <DataTableToolbar
         searchQuery={globalFilter}
         onSearchChange={setGlobalFilter}
         filteredCount={filteredRecords}
         totalCount={totalRecords}
+        isLoadingTotal={isTotalUnknownWhileLoading}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         density={density}
@@ -1259,11 +1516,7 @@ export const DataTable = <T extends Record<string, any>>({
         activeFilters={activeFiltersMap}
         onApplyFilters={handleApplyFilters}
         onClearFilter={(k) => table.getColumn(k)?.setFilterValue(undefined)}
-        onClearAllFilters={() => {
-          table.resetColumnFilters();
-          setGlobalFilter('');
-          handleApplyFilters({});
-        }}
+        onClearAllFilters={handleResetAllFilters}
         savedViews={savedViews}
         activeViewId={activeViewId}
         onSelectView={handleSelectView}
@@ -1310,70 +1563,70 @@ export const DataTable = <T extends Record<string, any>>({
         </div>
       )}
 
-      {/* 3. Server Mode Loading Bar */}
-      {serverMode && loading && (
-        <div className="w-full h-1 bg-orange-100 overflow-hidden rounded-full">
-          <div className="w-1/3 h-full bg-[#F26B3A] animate-pulse rounded-full" />
+      {/* 3. Background Refresh / Overlay Progress Bar */}
+      {isOverlayLoading && (
+        <div
+          data-overlay-progress="true"
+          className="w-full h-1 bg-[var(--brand-soft)] overflow-hidden rounded-full"
+          aria-hidden="true"
+        >
+          <div className="w-1/3 h-full bg-[var(--brand)] animate-pulse rounded-full" />
         </div>
       )}
 
       {/* 4. Main Table Card Container or Card View */}
       {viewMode === 'cards' ? (
         <div className="w-full select-none">
-          {loading && !serverMode ? (
+          {showSkeleton ? (
             <div className={cn(cardGridClassName || 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4')}>
               {Array.from({ length: pageSize }).map((_, i) => (
                 <div
                   key={`card-skel-${i}`}
+                  data-skeleton-card="true"
                   className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-3 min-w-0 h-full"
                 >
                   <div className="flex items-center gap-3">
-                    <Skeleton className="w-9 h-9 rounded-full" />
+                    <Skeleton className="w-9 h-9 rounded-full shrink-0" />
                     <div className="space-y-1.5 flex-1">
-                      <Skeleton className="h-4 w-3/4 rounded" />
-                      <Skeleton className="h-3 w-1/2 rounded" />
+                      <Skeleton
+                        className="h-3.5 rounded"
+                        style={{ width: getDeterministicSkeletonWidth(i, 0, 62, 88) }}
+                      />
+                      <Skeleton
+                        className="h-2.5 rounded"
+                        style={{ width: getDeterministicSkeletonWidth(i, 1, 45, 72) }}
+                      />
                     </div>
                   </div>
-                  <Skeleton className="h-3 w-full rounded" />
-                  <Skeleton className="h-8 w-full rounded-xl" />
+                  <Skeleton
+                    className="h-3 rounded"
+                    style={{ width: getDeterministicSkeletonWidth(i, 2, 70, 95) }}
+                  />
+                  <Skeleton className="h-7 w-full rounded-xl" />
                 </div>
               ))}
             </div>
-          ) : rows.length === 0 ? (
-            <div className="w-full py-16 text-center rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)]">
-              <div className="flex flex-col items-center justify-center space-y-2">
-                {emptyIllustration || (
-                  <div className="w-12 h-12 rounded-2xl bg-[var(--brand-soft)] flex items-center justify-center text-[var(--brand)] mb-2">
-                    <Filter className="w-6 h-6" />
-                  </div>
-                )}
-                <h4 className="text-[13px] font-semibold text-[var(--text)]">
-                  {emptyTitle}
-                </h4>
-                <p className="text-xs text-[var(--text-muted)] max-w-sm">{emptySubtitle}</p>
-                <div className="flex items-center gap-2 mt-3">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      table.resetColumnFilters();
-                      setGlobalFilter('');
-                      handleApplyFilters({});
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                  {onAddNew && (
-                    <Button size="sm" variant="primary" onClick={onAddNew}>
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>{addNewLabel}</span>
-                    </Button>
-                  )}
-                </div>
-              </div>
+          ) : isWaitingForInitialSkeleton ? (
+            <div
+              className={cn(cardGridClassName || 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4')}
+              aria-hidden="true"
+            >
+              {Array.from({ length: Math.min(pageSize, 4) }).map((_, i) => (
+                <div
+                  key={`card-wait-${i}`}
+                  className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] min-h-[140px]"
+                />
+              ))}
+            </div>
+          ) : error || rows.length === 0 ? (
+            <div className="w-full rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)]">
+              {renderEmptyOrErrorState()}
             </div>
           ) : (
-            <div className={cn(cardGridClassName || 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4')}>
+            <div className={cn(
+              cardGridClassName || 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4',
+              isOverlayLoading && 'opacity-60 pointer-events-none transition-opacity'
+            )}>
               {rows.map((row) => {
                 if (row.getIsGrouped()) {
                   const groupCol = columns.find((c) => c.id === row.groupingColumnId);
@@ -1655,73 +1908,135 @@ export const DataTable = <T extends Record<string, any>>({
                 ))}
               </thead>
 
-              {/* Table Body (Density: 64px / 52px / 40px) */}
+              {/* Table Body (Density: 56px / 48px / 40px) */}
               <tbody
                 className={cn(
                   'divide-y divide-[var(--border-subtle)] text-xs transition-opacity',
-                  serverMode && loading && 'opacity-60 pointer-events-none'
+                  isOverlayLoading && 'opacity-60 pointer-events-none'
                 )}
               >
-                {loading && !serverMode ? (
-                  Array.from({ length: pageSize }).map((_, i) => (
-                    <tr key={`skel-${i}`} style={{ height: currentRowHeight }}>
-                      {leafColumns.map((col) => (
-                        <td key={col.id} className="px-4">
-                          <Skeleton className="h-4 w-3/4 rounded" />
-                        </td>
-                      ))}
+                {showSkeleton ? (
+                  Array.from({ length: pageSize }).map((_, rowIdx) => (
+                    <tr
+                      key={`skel-${rowIdx}`}
+                      data-skeleton-row="true"
+                      style={{ height: currentRowHeight }}
+                      className="align-middle"
+                    >
+                      {leafColumns.map((col, colIdx) => {
+                        const colDef = columns.find((c) => c.id === col.id);
+                        const isPinnedL = columnPinningInfo.isPinnedLeft[col.id];
+                        const isPinnedR = isOverflowingX && columnPinningInfo.isPinnedRight[col.id];
+                        const isLastLeftPinned = columnPinningInfo.lastLeftPinnedId === col.id;
+                        const isFirstRightPinned = columnPinningInfo.firstRightPinnedId === col.id;
+
+                        const flexColId = leafColumns.find(
+                          (c) =>
+                            (c.id === 'fullName' || c.id === 'customerName' || c.id === 'name' || c.id === 'title') &&
+                            !columnPinningInfo.isPinnedLeft[c.id]
+                        )?.id;
+                        const isFlexCol = !isOverflowingX && col.id === flexColId;
+
+                        const skelStickyStyle: React.CSSProperties = isPinnedL
+                          ? {
+                              width: `${col.getSize()}px`,
+                              minWidth: `${col.getSize()}px`,
+                              maxWidth: `${col.getSize()}px`,
+                              position: 'sticky',
+                              left: `${columnPinningInfo.leftOffsets[col.id]}px`,
+                              zIndex: 10,
+                            }
+                          : isPinnedR
+                            ? {
+                                width: `${col.getSize()}px`,
+                                minWidth: `${col.getSize()}px`,
+                                maxWidth: `${col.getSize()}px`,
+                                position: 'sticky',
+                                right: `${columnPinningInfo.rightOffsets[col.id]}px`,
+                                zIndex: 10,
+                              }
+                            : {
+                                width: isFlexCol ? undefined : `${col.getSize()}px`,
+                                minWidth: `${col.getSize()}px`,
+                                maxWidth: isFlexCol ? undefined : `${col.getSize()}px`,
+                              };
+
+                        const specialKind = getSpecialColumnKind(col.id);
+                        const shape = colDef ? getColumnSkeletonShape(colDef) : 'text';
+                        const primaryWidth = getDeterministicSkeletonWidth(rowIdx, colIdx, 60, 90);
+                        const secondaryWidth = getDeterministicSkeletonWidth(rowIdx + 3, colIdx + 1, 45, 75);
+
+                        return (
+                          <td
+                            key={col.id}
+                            style={skelStickyStyle}
+                            className={cn(
+                              col.id === 'select' || col.id === 'expander'
+                                ? 'px-0'
+                                : col.id === 'status'
+                                ? 'px-1'
+                                : 'px-3',
+                              'align-middle',
+                              (isPinnedL || isPinnedR) && 'bg-[var(--surface)]',
+                              isLastLeftPinned && 'border-r border-[var(--border-subtle)] shadow-[1px_0_0_0_rgba(0,0,0,0.03)]',
+                              isFirstRightPinned && 'border-l border-[var(--border-subtle)] shadow-[-1px_0_0_0_rgba(0,0,0,0.03)]',
+                              colDef?.align === 'right' && 'text-right',
+                              colDef?.align === 'center' && 'text-center'
+                            )}
+                          >
+                            {specialKind === 'select' ? (
+                              <div className="flex justify-center">
+                                <Skeleton className="w-4 h-4 rounded-[4px]" />
+                              </div>
+                            ) : specialKind === 'expander' ? (
+                              <div className="flex justify-center">
+                                <Skeleton className="w-4 h-4 rounded" />
+                              </div>
+                            ) : specialKind === 'actions' ? (
+                              <div className="flex justify-center">
+                                <Skeleton className="w-5 h-5 rounded-md" />
+                              </div>
+                            ) : shape === 'none' ? null : shape === 'avatar-text' ? (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <Skeleton className="h-3 rounded" style={{ width: primaryWidth }} />
+                                  <Skeleton className="h-2 rounded" style={{ width: secondaryWidth }} />
+                                </div>
+                              </div>
+                            ) : shape === 'badge' ? (
+                              <div className={cn(colDef?.align === 'center' && 'flex justify-center')}>
+                                <Skeleton className="h-5 w-16 rounded-full" />
+                              </div>
+                            ) : shape === 'number' ? (
+                              <div className="flex justify-end">
+                                <Skeleton
+                                  className="h-3.5 rounded"
+                                  style={{ width: getDeterministicSkeletonWidth(rowIdx, colIdx, 55, 80) }}
+                                />
+                              </div>
+                            ) : (
+                              <Skeleton className="h-3.5 rounded" style={{ width: primaryWidth }} />
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))
-                ) : error ? (
+                ) : isWaitingForInitialSkeleton ? (
+                  Array.from({ length: pageSize }).map((_, rowIdx) => (
+                    <tr
+                      key={`wait-${rowIdx}`}
+                      style={{ height: currentRowHeight }}
+                      aria-hidden="true"
+                    >
+                      <td colSpan={leafColumns.length} className="px-3" />
+                    </tr>
+                  ))
+                ) : error || rows.length === 0 ? (
                   <tr>
-                    <td colSpan={leafColumns.length} className="py-16 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2">
-                        <AlertCircle className="w-10 h-10 text-red-500" />
-                        <h4 className="text-[13px] font-semibold text-[var(--text)]">
-                          Failed to load records
-                        </h4>
-                        <p className="text-xs text-[var(--text-muted)] max-w-sm">{error}</p>
-                        {onRetry && (
-                          <Button size="sm" variant="primary" onClick={onRetry} className="mt-2">
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Retry Query</span>
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={leafColumns.length} className="py-16 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2">
-                        {emptyIllustration || (
-                          <div className="w-12 h-12 rounded-2xl bg-[var(--brand-soft)] flex items-center justify-center text-[var(--brand)] mb-2">
-                            <Filter className="w-6 h-6" />
-                          </div>
-                        )}
-                        <h4 className="text-[13px] font-semibold text-[var(--text)]">
-                          {emptyTitle}
-                        </h4>
-                        <p className="text-xs text-[var(--text-muted)] max-w-sm">{emptySubtitle}</p>
-                        <div className="flex items-center gap-2 mt-3">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              table.resetColumnFilters();
-                              setGlobalFilter('');
-                            }}
-                          >
-                            Clear Filters
-                          </Button>
-                          {onAddNew && (
-                            <Button size="sm" variant="primary" onClick={onAddNew}>
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>{addNewLabel}</span>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
+                    <td colSpan={leafColumns.length} className="p-0">
+                      {renderEmptyOrErrorState()}
                     </td>
                   </tr>
                 ) : (
@@ -1947,16 +2262,20 @@ export const DataTable = <T extends Record<string, any>>({
           <div className="h-[44px] flex items-center justify-between gap-3 px-4 border-t border-[var(--border)] bg-[var(--surface)] text-[12px] text-[var(--text-muted)] select-none">
             {/* Left: Showing 1-10 of 240 + per page + Updated 16s ago + refresh */}
             <div className="flex items-center gap-3">
-              <span className="whitespace-nowrap font-medium text-[var(--text-secondary)]">
-                Showing{' '}
-                <span className="font-semibold text-[var(--text)] tabular-nums">
-                  {totalRecords === 0 ? 0 : pageIndex * pageSize + 1}-{Math.min((pageIndex + 1) * pageSize, totalRecords)}
-                </span>{' '}
-                of{' '}
-                <span className="font-semibold text-[var(--text)] tabular-nums">
-                  {totalRecords}
+              {isTotalUnknownWhileLoading ? (
+                <Skeleton className="h-3.5 w-32 rounded" />
+              ) : (
+                <span className="whitespace-nowrap font-medium text-[var(--text-secondary)]">
+                  Showing{' '}
+                  <span className="font-semibold text-[var(--text)] tabular-nums">
+                    {totalRecords === 0 ? 0 : pageIndex * pageSize + 1}-{Math.min((pageIndex + 1) * pageSize, totalRecords)}
+                  </span>{' '}
+                  of{' '}
+                  <span className="font-semibold text-[var(--text)] tabular-nums">
+                    {totalRecords}
+                  </span>
                 </span>
-              </span>
+              )}
 
               {/* Per page combobox (32px) */}
               <div className="flex items-center gap-1.5 pl-3 border-l border-[var(--border)]">
@@ -1993,7 +2312,7 @@ export const DataTable = <T extends Record<string, any>>({
                     className="p-1 rounded-[6px] hover:bg-[var(--surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
                     title="Refresh data"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
+                    <RefreshCw className={cn('w-3.5 h-3.5', isBusy && 'animate-spin')} />
                   </button>
                 </div>
               )}
@@ -2004,7 +2323,7 @@ export const DataTable = <T extends Record<string, any>>({
               <button
                 type="button"
                 onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
+                disabled={showSkeleton || !table.getCanPreviousPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="First Page"
               >
@@ -2013,22 +2332,26 @@ export const DataTable = <T extends Record<string, any>>({
               <button
                 type="button"
                 onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
+                disabled={showSkeleton || !table.getCanPreviousPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="Previous Page"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
 
-              <span className="px-2 text-[12px] font-medium text-[var(--text-secondary)] whitespace-nowrap">
-                Page <span className="font-semibold text-[var(--text)]">{pageIndex + 1}</span> of{' '}
-                <span className="font-semibold text-[var(--text)]">{Math.max(1, totalPages)}</span>
-              </span>
+              {isTotalUnknownWhileLoading ? (
+                <Skeleton className="h-3.5 w-16 mx-2 rounded" />
+              ) : (
+                <span className="px-2 text-[12px] font-medium text-[var(--text-secondary)] whitespace-nowrap">
+                  Page <span className="font-semibold text-[var(--text)]">{pageIndex + 1}</span> of{' '}
+                  <span className="font-semibold text-[var(--text)]">{Math.max(1, totalPages)}</span>
+                </span>
+              )}
 
               <button
                 type="button"
                 onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
+                disabled={showSkeleton || !table.getCanNextPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="Next Page"
               >
@@ -2037,7 +2360,7 @@ export const DataTable = <T extends Record<string, any>>({
               <button
                 type="button"
                 onClick={() => table.setPageIndex(totalPages - 1)}
-                disabled={!table.getCanNextPage()}
+                disabled={showSkeleton || !table.getCanNextPage()}
                 className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
                 title="Last Page"
               >

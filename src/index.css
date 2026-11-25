@@ -663,6 +663,42 @@ input[type="number"] {
 }
 
 /* =========================================================
+   SKELETON SHIMMER (CSS ONLY, THEME-AWARE & REDUCED-MOTION SAFE)
+========================================================= */
+
+@keyframes nsmisp-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background-color: var(--surface-subtle);
+  background-image: linear-gradient(
+    90deg,
+    var(--surface-subtle) 0%,
+    var(--border-subtle) 45%,
+    var(--surface-subtle) 90%
+  );
+  background-size: 200% 100%;
+  animation: nsmisp-shimmer 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer {
+  background-color: var(--surface-raised);
+  background-image: linear-gradient(
+    90deg,
+    var(--surface-raised) 0%,
+    rgba(255, 255, 255, 0.08) 45%,
+    var(--surface-raised) 90%
+  );
+  background-size: 200% 100%;
+}
+
+/* =========================================================
    REDUCED MOTION
    Preserve short color and opacity transitions
 ========================================================= */
@@ -676,6 +712,11 @@ input[type="number"] {
     animation-iteration-count: 1 !important;
     transform: none !important;
   }
+
+  :root:not([data-motion="on"]) .skeleton-shimmer {
+    animation: none !important;
+    background-image: none !important;
+  }
 }
 
 [data-motion="reduced"] *,
@@ -684,4 +725,9 @@ input[type="number"] {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transform: none !important;
+}
+
+[data-motion="reduced"] .skeleton-shimmer {
+  animation: none !important;
+  background-image: none !important;
 }
