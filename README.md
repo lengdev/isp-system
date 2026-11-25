@@ -278,8 +278,8 @@ npm install
 cp .env.example .env
 
 # 2. Ensure PostgreSQL is running and DATABASE_URL in .env matches
-#    Note: .env.example defaults to postgresql://netpulse:netpulse@localhost:5432/netpulse?schema=public
-#    while docker-compose.yml provisions POSTGRES_USER=netpulse, POSTGRES_PASSWORD=netpulse123, POSTGRES_DB=netpulse
+#    Note: .env.example defaults to postgresql://nsmisp:nsmisp@localhost:5432/nsmisp?schema=public
+#    while docker-compose.yml provisions POSTGRES_USER=nsmisp, POSTGRES_PASSWORD=nsmisp123, POSTGRES_DB=nsmisp
 docker compose up -d postgres
 
 # 3. Generate Prisma client, run migrations, build server, and seed DB
@@ -312,10 +312,10 @@ docker compose ps
 ```
 
 Services defined in `docker-compose.yml`:
-- `netpulse-postgres`: PostgreSQL 16 (`5432`, user `netpulse`, password `netpulse123`, db `netpulse`)
-- `netpulse-redis`: Redis 7 (`6379`)
-- `netpulse-backend`: Express API (`5000`) built via `Dockerfile.backend`
-- `netpulse-frontend`: Nginx (`80`) serving `dist/` and proxying `/api/` to `backend:5000` via `Dockerfile.frontend` and `nginx.conf`
+- `nsmisp-postgres`: PostgreSQL 16 (`5432`, user `nsmisp`, password `nsmisp123`, db `nsmisp`)
+- `nsmisp-redis`: Redis 7 (`6379`)
+- `nsmisp-backend`: Express API (`5000`) built via `Dockerfile.backend`
+- `nsmisp-frontend`: Nginx (`80`) serving `dist/` and proxying `/api/` to `backend:5000` via `Dockerfile.frontend` and `nginx.conf`
 
 > **Production Environment Variables:** `server/src/server.ts` enforces `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `COOKIE_SECURE` when `NODE_ENV=production` and exits at startup if any are missing. Ensure all three are provided in production overrides/environment configuration.
 
@@ -326,8 +326,10 @@ Services defined in `docker-compose.yml`:
 ./scripts/db-backup.sh
 
 # Restore from a backup archive
-./scripts/db-restore.sh ./backups/netpulse_backup_YYYYMMDD_HHMMSS.sql.gz
+./scripts/db-restore.sh ./backups/nsmisp_backup_YYYYMMDD_HHMMSS.sql.gz
 ```
+
+> **Upgrading from an earlier NetPulse database/volume:** Renaming `DATABASE_URL` or Docker volume names does not move existing rows. Before switching `.env` to `nsmisp` or recreating containers, dump the legacy `netpulse` database with `pg_dump`, restore into `nsmisp`, verify row counts, and run `npx prisma migrate deploy`.
 
 ---
 

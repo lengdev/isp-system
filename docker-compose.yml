@@ -4,18 +4,18 @@ services:
   # 1. PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: netpulse-postgres
+    container_name: nsmisp-postgres
     restart: always
     environment:
-      POSTGRES_USER: netpulse
-      POSTGRES_PASSWORD: netpulse123
-      POSTGRES_DB: netpulse
+      POSTGRES_USER: nsmisp
+      POSTGRES_PASSWORD: nsmisp123
+      POSTGRES_DB: nsmisp
     ports:
       - '5432:5432'
     volumes:
-      - netpulse_pgdata:/var/lib/postgresql/data
+      - nsmisp_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U netpulse -d netpulse']
+      test: ['CMD-SHELL', 'pg_isready -U nsmisp -d nsmisp']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,31 +23,31 @@ services:
   # 2. Redis Background Queue
   redis:
     image: redis:7-alpine
-    container_name: netpulse-redis
+    container_name: nsmisp-redis
     restart: always
     ports:
       - '6379:6379'
     volumes:
-      - netpulse_redisdata:/data
+      - nsmisp_redisdata:/data
 
-  # 3. NetPulse Node.js / Express Backend
+  # 3. NSMISP Node.js / Express Backend
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    container_name: netpulse-backend
+    container_name: nsmisp-backend
     restart: always
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: postgresql://netpulse:netpulse123@postgres:5432/netpulse?schema=public
-      JWT_SECRET: netpulse-production-grade-jwt-secret-key-2026
+      DATABASE_URL: postgresql://nsmisp:nsmisp123@postgres:5432/nsmisp?schema=public
+      JWT_SECRET: nsmisp-production-grade-jwt-secret-key-2026
       JWT_EXPIRES_IN: 7d
       REDIS_URL: redis://redis:6379
       MIKROTIK_DEFAULT_HOST: 192.168.88.1
       MIKROTIK_DEFAULT_PORT: 8728
       MIKROTIK_DEFAULT_USER: admin
-      MIKROTIK_DEFAULT_PASS: netpulse123
+      MIKROTIK_DEFAULT_PASS: nsmisp123
     ports:
       - '5000:5000'
     depends_on:
@@ -56,12 +56,12 @@ services:
       redis:
         condition: service_started
 
-  # 4. NetPulse Frontend (Nginx)
+  # 4. NSMISP Frontend (Nginx)
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    container_name: netpulse-frontend
+    container_name: nsmisp-frontend
     restart: always
     ports:
       - '80:80'
@@ -69,5 +69,5 @@ services:
       - backend
 
 volumes:
-  netpulse_pgdata:
-  netpulse_redisdata:
+  nsmisp_pgdata:
+  nsmisp_redisdata:
