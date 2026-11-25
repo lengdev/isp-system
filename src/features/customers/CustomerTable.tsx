@@ -805,7 +805,6 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
           message: `Successfully validated and staged ${importedRows.length} new subscribers.`,
         });
       }}
-      autoRefreshInterval={30}
       onRefresh={onRefresh}
       isFilterActive={isFilterActive}
       externalFilterKey={externalFilterKey}
