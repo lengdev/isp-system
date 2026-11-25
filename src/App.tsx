@@ -37,7 +37,7 @@ import { WarehousesPage } from './pages/WarehousesPage';
 import { ProcurementPage } from './pages/ProcurementPage';
 import { InstallationsPage } from './pages/InstallationsPage';
 import { CustomerPortalPage } from './pages/CustomerPortalPage';
-import { StaffUsersPage } from './pages/StaffUsersPage';
+import { UsersPage } from './pages/UsersPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { DevTablePage } from './pages/DevTablePage';
 import { DevMotionPage } from './pages/DevMotionPage';
@@ -418,12 +418,14 @@ export const AppContent: React.FC = () => {
                     <ProtectedRoute>
                       <RequirePermission feature="page.users">
                         <AnimatedRouteWrapper>
-                          <StaffUsersPage />
+                          <UsersPage />
                         </AnimatedRouteWrapper>
                       </RequirePermission>
                     </ProtectedRoute>
                   }
                 />
+                <Route path="/settings/staff" element={<Navigate to="/settings/users" replace />} />
+                <Route path="/staff-users" element={<Navigate to="/settings/users" replace />} />
                 <Route
                   path="/settings/audit"
                   element={

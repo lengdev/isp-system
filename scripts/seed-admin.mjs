@@ -12,7 +12,11 @@ async function main() {
   console.log('\x1b[36m%s\x1b[0m', '🌱 NSMISP Database Seeding: RBAC Roles & Super Admin...');
 
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@nsmisp.net';
+  const rawAdminEmail = process.env.ADMIN_EMAIL?.trim();
+  const adminEmail =
+    !rawAdminEmail || rawAdminEmail.toLowerCase() === 'admin@netpulse.net'
+      ? 'admin@nsmisp.net'
+      : rawAdminEmail;
   const adminPassword = process.env.ADMIN_PASSWORD || 'NsmispAdmin2026!';
   const adminFullName = process.env.ADMIN_FULLNAME || 'David Vance';
 

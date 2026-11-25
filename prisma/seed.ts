@@ -166,7 +166,11 @@ export async function seed() {
     await prisma.$connect();
 
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@nsmisp.net';
+    const rawAdminEmail = process.env.ADMIN_EMAIL?.trim();
+    const adminEmail =
+      !rawAdminEmail || rawAdminEmail.toLowerCase() === 'admin@netpulse.net'
+        ? 'admin@nsmisp.net'
+        : rawAdminEmail;
     const adminPassword = process.env.ADMIN_PASSWORD || 'StrongSuperAdminPassword2026!';
     const adminFullName = process.env.ADMIN_FULLNAME || 'David Vance';
 

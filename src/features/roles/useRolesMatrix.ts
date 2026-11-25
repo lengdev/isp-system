@@ -340,7 +340,7 @@ export function useRolesMatrix() {
       addToast({
         type: 'success',
         title: 'Role Reassigned',
-        message: 'Staff user role updated successfully.',
+        message: 'User role updated successfully.',
       });
       queryClient.invalidateQueries({ queryKey: ['rolesUsers'] });
       queryClient.invalidateQueries({ queryKey: ['rolesMatrix'] });

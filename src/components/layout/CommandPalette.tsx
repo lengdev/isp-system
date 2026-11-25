@@ -24,6 +24,8 @@ import {
   Globe,
   Mail,
   Layers,
+  Key,
+  ShieldCheck,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { cn } from '../../lib/utils';
@@ -79,6 +81,9 @@ export const CommandPalette: React.FC = () => {
     { title: 'Messages & Broadcast', subtitle: 'SMS and email notifications to subscribers', icon: Mail, path: '/messages' },
     { title: 'Automation & Cron', subtitle: 'Automated suspension, backups and alert triggers', icon: Settings, path: '/automation' },
     { title: 'System Integrations', subtitle: 'Mikrotik, Ubiquiti, Stripe & Twilio APIs', icon: Layers, path: '/integrations' },
+    { title: 'Users', subtitle: 'Manage user accounts, their roles and access', icon: Users, path: '/settings/users' },
+    { title: 'Roles & Permissions', subtitle: 'Configure roles, permissions matrix and access', icon: Key, path: '/settings/roles' },
+    { title: 'Audit Logs', subtitle: 'System audit trail and user activity logs', icon: ShieldCheck, path: '/settings/audit' },
     { title: 'Settings', subtitle: 'System preferences & configurations', icon: Settings, path: '/settings' },
   ];
 

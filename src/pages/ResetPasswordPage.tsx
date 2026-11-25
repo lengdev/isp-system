@@ -106,7 +106,7 @@ export const ResetPasswordPage: React.FC = () => {
               <div className="text-center mb-6">
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">Set New Password</h2>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  Create a strong password (minimum 8 characters) for your {BRAND_NAME} staff account.
+                  Create a strong password (minimum 8 characters) for your {BRAND_NAME} user account.
                 </p>
               </div>
 
