@@ -203,7 +203,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           defaultValue={defaultValue}
           onBlur={handleBlur}
           className={cn(
-            'w-full h-full text-[13px] sm:text-[14px] leading-[20px] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 bg-transparent focus:outline-none tabular-nums font-normal caret-[#006FEE] transition-colors duration-150',
+            'w-full h-full text-[13px] sm:text-[14px] leading-[1.55] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 bg-transparent focus:outline-none tabular-nums font-normal caret-[#006FEE] transition-colors duration-150',
             hasLeading ? 'pl-10' : 'pl-3.5',
             hasTrailing ? 'pr-10' : 'pr-3.5',
             props.disabled && 'cursor-not-allowed'
@@ -260,7 +260,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           maxLength={maxLength}
           onChange={handleChange}
           className={cn(
-            'w-full min-h-[80px] px-3.5 py-2.5 text-[13px] sm:text-[14px] leading-[20px] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 bg-transparent focus:outline-none resize-y font-normal caret-[#006FEE] transition-colors duration-150',
+            'w-full min-h-[80px] px-3.5 py-2.5 text-[13px] sm:text-[14px] leading-[1.55] text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 bg-transparent focus:outline-none resize-y font-normal caret-[#006FEE] transition-colors duration-150',
             props.disabled && 'cursor-not-allowed'
           )}
           {...props}

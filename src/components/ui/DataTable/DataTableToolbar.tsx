@@ -239,7 +239,7 @@ export function DataTableToolbar<T extends Record<string, any>>({
               }
             }}
             placeholder={searchPlaceholder || 'Search…'}
-            className="w-full h-full pl-[38px] pr-10 text-[14px] bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 placeholder:text-[14px] font-normal select-text caret-[#006FEE]"
+            className="w-full h-full pl-[38px] pr-10 text-[14px] leading-[1.55] bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-[var(--text)] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 placeholder:text-[14px] font-normal select-text caret-[#006FEE]"
           />
           {localSearch ? (
             <button

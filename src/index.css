@@ -279,7 +279,6 @@
       'Inter',
       'Noto Sans Khmer',
       'Kantumruy Pro',
-      'Plus Jakarta Sans',
       system-ui,
       -apple-system,
       sans-serif;
@@ -332,13 +331,32 @@
   [lang="km"],
   .font-khmer {
     font-family:
+      'Inter',
       'Noto Sans Khmer',
       'Kantumruy Pro',
-      'Inter',
       system-ui,
+      -apple-system,
       sans-serif;
 
     line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  h1:lang(km),
+  h2:lang(km),
+  h3:lang(km),
+  h4:lang(km),
+  .font-khmer-heading {
+    font-family:
+      'Inter',
+      'Kantumruy Pro',
+      'Noto Sans Khmer',
+      system-ui,
+      -apple-system,
+      sans-serif;
+
+    line-height: 1.55;
+    letter-spacing: 0;
   }
 }
 

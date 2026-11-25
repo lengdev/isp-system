@@ -52,7 +52,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'Noto Sans Khmer', 'Kantumruy Pro', 'Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter', 'Noto Sans Khmer', 'Kantumruy Pro', 'system-ui', '-apple-system', 'sans-serif'],
+        heading: ['Inter', 'Kantumruy Pro', 'Noto Sans Khmer', 'system-ui', '-apple-system', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['11px', '14px'],

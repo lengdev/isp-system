@@ -93,9 +93,9 @@ export const Chip = forwardRef<HTMLDivElement, ChipProps>(
 
     // Size styles
     const sizeStyles: Record<ChipSize, string> = {
-      sm: 'h-6 px-2.5 text-[11px] gap-1',
-      md: 'h-7 px-3 text-[13px] gap-1.5',
-      lg: 'h-8 px-3.5 text-[14px] gap-2',
+      sm: 'min-h-[24px] py-0.5 px-2.5 text-[11px] gap-1',
+      md: 'min-h-[28px] py-0.5 px-3 text-[13px] gap-1.5',
+      lg: 'min-h-[32px] py-1 px-3.5 text-[14px] gap-2',
     };
 
     // Dot colors for variant="dot"
@@ -237,7 +237,7 @@ export const Chip = forwardRef<HTMLDivElement, ChipProps>(
         {startContent && <span className="shrink-0 flex items-center">{startContent}</span>}
 
         {/* Content */}
-        <span className="truncate leading-none">{fallbackText}</span>
+        <span className="truncate leading-[1.5]">{fallbackText}</span>
 
         {/* End Content */}
         {endContent && <span className="shrink-0 flex items-center">{endContent}</span>}

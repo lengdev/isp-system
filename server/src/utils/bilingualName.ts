@@ -81,3 +81,4 @@ export function resolveCustomerNamesForUpdate(
     fullName: nextEn || nextKm!,
   };
 }
+
