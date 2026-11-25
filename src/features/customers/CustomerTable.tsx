@@ -26,7 +26,7 @@ import { useStore } from '../../store/useStore';
 import { Avatar } from '../../components/ui/Avatar';
 import { StatusChangePopover } from './StatusChangePopover';
 import { Tooltip } from '../../components/ui/Tooltip';
-import { formatCurrency, formatNumber, cn } from '../../lib/utils';
+import { formatCurrency, formatNumber, cn, getInitials, normalizeSearchText, getCustomerDisplayNames } from '../../lib/utils';
 import { useCan } from '../../lib/permissions';
 import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox } from '../../components/ui/DataTable';
 
@@ -91,17 +91,19 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
     }
 
     if (filters.searchQuery && filters.searchQuery.trim()) {
-      const q = filters.searchQuery.toLowerCase().trim();
+      const q = normalizeSearchText(filters.searchQuery);
       result = result.filter(
         (c) =>
-          c.fullName.toLowerCase().includes(q) ||
-          c.code.toLowerCase().includes(q) ||
-          c.email.toLowerCase().includes(q) ||
-          c.phone.toLowerCase().includes(q) ||
-          c.ipAddress.toLowerCase().includes(q) ||
-          c.macAddress.toLowerCase().includes(q) ||
-          c.planName.toLowerCase().includes(q) ||
-          c.city.toLowerCase().includes(q)
+          normalizeSearchText(c.nameKm).includes(q) ||
+          normalizeSearchText(c.nameEn).includes(q) ||
+          normalizeSearchText(c.fullName).includes(q) ||
+          normalizeSearchText(c.code).includes(q) ||
+          normalizeSearchText(c.email).includes(q) ||
+          normalizeSearchText(c.phone).includes(q) ||
+          normalizeSearchText(c.ipAddress).includes(q) ||
+          normalizeSearchText(c.macAddress).includes(q) ||
+          normalizeSearchText(c.planName).includes(q) ||
+          normalizeSearchText(c.city).includes(q)
       );
     }
 
@@ -146,18 +148,29 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
       {
         id: 'fullName',
         header: 'Customer',
-        accessorKey: 'fullName',
-        width: 240,
-        minWidth: 200,
+        accessorFn: (row) => (row.nameEn || row.nameKm || row.fullName || '').normalize('NFC'),
+        width: 260,
+        minWidth: 210,
         sortable: true,
         priority: 1,
         filter: {
           type: 'text',
           placeholder: 'Search customer...',
         },
-        tooltip: (val, row) => `${row.fullName} (${row.code}) - ${row.email}`,
+        tooltip: (_val, row) => {
+          const { nameKm, nameEn, fullName } = getCustomerDisplayNames(row);
+          const nameLabel = nameKm && nameEn ? `${nameKm} (${nameEn})` : fullName;
+          return `${nameLabel} (${row.code}) - ${row.email}`;
+        },
+        exportFields: [
+          { id: 'nameKm', header: 'Khmer Name (nameKm)', getValue: (row) => row.nameKm || '' },
+          { id: 'nameEn', header: 'Latin Name (nameEn)', getValue: (row) => row.nameEn || '' },
+          { id: 'fullName', header: 'Full Name', getValue: (row) => row.nameEn || row.nameKm || row.fullName || '' },
+        ],
         cell: ({ row }) => {
           const c = row.original;
+          const { nameKm, nameEn, primary } = getCustomerDisplayNames(c);
+          const tooltipName = nameKm && nameEn ? `${nameKm} • ${nameEn}` : primary;
           return (
             <div
               className="flex items-center gap-2 min-w-0 w-full cursor-pointer"
@@ -167,12 +180,32 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
               }}
             >
               <div className="w-7 h-7 rounded-full bg-[var(--surface-subtle)] border border-[var(--border)] flex items-center justify-center shrink-0 text-[11px] font-semibold text-[var(--text)]">
-                {c.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                {c.initials || getInitials(c.nameEn || c.nameKm || c.fullName)}
               </div>
               <div className="min-w-0 flex-1">
-                <Tooltip content={c.fullName}>
-                  <div className="font-semibold text-[12px] text-[var(--text)] hover:text-[var(--brand)] transition-colors truncate">
-                    {c.fullName}
+                <Tooltip content={tooltipName}>
+                  <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-[var(--text)] hover:text-[var(--brand)] transition-colors leading-[1.5]">
+                    {nameKm && (
+                      <span lang="km" className="font-semibold truncate">
+                        {nameKm}
+                      </span>
+                    )}
+                    {nameKm && nameEn && (
+                      <span className="text-[var(--text-muted)] shrink-0">·</span>
+                    )}
+                    {nameEn && (
+                      <span
+                        className={cn(
+                          'truncate',
+                          nameKm ? 'font-medium text-[var(--text-secondary)]' : 'font-semibold'
+                        )}
+                      >
+                        {nameEn}
+                      </span>
+                    )}
+                    {!nameKm && !nameEn && (
+                      <span className="font-semibold truncate">{c.fullName}</span>
+                    )}
                   </div>
                 </Tooltip>
                 <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] truncate">
@@ -632,15 +665,30 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                 />
               </div>
               <Avatar
-                name={c.fullName}
+                name={c.nameEn || c.nameKm || c.fullName}
+                initials={c.initials}
                 size="md"
                 online={c.onlineStatus === 'online'}
               />
               <div className="min-w-0 flex-1">
-                <Tooltip content={c.fullName}>
-                  <h4 className="text-[13px] font-semibold text-[var(--text)] truncate group-hover:text-[var(--brand)] transition-colors">
-                    {c.fullName}
-                  </h4>
+                <Tooltip content={c.nameKm && c.nameEn ? `${c.nameKm} • ${c.nameEn}` : c.fullName}>
+                  <div className="min-w-0">
+                    {c.nameKm && (
+                      <h4 lang="km" className="text-[13px] font-semibold text-[var(--text)] truncate leading-[1.55] group-hover:text-[var(--brand)] transition-colors">
+                        {c.nameKm}
+                      </h4>
+                    )}
+                    {(c.nameEn || !c.nameKm) && (
+                      <div className={cn(
+                        'truncate transition-colors',
+                        c.nameKm
+                          ? 'text-[11px] font-medium text-[var(--text-secondary)]'
+                          : 'text-[13px] font-semibold text-[var(--text)] group-hover:text-[var(--brand)]'
+                      )}>
+                        {c.nameEn || c.fullName}
+                      </div>
+                    )}
+                  </div>
                 </Tooltip>
                 <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] truncate">
                   <span className="font-mono text-[10px]">{c.code}</span>

@@ -78,6 +78,8 @@ export const BulkActionBar: React.FC = () => {
     const headers = [
       'ID',
       'Account Code',
+      'Khmer Name (nameKm)',
+      'Latin Name (nameEn)',
       'Full Name',
       'Email',
       'Phone',
@@ -94,6 +96,8 @@ export const BulkActionBar: React.FC = () => {
     const rows = selectedCustomers.map((c) => [
       c.id,
       c.code,
+      c.nameKm || '',
+      c.nameEn || '',
       c.fullName,
       c.email,
       c.phone,

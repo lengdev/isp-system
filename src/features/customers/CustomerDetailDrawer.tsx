@@ -56,7 +56,8 @@ const CopyDefinitionItem: React.FC<{
   label: string;
   value: string;
   mono?: boolean;
-}> = ({ label, value, mono = false }) => {
+  lang?: string;
+}> = ({ label, value, mono = false, lang }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -73,8 +74,10 @@ const CopyDefinitionItem: React.FC<{
           {label}
         </span>
         <span
+          lang={lang}
           className={cn(
             'text-[12px] font-semibold text-[var(--text)] truncate block',
+            lang === 'km' && 'leading-[1.55]',
             mono && 'font-mono'
           )}
         >
@@ -293,21 +296,30 @@ export const CustomerDetailDrawer: React.FC = () => {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <Avatar
-            name={customer.fullName}
+            name={customer.nameEn || customer.nameKm || customer.fullName}
+            initials={customer.initials}
             size="lg"
             online={customer.onlineStatus === 'online'}
             className="text-[16px] font-bold shrink-0"
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-[18px] font-semibold text-[var(--text)] tracking-tight truncate">
-                {customer.fullName}
+              <h2
+                lang={customer.nameKm ? 'km' : undefined}
+                className="text-[18px] font-semibold text-[var(--text)] tracking-tight truncate leading-[1.5]"
+              >
+                {customer.nameKm || customer.nameEn || customer.fullName}
               </h2>
               <StatusChangePopover
                 currentStatus={customer.status}
                 customerId={customer.id}
               />
             </div>
+            {customer.nameKm && customer.nameEn && (
+              <p className="text-[12px] font-medium text-[var(--text-secondary)] truncate">
+                {customer.nameEn}
+              </p>
+            )}
           </div>
         </div>
 
@@ -598,6 +610,15 @@ export const CustomerDetailDrawer: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <CopyDefinitionItem
+                  label="Khmer Name"
+                  value={customer.nameKm || '—'}
+                  lang="km"
+                />
+                <CopyDefinitionItem
+                  label="Latin Name"
+                  value={customer.nameEn || '—'}
+                />
                 <CopyDefinitionItem
                   label="IP Address"
                   value={customer.ipAddress}

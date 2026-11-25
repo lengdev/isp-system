@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '../lib/api';
+import { getInitials } from '../lib/utils';
 import { migrateLegacyStorage, STORAGE_PREFIX, STORE_PERSIST_KEY } from '../lib/storageMigration';
 
 migrateLegacyStorage();
@@ -52,19 +53,31 @@ export function normalizeApiCustomer(raw: any): Customer {
   if (typeLower === 'wireless') connectionType = 'Wireless';
   else if (typeLower === 'dsl') connectionType = 'DSL';
 
-  const fullName = raw.fullName || 'Unknown Customer';
-  const nameParts = fullName.trim().split(/\s+/);
+  const nameKm =
+    typeof raw.nameKm === 'string' && raw.nameKm.trim()
+      ? raw.nameKm.trim().normalize('NFC')
+      : null;
+  const nameEn =
+    typeof raw.nameEn === 'string' && raw.nameEn.trim()
+      ? raw.nameEn.trim().normalize('NFC')
+      : null;
+  const fullName =
+    (typeof raw.fullName === 'string' && raw.fullName.trim()
+      ? raw.fullName.trim().normalize('NFC')
+      : null) ||
+    nameEn ||
+    nameKm ||
+    'Unknown Customer';
   const initials =
-    raw.initials ||
-    (nameParts.length === 1
-      ? nameParts[0].slice(0, 2).toUpperCase()
-      : (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase());
+    raw.initials || getInitials(nameEn || nameKm || fullName);
 
   return {
     id: String(raw.id),
     code: raw.code || `CUST-${raw.id}`,
     avatarUrl: raw.avatarUrl,
     initials,
+    nameKm,
+    nameEn,
     fullName,
     email: raw.email || '',
     phone: raw.phone || '',
@@ -538,65 +551,35 @@ export const useStore = create<AppStore>()(
 
       addCustomer: async (customerData) => {
         await get().simulateLatency();
-        try {
-          const res = await api.customers.create({
-            fullName: customerData.fullName,
-            email: customerData.email,
-            phone: customerData.phone,
-            address: customerData.address,
-            city: customerData.city,
-            planId: customerData.planId,
-            planName: customerData.planName,
-            monthlyPrice: customerData.monthlyPrice,
-            connectionType: (customerData.connectionType || 'Fiber').toUpperCase(),
-            status: (customerData.status || 'Pending').toUpperCase(),
-            ipAddress: customerData.ipAddress,
-            macAddress: customerData.macAddress,
-            routerModel: customerData.routerModel,
-          });
-          if (res) {
-            const normalized = normalizeApiCustomer(res);
-            set((state) => ({
-              customers: [normalized, ...state.customers.filter((c) => c.id !== normalized.id)],
-              activities: [
-                {
-                  id: 'act-' + Date.now(),
-                  customerId: normalized.id,
-                  action: 'Customer Onboarded',
-                  details: `Added new subscriber ${normalized.fullName} with ${normalized.planName}`,
-                  actor: 'Admin',
-                  timestamp: 'Just now',
-                  type: 'profile',
-                },
-                ...state.activities,
-              ],
-            }));
-            get().addToast({
-              type: 'success',
-              title: 'Customer Created',
-              message: `${normalized.fullName} (${normalized.code}) added successfully.`,
-            });
-            return;
-          }
-        } catch (err) {
-          console.warn('API createCustomer failed, persisting locally:', err);
+        const res = await api.customers.create({
+          nameKm: customerData.nameKm ?? null,
+          nameEn: customerData.nameEn ?? null,
+          fullName: customerData.fullName,
+          email: customerData.email,
+          phone: customerData.phone,
+          address: customerData.address,
+          city: customerData.city,
+          planId: customerData.planId,
+          planName: customerData.planName,
+          monthlyPrice: customerData.monthlyPrice,
+          connectionType: (customerData.connectionType || 'Fiber').toUpperCase(),
+          status: (customerData.status || 'Pending').toUpperCase(),
+          ipAddress: customerData.ipAddress,
+          macAddress: customerData.macAddress,
+          routerModel: customerData.routerModel,
+        });
+        if (!res) {
+          throw new Error('Failed to create customer record');
         }
-
-        const nextId = 'cust-' + (get().customers.length + 1);
-        const nextCode = `CUST-${1000 + get().customers.length + 1}`;
-        const newCustomer: Customer = {
-          ...customerData,
-          id: nextId,
-          code: nextCode,
-        };
+        const normalized = normalizeApiCustomer(res);
         set((state) => ({
-          customers: [newCustomer, ...state.customers],
+          customers: [normalized, ...state.customers.filter((c) => c.id !== normalized.id)],
           activities: [
             {
               id: 'act-' + Date.now(),
-              customerId: nextId,
+              customerId: normalized.id,
               action: 'Customer Onboarded',
-              details: `Added new subscriber ${newCustomer.fullName} with ${newCustomer.planName}`,
+              details: `Added new subscriber ${normalized.fullName} with ${normalized.planName}`,
               actor: 'Admin',
               timestamp: 'Just now',
               type: 'profile',
@@ -607,24 +590,26 @@ export const useStore = create<AppStore>()(
         get().addToast({
           type: 'success',
           title: 'Customer Created',
-          message: `${newCustomer.fullName} (${nextCode}) added successfully.`,
+          message: `${normalized.fullName} (${normalized.code}) added successfully.`,
         });
       },
 
       updateCustomer: async (id, updates) => {
         await get().simulateLatency();
-        try {
-          await api.customers.update(id, {
-            ...updates,
-            status: updates.status ? updates.status.toUpperCase() : undefined,
-            connectionType: updates.connectionType ? updates.connectionType.toUpperCase() : undefined,
-          });
-        } catch (err) {
-          console.warn('API updateCustomer failed, applying locally:', err);
-        }
+        const res = await api.customers.update(id, {
+          ...updates,
+          nameKm: updates.nameKm,
+          nameEn: updates.nameEn,
+          fullName: updates.fullName,
+          status: updates.status ? updates.status.toUpperCase() : undefined,
+          connectionType: updates.connectionType ? updates.connectionType.toUpperCase() : undefined,
+        });
+        const normalized = res ? normalizeApiCustomer(res) : null;
 
         set((state) => ({
-          customers: state.customers.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+          customers: state.customers.map((c) =>
+            c.id === id ? (normalized ? { ...c, ...normalized } : { ...c, ...updates }) : c
+          ),
           activities: [
             {
               id: 'act-' + Date.now(),

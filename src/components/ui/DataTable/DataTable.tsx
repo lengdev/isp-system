@@ -1438,6 +1438,8 @@ export const DataTable = <T extends Record<string, any>>({
                             />
                             <div className="font-semibold text-xs text-[var(--text)] truncate">
                               {String(
+                                row.original.nameKm ||
+                                row.original.nameEn ||
                                 row.original.fullName ||
                                 row.original.name ||
                                 row.original.title ||

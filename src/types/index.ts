@@ -20,6 +20,8 @@ export interface Customer {
   code: string; // e.g. "CUST-1042"
   avatarUrl?: string;
   initials: string;
+  nameKm?: string | null;
+  nameEn?: string | null;
   fullName: string;
   email: string;
   phone: string;

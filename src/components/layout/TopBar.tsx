@@ -22,7 +22,7 @@ import { BRAND_NAME, BRAND_LOCAL_DOMAIN } from '../../lib/brand';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../lib/api';
 import { Avatar } from '../ui/Avatar';
-import { formatDate, cn } from '../../lib/utils';
+import { formatDate, cn, normalizeSearchText } from '../../lib/utils';
 import { NotificationPanel } from './NotificationPanel';
 
 interface TopBarProps {
@@ -142,15 +142,18 @@ export const TopBar: React.FC<TopBarProps> = ({ onMobileMenuOpen }) => {
 
   const matchedCustomers = useMemo(() => {
     if (!q) return [];
+    const nq = normalizeSearchText(q);
     return customers
       .filter(
         (c) =>
-          c.fullName.toLowerCase().includes(q) ||
-          c.code.toLowerCase().includes(q) ||
+          normalizeSearchText(c.nameKm).includes(nq) ||
+          normalizeSearchText(c.nameEn).includes(nq) ||
+          normalizeSearchText(c.fullName).includes(nq) ||
+          c.code.toLowerCase().includes(nq) ||
           c.ipAddress.includes(q) ||
-          c.macAddress.toLowerCase().includes(q) ||
+          c.macAddress.toLowerCase().includes(nq) ||
           c.phone.includes(q) ||
-          (c.planName && c.planName.toLowerCase().includes(q))
+          (c.planName && c.planName.toLowerCase().includes(nq))
       )
       .slice(0, 4);
   }, [customers, q]);

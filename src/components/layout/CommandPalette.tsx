@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BRAND_NAME } from '../../lib/brand';
+import { normalizeSearchText } from '../../lib/utils';
 import {
   Search,
   Users,
@@ -133,15 +134,19 @@ export const CommandPalette: React.FC = () => {
 
   const filteredCustomers = query.trim()
     ? customers
-        .filter(
-          (c) =>
-            c.fullName.toLowerCase().includes(query.toLowerCase()) ||
-            c.email.toLowerCase().includes(query.toLowerCase()) ||
+        .filter((c) => {
+          const q = normalizeSearchText(query);
+          return (
+            normalizeSearchText(c.nameKm).includes(q) ||
+            normalizeSearchText(c.nameEn).includes(q) ||
+            normalizeSearchText(c.fullName).includes(q) ||
+            c.email.toLowerCase().includes(q) ||
             c.ipAddress.includes(query) ||
-            c.macAddress.toLowerCase().includes(query.toLowerCase()) ||
+            c.macAddress.toLowerCase().includes(q) ||
             c.phone.includes(query) ||
-            c.code.toLowerCase().includes(query.toLowerCase())
-        )
+            c.code.toLowerCase().includes(q)
+          );
+        })
         .slice(0, 6)
     : [];
 

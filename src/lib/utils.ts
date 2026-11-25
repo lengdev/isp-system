@@ -29,26 +29,63 @@ export function formatDate(dateString: string | Date, formatStr = 'MMM dd, yyyy'
 }
 
 export function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((part) => part[0])
+  const cleaned = name.trim().normalize('NFC');
+  if (!cleaned) return 'CU';
+  return cleaned
+    .split(/\s+/)
+    .map((part) => Array.from(part)[0] || '')
     .filter(Boolean)
     .slice(0, 2)
     .join('')
     .toUpperCase();
 }
 
-export function downloadCSV(filename: string, headers: string[], rows: (string | number)[][]) {
-  const csvContent =
-    'data:text/csv;charset=utf-8,' +
-    [headers.join(','), ...rows.map((row) => row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))].join(
-      '\n'
-    );
-  const encodedUri = encodeURI(csvContent);
+export function normalizeSearchText(value?: string | null): string {
+  return (value || '').trim().normalize('NFC').toLowerCase();
+}
+
+export function getCustomerDisplayNames(customer: {
+  nameKm?: string | null;
+  nameEn?: string | null;
+  fullName?: string | null;
+}): {
+  nameKm: string | null;
+  nameEn: string | null;
+  primary: string;
+  secondary: string | null;
+  fullName: string;
+} {
+  const nameKm = customer.nameKm?.trim().normalize('NFC') || null;
+  const nameEn = customer.nameEn?.trim().normalize('NFC') || null;
+  const fallback = customer.fullName?.trim().normalize('NFC') || 'Unknown Customer';
+  const primary = nameKm || nameEn || fallback;
+  const secondary = nameKm && nameEn ? nameEn : null;
+  const fullName = nameEn || nameKm || fallback;
+  return { nameKm, nameEn, primary, secondary, fullName };
+}
+
+function escapeCsvCell(val: string | number | null | undefined): string {
+  const str = val === null || val === undefined ? '' : String(val);
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+export function downloadCSV(
+  filename: string,
+  headers: string[],
+  rows: (string | number | null | undefined)[][]
+) {
+  const csvBody = [
+    headers.map((h) => escapeCsvCell(h)).join(','),
+    ...rows.map((row) => row.map((val) => escapeCsvCell(val)).join(',')),
+  ].join('\r\n');
+
+  const blob = new Blob(['\uFEFF' + csvBody], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.setAttribute('href', encodedUri);
+  link.setAttribute('href', url);
   link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

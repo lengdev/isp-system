@@ -12,22 +12,37 @@ import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { ConnectionType, CustomerStatus } from '../../types';
 
-const customerSchema = z.object({
-  fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  email: z.string().email('Please enter a valid email address'),
-  phone: z.string().min(8, 'Valid phone number is required'),
-  address: z.string().min(5, 'Street address is required'),
-  city: z.string().min(2, 'City is required'),
-  planId: z.string().min(1, 'Please select an internet plan'),
-  connectionType: z.enum(['Fiber', 'Wireless', 'DSL']),
-  ipAddress: z.string().min(7, 'Valid IP address required'),
-  macAddress: z.string().min(10, 'Valid MAC address required'),
-  dueDate: z.string().min(1, 'Due date is required'),
-  status: z.enum(['Active', 'Suspended', 'Pending', 'Disconnected', 'Overdue']),
-  assignedTechnician: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  notes: z.string().optional(),
-});
+import { getInitials } from '../../lib/utils';
+
+const customerSchema = z
+  .object({
+    nameKm: z.string().optional().default(''),
+    nameEn: z.string().optional().default(''),
+    email: z.string().email('Please enter a valid email address'),
+    phone: z.string().min(8, 'Valid phone number is required'),
+    address: z.string().min(5, 'Street address is required'),
+    city: z.string().min(2, 'City is required'),
+    planId: z.string().min(1, 'Please select an internet plan'),
+    connectionType: z.enum(['Fiber', 'Wireless', 'DSL']),
+    ipAddress: z.string().min(7, 'Valid IP address required'),
+    macAddress: z.string().min(10, 'Valid MAC address required'),
+    dueDate: z.string().min(1, 'Due date is required'),
+    status: z.enum(['Active', 'Suspended', 'Pending', 'Disconnected', 'Overdue']),
+    assignedTechnician: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const km = (data.nameKm || '').trim().normalize('NFC');
+    const en = (data.nameEn || '').trim().normalize('NFC');
+    if (!km && !en) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Enter at least a Khmer name or a Latin name',
+        path: ['nameEn'],
+      });
+    }
+  });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
 
@@ -60,18 +75,19 @@ export const AddEditCustomerModal: React.FC = () => {
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
-      fullName: '',
+      nameKm: '',
+      nameEn: '',
       email: '',
       phone: '',
       address: '',
-      city: 'Austin, TX',
+      city: 'Phnom Penh',
       planId: plans[0]?.id || '',
       connectionType: 'Fiber',
       ipAddress: `192.168.${Math.floor(Math.random() * 80) + 10}.${Math.floor(Math.random() * 200) + 10}`,
       macAddress: `F4:5C:89:${Math.floor(Math.random() * 89 + 10)}:${Math.floor(Math.random() * 89 + 10)}:9A`,
       dueDate: '2025-10-15',
       status: 'Active',
-      assignedTechnician: technicians[0]?.name || 'Carlos Ramos',
+      assignedTechnician: technicians[0]?.name || 'Sok Chea',
       tags: ['Residential'],
       notes: '',
     },
@@ -87,8 +103,12 @@ export const AddEditCustomerModal: React.FC = () => {
       setIsSuccess(false);
 
       if (isEdit && existingCustomer) {
+        const hasKm = Boolean(existingCustomer.nameKm?.trim());
+        const hasEn = Boolean(existingCustomer.nameEn?.trim());
+        const fallbackHasKm = /[\u1780-\u17FF]/.test(existingCustomer.fullName || '');
         reset({
-          fullName: existingCustomer.fullName,
+          nameKm: existingCustomer.nameKm || (!hasKm && !hasEn && fallbackHasKm ? existingCustomer.fullName : ''),
+          nameEn: existingCustomer.nameEn || (!hasKm && !hasEn && !fallbackHasKm ? existingCustomer.fullName : ''),
           email: existingCustomer.email,
           phone: existingCustomer.phone,
           address: existingCustomer.address,
@@ -105,18 +125,19 @@ export const AddEditCustomerModal: React.FC = () => {
         });
       } else {
         reset({
-          fullName: '',
+          nameKm: '',
+          nameEn: '',
           email: '',
           phone: '',
           address: '',
-          city: 'Austin, TX',
+          city: 'Phnom Penh',
           planId: plans[0]?.id || '',
           connectionType: 'Fiber',
           ipAddress: `192.168.${Math.floor(Math.random() * 80) + 10}.${Math.floor(Math.random() * 200) + 10}`,
           macAddress: `F4:5C:89:${Math.floor(Math.random() * 89 + 10)}:${Math.floor(Math.random() * 89 + 10)}:9A`,
           dueDate: '2025-10-15',
           status: 'Active',
-          assignedTechnician: technicians[0]?.name || 'Carlos Ramos',
+          assignedTechnician: technicians[0]?.name || 'Sok Chea',
           tags: ['Residential'],
           notes: '',
         });
@@ -147,12 +168,12 @@ export const AddEditCustomerModal: React.FC = () => {
   ];
 
   const cityOptions: ComboboxOption[] = [
-    { value: 'Austin, TX', label: 'Austin, TX' },
-    { value: 'Seattle, WA', label: 'Seattle, WA' },
-    { value: 'Denver, CO', label: 'Denver, CO' },
-    { value: 'Portland, OR', label: 'Portland, OR' },
-    { value: 'San Jose, CA', label: 'San Jose, CA' },
-    { value: 'Phoenix, AZ', label: 'Phoenix, AZ' },
+    { value: 'Phnom Penh', label: 'Phnom Penh' },
+    { value: 'Siem Reap', label: 'Siem Reap' },
+    { value: 'Battambang', label: 'Battambang' },
+    { value: 'Sihanoukville', label: 'Sihanoukville' },
+    { value: 'Kampong Cham', label: 'Kampong Cham' },
+    { value: 'Kampot', label: 'Kampot' },
   ];
 
   const technicianOptions: ComboboxOption[] = technicians.map((t) => ({
@@ -170,7 +191,7 @@ export const AddEditCustomerModal: React.FC = () => {
 
   const handleNextStep = async () => {
     if (step === 1) {
-      const valid = await trigger(['fullName', 'email', 'phone', 'address', 'city']);
+      const valid = await trigger(['nameKm', 'nameEn', 'email', 'phone', 'address', 'city']);
       if (valid) {
         setDirection('forward');
         setStep(2);
@@ -199,13 +220,18 @@ export const AddEditCustomerModal: React.FC = () => {
   const onSubmit = async (data: CustomerFormData) => {
     setIsSubmitting(true);
     const chosenPlan = plans.find((p) => p.id === data.planId) || plans[0];
+    const nameKm = (data.nameKm || '').trim().normalize('NFC') || null;
+    const nameEn = (data.nameEn || '').trim().normalize('NFC') || null;
+    const fullName = nameEn || nameKm || '';
 
     const customerPayload = {
-      fullName: data.fullName,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      city: data.city,
+      nameKm,
+      nameEn,
+      fullName,
+      email: data.email.trim(),
+      phone: data.phone.trim(),
+      address: data.address.trim(),
+      city: data.city.trim(),
       planId: chosenPlan.id,
       planName: chosenPlan.name,
       monthlyPrice: chosenPlan.monthlyPrice,
@@ -224,31 +250,35 @@ export const AddEditCustomerModal: React.FC = () => {
       notes: data.notes,
       onlineStatus: 'online' as const,
       lastPingMs: 14,
-      initials: data.fullName
-        .split(' ')
-        .map((n) => n[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase(),
+      initials: getInitials(fullName),
     };
 
-    if (isEdit && existingCustomer) {
-      await updateCustomer(existingCustomer.id, customerPayload);
-    } else {
-      await addCustomer(customerPayload);
-    }
+    try {
+      if (isEdit && existingCustomer) {
+        await updateCustomer(existingCustomer.id, customerPayload);
+      } else {
+        await addCustomer(customerPayload);
+      }
 
-    setIsSubmitting(false);
-    setIsSuccess(true);
+      setIsSubmitting(false);
+      setIsSuccess(true);
 
-    setTimeout(() => {
+      setTimeout(() => {
+        addToast({
+          type: 'success',
+          title: isEdit ? 'Customer Updated' : 'Customer Enrolled',
+          message: `${fullName} is now provisioned with ${chosenPlan.name}.`,
+        });
+        closeModal('addEditCustomer');
+      }, 600);
+    } catch (err: any) {
+      setIsSubmitting(false);
       addToast({
-        type: 'success',
-        title: isEdit ? 'Customer Updated' : 'Customer Enrolled',
-        message: `${data.fullName} is now provisioned with ${chosenPlan.name}.`,
+        type: 'error',
+        title: isEdit ? 'Update Failed' : 'Enrollment Failed',
+        message: err?.message || 'Unable to save customer record.',
       });
-      closeModal('addEditCustomer');
-    }, 600);
+    }
   };
 
   const stepVariants = {
@@ -278,7 +308,7 @@ export const AddEditCustomerModal: React.FC = () => {
       title={isEdit ? 'Edit Subscriber Account' : 'Add New Customer'}
       subtitle={
         isEdit
-          ? `Modifying subscriber account profile for ${existingCustomer?.fullName}`
+          ? `Modifying subscriber account profile for ${existingCustomer?.nameKm || existingCustomer?.nameEn || existingCustomer?.fullName}`
           : 'Step-by-step subscriber onboarding and optical provisioning'
       }
       isDirty={isDirty}
@@ -424,16 +454,35 @@ export const AddEditCustomerModal: React.FC = () => {
                 exit="exit"
                 className="space-y-4"
               >
-                {/* Full name & Email */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
-                  <Field label="Full name" required error={errors.fullName?.message}>
-                    <Input
-                      {...register('fullName')}
-                      placeholder="e.g. Rachel Adams"
-                      hasError={Boolean(errors.fullName)}
-                    />
-                  </Field>
+                {/* Bilingual Names */}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                    <Field label="Khmer name (ឈ្មោះខ្មែរ)" error={errors.nameKm?.message}>
+                      <Input
+                        {...register('nameKm')}
+                        lang="km"
+                        placeholder="ឧ. សុខា ចាន់"
+                        hasError={Boolean(errors.nameKm || errors.nameEn)}
+                      />
+                    </Field>
 
+                    <Field label="Latin name" error={errors.nameEn?.message}>
+                      <Input
+                        {...register('nameEn')}
+                        placeholder="e.g. Sokha Chan"
+                        hasError={Boolean(errors.nameEn)}
+                      />
+                    </Field>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Provide a Khmer name, a Latin name, or both.
+                  </p>
+                </div>
+
+                {/* Section: Contact */}
+                <FormSectionTitle>Contact</FormSectionTitle>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="Email address" required error={errors.email?.message}>
                     <Input
                       {...register('email')}
@@ -442,16 +491,11 @@ export const AddEditCustomerModal: React.FC = () => {
                       hasError={Boolean(errors.email)}
                     />
                   </Field>
-                </div>
 
-                {/* Section: Contact */}
-                <FormSectionTitle>Contact</FormSectionTitle>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="Phone number" required error={errors.phone?.message}>
                     <Input
                       {...register('phone')}
-                      placeholder="+1 512 555 0199"
+                      placeholder="+855 12 345 678"
                       hasError={Boolean(errors.phone)}
                     />
                   </Field>
@@ -610,9 +654,21 @@ export const AddEditCustomerModal: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
                       <span className="text-gray-400 block text-[11px]">Subscriber:</span>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">
-                        {watchedData.fullName || '—'}
-                      </span>
+                      <div className="space-y-0.5">
+                        {watchedData.nameKm && (
+                          <span lang="km" className="font-semibold text-gray-900 dark:text-gray-100 block leading-[1.5]">
+                            {watchedData.nameKm}
+                          </span>
+                        )}
+                        {watchedData.nameEn && (
+                          <span className="font-semibold text-gray-900 dark:text-gray-100 block">
+                            {watchedData.nameEn}
+                          </span>
+                        )}
+                        {!watchedData.nameKm && !watchedData.nameEn && (
+                          <span className="font-semibold text-gray-900 dark:text-gray-100 block">—</span>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <span className="text-gray-400 block text-[11px]">Plan:</span>

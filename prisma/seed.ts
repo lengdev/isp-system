@@ -380,6 +380,8 @@ export async function seed() {
             code: c.code,
             type: c.type,
             status: c.status,
+            nameKm: /[\u1780-\u17FF]/.test(c.fullName) ? c.fullName : null,
+            nameEn: !/[\u1780-\u17FF]/.test(c.fullName) ? c.fullName : null,
             fullName: c.fullName,
             companyName: c.companyName || null,
             taxNumber: c.taxNumber || null,

@@ -43,17 +43,29 @@ export const DataTableExport = <T extends Record<string, any>>({
 
   const getFormattedData = () => {
     const rows = getTargetRows();
-    const headers = exportColumns.map((c) =>
-      typeof c.header === 'string' ? c.header : c.id
-    );
+    const expandedDescriptors = exportColumns.flatMap((col) => {
+      if (col.exportFields && col.exportFields.length > 0) {
+        return col.exportFields.map((field) => ({
+          header: field.header,
+          getValue: (row: T) => field.getValue(row) ?? '',
+        }));
+      }
+      return [
+        {
+          header: typeof col.header === 'string' ? col.header : col.id,
+          getValue: (row: T) => {
+            if (col.exportValue) return col.exportValue(row);
+            if (col.accessorFn) return col.accessorFn(row);
+            if (col.accessorKey) return row[col.accessorKey as string];
+            return '';
+          },
+        },
+      ];
+    });
 
+    const headers = expandedDescriptors.map((d) => d.header);
     const formattedRows = rows.map((row) =>
-      exportColumns.map((c) => {
-        if (c.exportValue) return c.exportValue(row);
-        if (c.accessorFn) return c.accessorFn(row);
-        if (c.accessorKey) return row[c.accessorKey as string];
-        return '';
-      })
+      expandedDescriptors.map((d) => d.getValue(row))
     );
 
     return { headers, formattedRows, rows };
@@ -94,7 +106,7 @@ export const DataTableExport = <T extends Record<string, any>>({
     a.href = url;
     a.download = `${filename}-${Date.now()}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     onToast({
       type: 'success',
       title: 'JSON Export Complete',

@@ -41,6 +41,11 @@ export interface DataTableColumnDef<T> {
   aggregate?: 'sum' | 'avg' | 'count' | ((rows: T[]) => any);
   tooltip?: string | ((val: any, row: T) => string);
   exportValue?: (row: T) => string | number;
+  exportFields?: {
+    id?: string;
+    header: string;
+    getValue: (row: T) => string | number | null | undefined;
+  }[];
   priority?: number; // 1 (critical/always show), 2 (hide < 1100px), 3 (hide < 860px)
 }
 

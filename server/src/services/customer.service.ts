@@ -1,6 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { prisma, logAudit } from '../db/store.js';
 import { MikroTikService } from './mikrotik.service.js';
+import {
+  normalizeNameInput,
+  resolveCustomerNamesForCreate,
+  resolveCustomerNamesForUpdate,
+} from '../utils/bilingualName.js';
 
 function formatCustomerRecord(c: any) {
   const primaryAddr = c.addresses?.find((a: any) => a.isPrimary) || c.addresses?.[0];
@@ -10,7 +15,9 @@ function formatCustomerRecord(c: any) {
     code: c.code,
     type: c.type,
     status: c.status,
-    fullName: c.fullName,
+    nameKm: c.nameKm ?? null,
+    nameEn: c.nameEn ?? null,
+    fullName: c.fullName || c.nameEn || c.nameKm || '',
     email: c.email,
     phone: c.phone,
     address: primaryAddr?.addressLine || 'N/A',
@@ -67,17 +74,33 @@ export class CustomerService {
       result = result.filter((c) => types.map((t: string) => t.toUpperCase()).includes(c.connectionType.toUpperCase()));
     }
 
-    if (filters.searchQuery) {
-      const q = String(filters.searchQuery).toLowerCase();
+    const rawSearch = filters.searchQuery ?? filters.search ?? filters.q;
+    const normalizedQuery = normalizeNameInput(rawSearch)?.toLowerCase();
+    if (normalizedQuery) {
       result = result.filter(
         (c) =>
-          c.fullName.toLowerCase().includes(q) ||
-          c.code.toLowerCase().includes(q) ||
-          c.email.toLowerCase().includes(q) ||
-          c.phone.toLowerCase().includes(q) ||
-          (c.ipAddress && c.ipAddress.includes(q)) ||
-          (c.macAddress && c.macAddress.toLowerCase().includes(q))
+          (c.nameKm || '').normalize('NFC').toLowerCase().includes(normalizedQuery) ||
+          (c.nameEn || '').normalize('NFC').toLowerCase().includes(normalizedQuery) ||
+          (c.fullName || '').normalize('NFC').toLowerCase().includes(normalizedQuery) ||
+          c.code.toLowerCase().includes(normalizedQuery) ||
+          c.email.toLowerCase().includes(normalizedQuery) ||
+          c.phone.toLowerCase().includes(normalizedQuery) ||
+          (c.ipAddress && c.ipAddress.includes(normalizedQuery)) ||
+          (c.macAddress && c.macAddress.toLowerCase().includes(normalizedQuery))
       );
+    }
+
+    if (
+      filters.sortBy === 'name' ||
+      filters.sortBy === 'fullName' ||
+      filters.sortBy === 'displayName'
+    ) {
+      const dir = String(filters.sortDir || 'asc').toLowerCase() === 'desc' ? -1 : 1;
+      result.sort((a, b) => {
+        const aName = (a.nameEn || a.nameKm || a.fullName || '').normalize('NFC');
+        const bName = (b.nameEn || b.nameKm || b.fullName || '').normalize('NFC');
+        return aName.localeCompare(bName) * dir;
+      });
     }
 
     return result;
@@ -115,7 +138,8 @@ export class CustomerService {
     const networkInfo = {
       connectionType: formattedCust.connectionType,
       pppoeUsername:
-        formattedCust.pppoeUsername || `${formattedCust.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`,
+        formattedCust.pppoeUsername ||
+        `${((formattedCust.nameEn || formattedCust.code).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'subscriber')}_pppoe`,
       assignedRouter: sub?.router?.name || 'Core-CCR2004-East (Phnom Penh POP)',
       routerId: sub?.routerId || 'rtr-core-1',
       vlanId: formattedCust.connectionType === 'WIRELESS' ? 30 : 20,
@@ -151,6 +175,8 @@ export class CustomerService {
 
   // 3. Create Customer in PostgreSQL
   static async createCustomer(data: any) {
+    const resolvedNames = resolveCustomerNamesForCreate(data);
+
     let pkg = await prisma.package.findFirst({
       where: {
         OR: [
@@ -171,7 +197,6 @@ export class CustomerService {
     const initialStatus = (data.status || 'PENDING').toUpperCase();
     const ipAddress = data.ipAddress || `10.20.1.${Math.floor(Math.random() * 200) + 10}`;
     const macAddress = data.macAddress || `48:8F:5A:12:44:${Math.floor(Math.random() * 90 + 10)}`;
-    const basePppoe = `${data.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`;
 
     const created = await prisma.$transaction(async (tx) => {
       const router = await tx.router.findFirst();
@@ -208,6 +233,12 @@ export class CustomerService {
         targetCode = `CUST-${counter}`;
       }
 
+      const latinSlug = (resolvedNames.nameEn || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      const basePppoe = `${latinSlug || targetCode.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_pppoe`;
+
       const existingPppoe = await tx.pPPoEAccount.findUnique({ where: { username: basePppoe } });
       const pppoeUsername = existingPppoe ? `${basePppoe}_${counter}` : basePppoe;
 
@@ -215,7 +246,9 @@ export class CustomerService {
         data: {
           id: targetId,
           code: targetCode,
-          fullName: data.fullName,
+          nameKm: resolvedNames.nameKm,
+          nameEn: resolvedNames.nameEn,
+          fullName: resolvedNames.fullName,
           email: data.email,
           phone: data.phone || '',
           type: (data.type || 'RESIDENTIAL') as any,
@@ -288,7 +321,12 @@ export class CustomerService {
 
     await prisma.$transaction(async (tx) => {
       const customerData: any = {};
-      if (updates.fullName !== undefined) customerData.fullName = updates.fullName;
+      const resolvedNames = resolveCustomerNamesForUpdate(updates, existing);
+      if (resolvedNames) {
+        customerData.nameKm = resolvedNames.nameKm;
+        customerData.nameEn = resolvedNames.nameEn;
+        customerData.fullName = resolvedNames.fullName;
+      }
       if (updates.email !== undefined) customerData.email = updates.email;
       if (updates.phone !== undefined) customerData.phone = updates.phone;
       if (updates.type !== undefined) customerData.type = updates.type;

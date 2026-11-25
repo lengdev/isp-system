@@ -243,6 +243,8 @@ model Customer {
   type             CustomerType   @default(RESIDENTIAL)
   status           CustomerStatus @default(PENDING)
   fullName         String
+  nameKm           String?
+  nameEn           String?
   email            String         @unique
   phone            String
   nationalId       String?
@@ -269,6 +271,8 @@ model Customer {
 
   @@index([status])
   @@index([fullName])
+  @@index([nameEn])
+  @@index([nameKm])
   @@index([phone])
 }
 
