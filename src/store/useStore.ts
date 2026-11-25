@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '../lib/api';
+import { queryClient } from '../lib/queryClient';
 import { getInitials } from '../lib/utils';
 import { migrateLegacyStorage, STORAGE_PREFIX, STORE_PERSIST_KEY } from '../lib/storageMigration';
 
@@ -214,6 +215,7 @@ interface AppStore {
   // Customers CRUD
   fetchCustomers: () => Promise<void>;
   setCustomers: (customers: Customer[]) => void;
+  mergeCustomers: (customers: Customer[]) => void;
   addCustomer: (customerData: Omit<Customer, 'id' | 'code'>) => Promise<void>;
   updateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
@@ -535,11 +537,10 @@ export const useStore = create<AppStore>()(
       fetchCustomers: async () => {
         set({ isCustomersLoading: true });
         try {
-          const res = await api.customers.list();
-          if (Array.isArray(res)) {
-            const normalized = res.map(normalizeApiCustomer);
-            set({ customers: normalized });
-          }
+          const res = await api.customers.listPaged({ page: 1, limit: 100 });
+          const rawItems = Array.isArray(res) ? res : Array.isArray(res?.items) ? res.items : [];
+          const normalized = rawItems.map(normalizeApiCustomer);
+          set({ customers: normalized });
         } catch (err: any) {
           console.error('Failed to fetch customers from API:', err);
         } finally {
@@ -548,6 +549,23 @@ export const useStore = create<AppStore>()(
       },
 
       setCustomers: (customers) => set({ customers }),
+
+      mergeCustomers: (incoming) =>
+        set((state) => {
+          if (!incoming.length) return state;
+          const byId = new Map<string, Customer>();
+          for (const item of incoming) {
+            byId.set(item.id, item);
+          }
+          for (const existing of state.customers) {
+            if (!byId.has(existing.id)) {
+              byId.set(existing.id, existing);
+            }
+          }
+          return {
+            customers: Array.from(byId.values()).slice(0, 200),
+          };
+        }),
 
       addCustomer: async (customerData) => {
         await get().simulateLatency();
@@ -573,7 +591,7 @@ export const useStore = create<AppStore>()(
         }
         const normalized = normalizeApiCustomer(res);
         set((state) => ({
-          customers: [normalized, ...state.customers.filter((c) => c.id !== normalized.id)],
+          customers: [normalized, ...state.customers.filter((c) => c.id !== normalized.id)].slice(0, 200),
           activities: [
             {
               id: 'act-' + Date.now(),
@@ -587,6 +605,8 @@ export const useStore = create<AppStore>()(
             ...state.activities,
           ],
         }));
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-stats'] });
         get().addToast({
           type: 'success',
           title: 'Customer Created',
@@ -623,6 +643,8 @@ export const useStore = create<AppStore>()(
             ...state.activities,
           ],
         }));
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-stats'] });
         get().addToast({
           type: 'success',
           title: 'Customer Updated',
@@ -632,29 +654,28 @@ export const useStore = create<AppStore>()(
 
       deleteCustomer: async (id) => {
         const customer = get().customers.find((c) => c.id === id);
-        if (!customer) return;
 
         await get().simulateLatency();
-        try {
-          await api.customers.delete(id);
-        } catch (err) {
-          console.warn('API deleteCustomer failed, applying locally:', err);
-        }
+        await api.customers.delete(id);
 
         set((state) => ({
           customers: state.customers.filter((c) => c.id !== id),
           selectedCustomerIds: state.selectedCustomerIds.filter((cid) => cid !== id),
-          lastDeletedCustomers: [customer],
+          lastDeletedCustomers: customer ? [customer] : [],
           isDrawerOpen: state.activeCustomerId === id ? false : state.isDrawerOpen,
         }));
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-stats'] });
 
         get().addToast({
           type: 'info',
           title: 'Customer Deleted',
-          message: `${customer.fullName} was deleted.`,
-          undoAction: () => {
-            get().undoDelete();
-          },
+          message: `${customer?.fullName || id} was deleted.`,
+          undoAction: customer
+            ? () => {
+                get().undoDelete();
+              }
+            : undefined,
         });
       },
 
@@ -672,6 +693,8 @@ export const useStore = create<AppStore>()(
           selectedCustomerIds: [],
           lastDeletedCustomers: deleted,
         }));
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-stats'] });
         get().addToast({
           type: 'info',
           title: `${ids.length} Customers Deleted`,
@@ -727,6 +750,8 @@ export const useStore = create<AppStore>()(
             ...state.activities,
           ],
         }));
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-stats'] });
         get().addToast({
           type: 'success',
           title: 'Status Updated',
@@ -756,6 +781,8 @@ export const useStore = create<AppStore>()(
           ),
           selectedCustomerIds: [],
         }));
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-stats'] });
         get().addToast({
           type: 'success',
           title: 'Bulk Status Updated',

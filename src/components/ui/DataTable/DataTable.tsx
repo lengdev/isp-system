@@ -320,6 +320,7 @@ export const DataTable = <T extends Record<string, any>>({
   noDataDescription,
   emptyActionPermission,
   isFilterActive,
+  externalFilterKey,
   initialFilters,
   onClearFilters,
   onAddNew,
@@ -904,10 +905,10 @@ export const DataTable = <T extends Record<string, any>>({
     columnResizeMode: 'onChange',
   });
 
-  // Go back to page 1 when the query changes
+  // Go back to page 1 when the query or external filter changes
   useEffect(() => {
     setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
-  }, [globalFilter, columnFilters, sorting]);
+  }, [globalFilter, columnFilters, sorting, externalFilterKey]);
 
   // Keep the page in range when the data shrinks
   const pageCount = table.getPageCount();

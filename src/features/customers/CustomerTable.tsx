@@ -26,20 +26,42 @@ import { useStore } from '../../store/useStore';
 import { Avatar } from '../../components/ui/Avatar';
 import { StatusChangePopover } from './StatusChangePopover';
 import { Tooltip } from '../../components/ui/Tooltip';
-import { formatCurrency, formatNumber, cn, getInitials, normalizeSearchText, getCustomerDisplayNames } from '../../lib/utils';
+import { formatCurrency, formatNumber, cn, getInitials, getCustomerDisplayNames } from '../../lib/utils';
 import { useCan } from '../../lib/permissions';
-import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox } from '../../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox, TableQuery } from '../../components/ui/DataTable';
 
 interface CustomerTableProps {
   customers: Customer[];
-  allPageCustomerIds?: string[];
   total?: number;
   loading?: boolean;
+  fetching?: boolean;
+  loadingMode?: 'skeleton' | 'overlay';
+  error?: string | null;
+  onRetry?: () => void;
+  onRefresh?: () => void;
+  onQueryChange?: (query: TableQuery) => void;
+  availableCities?: string[];
+  availablePlans?: Array<{ id: string; name: string; speedMbps: number; monthlyPrice: number }>;
+  isFilterActive?: boolean;
+  externalFilterKey?: string;
+  onClearFilters?: () => void;
 }
 
 export const CustomerTable: React.FC<CustomerTableProps> = ({
   customers,
+  total,
   loading = false,
+  fetching = false,
+  loadingMode,
+  error = null,
+  onRetry,
+  onRefresh,
+  onQueryChange,
+  availableCities,
+  availablePlans,
+  isFilterActive,
+  externalFilterKey,
+  onClearFilters,
 }) => {
   const openDrawer = useStore((s) => s.openDrawer);
   const openModal = useStore((s) => s.openModal);
@@ -56,59 +78,6 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   const selectAllCustomers = useStore((s) => s.selectAllCustomers);
   const setSelectedCustomerIds = useStore((s) => s.setSelectedCustomerIds);
   const clearSelectedCustomers = useStore((s) => s.clearSelectedCustomers);
-  const filters = useStore((s) => s.filters);
-
-  // Filter customers based on active store filters (StatusTabs, search, plan, city, etc.)
-  const filteredCustomers = useMemo(() => {
-    let result = customers;
-
-    if (filters.status && filters.status.length > 0) {
-      result = result.filter((c) => filters.status.includes(c.status));
-    }
-
-    if (filters.plan && filters.plan.length > 0) {
-      result = result.filter((c) => filters.plan.includes(c.planName));
-    }
-
-    if (filters.city && filters.city.length > 0) {
-      result = result.filter((c) => filters.city.includes(c.city));
-    }
-
-    if (filters.connectionType && filters.connectionType.length > 0) {
-      result = result.filter((c) => filters.connectionType.includes(c.connectionType));
-    }
-
-    if (filters.technician && filters.technician.length > 0) {
-      result = result.filter((c) => c.assignedTechnician && filters.technician.includes(c.assignedTechnician));
-    }
-
-    if (filters.minBalance !== undefined && filters.minBalance !== null) {
-      result = result.filter((c) => c.balanceDue >= filters.minBalance!);
-    }
-
-    if (filters.maxBalance !== undefined && filters.maxBalance !== null) {
-      result = result.filter((c) => c.balanceDue <= filters.maxBalance!);
-    }
-
-    if (filters.searchQuery && filters.searchQuery.trim()) {
-      const q = normalizeSearchText(filters.searchQuery);
-      result = result.filter(
-        (c) =>
-          normalizeSearchText(c.nameKm).includes(q) ||
-          normalizeSearchText(c.nameEn).includes(q) ||
-          normalizeSearchText(c.fullName).includes(q) ||
-          normalizeSearchText(c.code).includes(q) ||
-          normalizeSearchText(c.email).includes(q) ||
-          normalizeSearchText(c.phone).includes(q) ||
-          normalizeSearchText(c.ipAddress).includes(q) ||
-          normalizeSearchText(c.macAddress).includes(q) ||
-          normalizeSearchText(c.planName).includes(q) ||
-          normalizeSearchText(c.city).includes(q)
-      );
-    }
-
-    return result;
-  }, [customers, filters]);
 
   // Clear selection on load (0 rows selected on load) if needed
   useEffect(() => {
@@ -120,19 +89,21 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
 
   // Distinct cities for filter dropdown
   const cities = useMemo(
-    () => Array.from(new Set(customers.map((c) => c.city).filter(Boolean))).sort(),
-    [customers]
+    () =>
+      availableCities && availableCities.length > 0
+        ? availableCities
+        : Array.from(new Set(customers.map((c) => c.city).filter(Boolean))).sort(),
+    [availableCities, customers]
   );
 
-  const planOptions = useMemo(
-    () =>
-      plans.map((p) => ({
-        value: p.name,
-        label: p.name,
-        description: `${p.speedMbps} Mbps • $${p.monthlyPrice}/mo`,
-      })),
-    [plans]
-  );
+  const planOptions = useMemo(() => {
+    const sourcePlans = availablePlans && availablePlans.length > 0 ? availablePlans : plans;
+    return sourcePlans.map((p) => ({
+      value: p.name,
+      label: p.name,
+      description: `${p.speedMbps} Mbps • $${p.monthlyPrice}/mo`,
+    }));
+  }, [availablePlans, plans]);
 
   const statusOptions: { value: CustomerStatus; label: string }[] = [
     { value: 'Active', label: 'Active' },
@@ -807,8 +778,15 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   return (
     <DataTable<Customer>
       columns={columns}
-      data={filteredCustomers}
+      data={customers}
+      serverMode={true}
+      total={total}
+      onQueryChange={onQueryChange}
       loading={loading}
+      fetching={fetching}
+      loadingMode={loadingMode}
+      error={error}
+      onRetry={onRetry}
       rowId={(c) => c.id}
       viewKey="customers_master_table"
       onRowClick={(c) => openDrawer(c.id)}
@@ -828,15 +806,15 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
         });
       }}
       autoRefreshInterval={30}
-      onRefresh={async () => {
-        addToast({
-          type: 'info',
-          title: 'Subscribers Refreshed',
-          message: 'Real-time telemetry and balance ledger synchronized.',
-        });
-      }}
-      emptyTitle="No subscribers found"
-      emptySubtitle="Try adjusting your filters, clearing your search query, or adding a new subscriber."
+      onRefresh={onRefresh}
+      isFilterActive={isFilterActive}
+      externalFilterKey={externalFilterKey}
+      onClearFilters={onClearFilters}
+      noDataTitle="No customers yet"
+      noDataDescription="Add subscribers to track bandwidth usage, billing cycles, and connection health."
+      emptyTitle="No matching customers"
+      emptySubtitle="Try adjusting your filters or clearing your search query."
+      emptyActionPermission="customers.btn.create"
       onAddNew={canCreateCustomer ? () => openModal('addEditCustomer') : undefined}
       addNewLabel="Add New Customer"
     />

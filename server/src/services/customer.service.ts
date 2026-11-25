@@ -36,74 +36,299 @@ function formatCustomerRecord(c: any) {
   };
 }
 
-export class CustomerService {
-  // 1. List Customers with filters & pagination
-  static async listCustomers(filters: any = {}) {
-    const customers = await prisma.customer.findMany({
-      include: {
-        addresses: true,
-        subscriptions: {
-          include: {
-            package: true,
-            pppoeAccount: true,
-          },
+function parseMultiFilter(val: unknown): string[] {
+  if (!val) return [];
+  const rawList = Array.isArray(val) ? val : String(val).split(',');
+  return rawList
+    .map((v) => String(v).trim())
+    .filter((v) => v.length > 0 && v.toLowerCase() !== 'all');
+}
+
+const VALID_CUSTOMER_STATUSES = new Set([
+  'ACTIVE',
+  'SUSPENDED',
+  'OVERDUE',
+  'PENDING',
+  'DISCONNECTED',
+]);
+
+const VALID_CONNECTION_TYPES = new Set(['FIBER', 'WIRELESS', 'LTE', 'DSL']);
+
+function buildCustomerWhere(filters: any = {}): Prisma.CustomerWhereInput {
+  const andClauses: Prisma.CustomerWhereInput[] = [];
+
+  const statuses = parseMultiFilter(filters.status)
+    .map((s) => s.toUpperCase())
+    .filter((s) => VALID_CUSTOMER_STATUSES.has(s));
+  if (statuses.length > 0) {
+    andClauses.push({ status: { in: statuses as any[] } });
+  }
+
+  const plans = parseMultiFilter(filters.plan);
+  if (plans.length > 0) {
+    andClauses.push({
+      subscriptions: {
+        some: {
+          package: { name: { in: plans } },
         },
       },
-      orderBy: { createdAt: 'desc' },
     });
+  }
 
-    let result = customers.map(formatCustomerRecord);
+  const cities = parseMultiFilter(filters.city);
+  if (cities.length > 0) {
+    andClauses.push({
+      addresses: {
+        some: { city: { in: cities } },
+      },
+    });
+  }
 
-    if (filters.status && filters.status.length > 0) {
-      const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
-      result = result.filter((c) => statuses.map((s: string) => s.toUpperCase()).includes(c.status.toUpperCase()));
+  const connectionTypes = parseMultiFilter(filters.connectionType)
+    .map((t) => t.toUpperCase())
+    .filter((t) => VALID_CONNECTION_TYPES.has(t));
+  if (connectionTypes.length > 0) {
+    andClauses.push({
+      subscriptions: {
+        some: {
+          technology: { in: connectionTypes as any[] },
+        },
+      },
+    });
+  }
+
+  if (filters.minBalance !== undefined && filters.minBalance !== null && filters.minBalance !== '') {
+    const min = Number(filters.minBalance);
+    if (!Number.isNaN(min)) {
+      andClauses.push({ balanceDue: { gte: min } });
     }
+  }
 
-    if (filters.plan && filters.plan.length > 0) {
-      const plans = Array.isArray(filters.plan) ? filters.plan : [filters.plan];
-      result = result.filter((c) => plans.includes(c.planName));
+  if (filters.maxBalance !== undefined && filters.maxBalance !== null && filters.maxBalance !== '') {
+    const max = Number(filters.maxBalance);
+    if (!Number.isNaN(max)) {
+      andClauses.push({ balanceDue: { lte: max } });
     }
+  }
 
-    if (filters.city && filters.city.length > 0) {
-      const cities = Array.isArray(filters.city) ? filters.city : [filters.city];
-      result = result.filter((c) => cities.includes(c.city));
-    }
+  const nameFilter = normalizeNameInput(filters.nameFilter);
+  if (nameFilter) {
+    andClauses.push({
+      OR: [
+        { nameKm: { contains: nameFilter, mode: 'insensitive' } },
+        { nameEn: { contains: nameFilter, mode: 'insensitive' } },
+        { fullName: { contains: nameFilter, mode: 'insensitive' } },
+      ],
+    });
+  }
 
-    if (filters.connectionType && filters.connectionType.length > 0) {
-      const types = Array.isArray(filters.connectionType) ? filters.connectionType : [filters.connectionType];
-      result = result.filter((c) => types.map((t: string) => t.toUpperCase()).includes(c.connectionType.toUpperCase()));
-    }
+  const codeFilter = normalizeNameInput(filters.codeFilter);
+  if (codeFilter) {
+    andClauses.push({ code: { contains: codeFilter, mode: 'insensitive' } });
+  }
 
-    const rawSearch = filters.searchQuery ?? filters.search ?? filters.q;
-    const normalizedQuery = normalizeNameInput(rawSearch)?.toLowerCase();
-    if (normalizedQuery) {
-      result = result.filter(
-        (c) =>
-          (c.nameKm || '').normalize('NFC').toLowerCase().includes(normalizedQuery) ||
-          (c.nameEn || '').normalize('NFC').toLowerCase().includes(normalizedQuery) ||
-          (c.fullName || '').normalize('NFC').toLowerCase().includes(normalizedQuery) ||
-          c.code.toLowerCase().includes(normalizedQuery) ||
-          c.email.toLowerCase().includes(normalizedQuery) ||
-          c.phone.toLowerCase().includes(normalizedQuery) ||
-          (c.ipAddress && c.ipAddress.includes(normalizedQuery)) ||
-          (c.macAddress && c.macAddress.toLowerCase().includes(normalizedQuery))
-      );
-    }
+  const rawSearch = filters.searchQuery ?? filters.search ?? filters.q;
+  const normalizedQuery = normalizeNameInput(rawSearch);
+  if (normalizedQuery) {
+    const searchOr: Prisma.CustomerWhereInput[] = [
+      { nameKm: { contains: normalizedQuery, mode: 'insensitive' } },
+      { nameEn: { contains: normalizedQuery, mode: 'insensitive' } },
+      { fullName: { contains: normalizedQuery, mode: 'insensitive' } },
+      { code: { contains: normalizedQuery, mode: 'insensitive' } },
+      { email: { contains: normalizedQuery, mode: 'insensitive' } },
+      { phone: { contains: normalizedQuery, mode: 'insensitive' } },
+    ];
 
-    if (
-      filters.sortBy === 'name' ||
-      filters.sortBy === 'fullName' ||
-      filters.sortBy === 'displayName'
-    ) {
-      const dir = String(filters.sortDir || 'asc').toLowerCase() === 'desc' ? -1 : 1;
-      result.sort((a, b) => {
-        const aName = (a.nameEn || a.nameKm || a.fullName || '').normalize('NFC');
-        const bName = (b.nameEn || b.nameKm || b.fullName || '').normalize('NFC');
-        return aName.localeCompare(bName) * dir;
+    // Keep text searches purely on trigram GIN Customer columns; include PPPoE IP/MAC only for network-style queries
+    if (/\d+\.\d+/.test(normalizedQuery) || /[0-9a-f]{2}:[0-9a-f]{2}/i.test(normalizedQuery)) {
+      searchOr.push({
+        subscriptions: {
+          some: {
+            pppoeAccount: {
+              OR: [
+                { ipAddress: { contains: normalizedQuery, mode: 'insensitive' } },
+                { macAddress: { contains: normalizedQuery, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
       });
     }
 
-    return result;
+    andClauses.push({ OR: searchOr });
+  }
+
+  return andClauses.length > 0 ? { AND: andClauses } : {};
+}
+
+function buildCustomerOrderBy(sortBy?: string, sortDir?: string): Prisma.CustomerOrderByWithRelationInput | Prisma.CustomerOrderByWithRelationInput[] {
+  const dir: Prisma.SortOrder = String(sortDir || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+  if (!sortBy) {
+    return { createdAt: 'desc' };
+  }
+  switch (sortBy) {
+    case 'name':
+    case 'fullName':
+    case 'displayName':
+    case 'customerName':
+      return [{ fullName: dir }, { createdAt: 'desc' }];
+    case 'code':
+      return [{ code: dir }];
+    case 'status':
+      return [{ status: dir }, { createdAt: 'desc' }];
+    case 'balanceDue':
+      return [{ balanceDue: dir }, { createdAt: 'desc' }];
+    case 'rating':
+      return [{ rating: dir }, { createdAt: 'desc' }];
+    case 'email':
+      return [{ email: dir }];
+    case 'registrationDate':
+    case 'installationDate':
+      return [{ registrationDate: dir }, { createdAt: 'desc' }];
+    case 'createdAt':
+    default:
+      return { createdAt: sortBy === 'createdAt' ? dir : 'desc' };
+  }
+}
+
+export class CustomerService {
+  // 1. List Customers with SQL filters, sorting, and optional pagination
+  static async listCustomers(filters: any = {}) {
+    const where = buildCustomerWhere(filters);
+    const orderBy = buildCustomerOrderBy(
+      typeof filters.sortBy === 'string' ? filters.sortBy : undefined,
+      typeof filters.sortDir === 'string' ? filters.sortDir : undefined
+    );
+
+    const hasPagination =
+      filters.page !== undefined ||
+      filters.limit !== undefined ||
+      filters.pageSize !== undefined ||
+      filters.paged === '1' ||
+      filters.paged === 'true';
+
+    const include = {
+      addresses: {
+        orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
+        take: 1,
+      },
+      subscriptions: {
+        orderBy: { createdAt: 'desc' as const },
+        take: 1,
+        include: {
+          package: true,
+          pppoeAccount: true,
+        },
+      },
+    };
+
+    if (hasPagination) {
+      const page = Math.max(1, parseInt(String(filters.page ?? '1'), 10) || 1);
+      const limit = Math.min(
+        200,
+        Math.max(1, parseInt(String(filters.limit ?? filters.pageSize ?? '25'), 10) || 25)
+      );
+      const skip = (page - 1) * limit;
+
+      const [total, customers] = await Promise.all([
+        prisma.customer.count({ where }),
+        prisma.customer.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy,
+          include,
+        }),
+      ]);
+
+      return {
+        items: customers.map(formatCustomerRecord),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    }
+
+    const customers = await prisma.customer.findMany({
+      where,
+      take: filters.all === 'true' ? undefined : 500,
+      orderBy,
+      include,
+    });
+
+    return customers.map(formatCustomerRecord);
+  }
+
+  // 1b. Lightweight KPI & filter facet summary via SQL aggregates
+  static async getCustomerStats() {
+    const [statusRows, mrrRows, cityRows, plans] = await Promise.all([
+      prisma.customer.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+      prisma.$queryRaw<Array<{ totalMrr: number }>>`
+        SELECT COALESCE(SUM(sub_fee), 0)::float AS "totalMrr"
+        FROM (
+          SELECT DISTINCT ON (c.id)
+            COALESCE(s."monthlyFee", p."monthlyPrice", 55)::float AS sub_fee
+          FROM "Customer" c
+          LEFT JOIN "Subscription" s ON s."customerId" = c.id
+          LEFT JOIN "Package" p ON p.id = s."packageId"
+          WHERE c.status <> 'DISCONNECTED'
+          ORDER BY c.id, s."createdAt" DESC
+        ) t
+      `,
+      prisma.$queryRaw<Array<{ city: string }>>`
+        SELECT DISTINCT city
+        FROM "Address"
+        WHERE city IS NOT NULL AND BTRIM(city) <> ''
+        ORDER BY city ASC
+      `,
+      prisma.package.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, downloadSpeed: true, monthlyPrice: true },
+        orderBy: { monthlyPrice: 'asc' },
+      }),
+    ]);
+
+    const statusCounts: Record<string, number> = {
+      All: 0,
+      Active: 0,
+      Suspended: 0,
+      Overdue: 0,
+      Pending: 0,
+      Disconnected: 0,
+    };
+
+    for (const row of statusRows) {
+      const count = row._count._all;
+      statusCounts.All += count;
+      if (row.status === 'ACTIVE') statusCounts.Active = count;
+      else if (row.status === 'SUSPENDED') statusCounts.Suspended = count;
+      else if (row.status === 'OVERDUE') statusCounts.Overdue = count;
+      else if (row.status === 'PENDING') statusCounts.Pending = count;
+      else if (row.status === 'DISCONNECTED') statusCounts.Disconnected = count;
+    }
+
+    return {
+      totalCustomers: statusCounts.All,
+      activeCount: statusCounts.Active,
+      suspendedCount: statusCounts.Suspended,
+      overdueCount: statusCounts.Overdue,
+      pendingCount: statusCounts.Pending,
+      disconnectedCount: statusCounts.Disconnected,
+      totalMRR: Number(mrrRows[0]?.totalMrr || 0),
+      avgUsage: 120,
+      statusCounts,
+      cities: cityRows.map((r) => r.city),
+      plans: plans.map((p) => ({
+        id: p.id,
+        name: p.name,
+        speedMbps: p.downloadSpeed,
+        monthlyPrice: Number(p.monthlyPrice),
+      })),
+    };
   }
 
   // 2. Get Full Customer 360 Profile

@@ -354,10 +354,58 @@ export const api = {
 
   // Customers
   customers: {
-    list: (params?: any) => {
-      const query = new URLSearchParams(params).toString();
-      return fetchJson<any[]>(`/customers${query ? `?${query}` : ''}`);
+    list: (params?: Record<string, any>, signal?: AbortSignal) => {
+      const qs = new URLSearchParams();
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          if (v === undefined || v === null || v === '') continue;
+          if (Array.isArray(v)) {
+            if (v.length > 0) qs.set(k, v.join(','));
+          } else {
+            qs.set(k, String(v));
+          }
+        }
+      }
+      const query = qs.toString();
+      return fetchJson<any[]>(`/customers${query ? `?${query}` : ''}`, signal ? { signal } : {});
     },
+    listPaged: (
+      params?: Record<string, any>,
+      signal?: AbortSignal
+    ): Promise<{
+      items: any[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }> => {
+      const qs = new URLSearchParams();
+      qs.set('paged', '1');
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          if (v === undefined || v === null || v === '') continue;
+          if (Array.isArray(v)) {
+            if (v.length > 0) qs.set(k, v.join(','));
+          } else {
+            qs.set(k, String(v));
+          }
+        }
+      }
+      return fetchJson(`/customers?${qs.toString()}`, signal ? { signal } : {});
+    },
+    getStats: (signal?: AbortSignal): Promise<{
+      totalCustomers: number;
+      activeCount: number;
+      suspendedCount: number;
+      overdueCount: number;
+      pendingCount: number;
+      disconnectedCount: number;
+      totalMRR: number;
+      avgUsage: number;
+      statusCounts: Record<string, number>;
+      cities: string[];
+      plans: Array<{ id: string; name: string; speedMbps: number; monthlyPrice: number }>;
+    }> => fetchJson('/customers/stats', signal ? { signal } : {}),
     get: (id: string) => fetchJson<any>(`/customers/${id}`),
     create: (data: any) => fetchJson<any>('/customers', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, updates: any) =>

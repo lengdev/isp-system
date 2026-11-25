@@ -125,6 +125,7 @@ export interface DataTableProps<T> {
   noDataDescription?: string;
   emptyActionPermission?: string;
   isFilterActive?: boolean;
+  externalFilterKey?: string;
   initialFilters?: Record<string, any>;
   onClearFilters?: () => void;
   onAddNew?: () => void;

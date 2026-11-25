@@ -6,7 +6,15 @@ import { Toggle } from '../../components/ui/Toggle';
 import { SPRING_SNAPPY } from '../../lib/motion';
 import { cn } from '../../lib/utils';
 
-export const StatusTabs: React.FC = () => {
+export interface StatusTabsProps {
+  statusCounts?: Record<string, number>;
+  onStatusSelect?: (status: 'All' | CustomerStatus) => void;
+}
+
+export const StatusTabs: React.FC<StatusTabsProps> = ({
+  statusCounts,
+  onStatusSelect,
+}) => {
   const customers = useStore((s) => s.customers);
   const filters = useStore((s) => s.filters);
   const setFilters = useStore((s) => s.setFilters);
@@ -37,18 +45,27 @@ export const StatusTabs: React.FC = () => {
     };
   }, [checkScroll]);
 
-  // Dynamic counts for each status
-  const counts = useMemo(
-    () => ({
+  // Dynamic counts for each status (prefer server aggregates when provided)
+  const counts = useMemo(() => {
+    if (statusCounts) {
+      return {
+        All: statusCounts.All ?? 0,
+        Active: statusCounts.Active ?? 0,
+        Suspended: statusCounts.Suspended ?? 0,
+        Overdue: statusCounts.Overdue ?? 0,
+        Pending: statusCounts.Pending ?? 0,
+        Disconnected: statusCounts.Disconnected ?? 0,
+      };
+    }
+    return {
       All: customers.length,
       Active: customers.filter((c) => c.status === 'Active').length,
       Suspended: customers.filter((c) => c.status === 'Suspended').length,
       Overdue: customers.filter((c) => c.status === 'Overdue').length,
       Pending: customers.filter((c) => c.status === 'Pending').length,
       Disconnected: customers.filter((c) => c.status === 'Disconnected').length,
-    }),
-    [customers]
-  );
+    };
+  }, [statusCounts, customers]);
 
   const statusPills: { label: string; value: 'All' | CustomerStatus; count: number }[] = [
     { label: 'All Customers', value: 'All', count: counts.All },
@@ -109,6 +126,7 @@ export const StatusTabs: React.FC = () => {
       params.set('status', val);
       setFilters({ status: [val] });
     }
+    onStatusSelect?.(val);
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
     window.history.replaceState(null, '', newUrl);
   };

@@ -60,6 +60,16 @@ router.get('/', authenticate, requireFeature('page.customers'), async (req, res)
   }
 });
 
+// GET /api/v1/customers/stats
+router.get('/stats', authenticate, requireFeature('page.customers'), async (_req, res) => {
+  try {
+    const stats = await CustomerService.getCustomerStats();
+    res.json(stats);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/v1/customers/:id
 router.get('/:id', authenticate, requireFeature('page.customers'), async (req, res) => {
   try {

@@ -1,5 +1,6 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Users,
   DollarSign,
@@ -8,37 +9,146 @@ import {
   Plus,
   RefreshCw,
 } from 'lucide-react';
-import { useStore } from '../../store/useStore';
+import { useStore, normalizeApiCustomer } from '../../store/useStore';
+import { api } from '../../lib/api';
 import { StatCard } from '../../components/ui/StatCard';
 import { Button } from '../../components/ui/Button';
+import type { TableQuery } from '../../components/ui/DataTable';
 import { StatusTabs } from './StatusTabs';
 import { CustomerTable } from './CustomerTable';
 import { BulkActionBar } from './BulkActionBar';
 import { Can } from '../../lib/permissions';
 
 export const CustomersPage: React.FC = () => {
-  const customers = useStore((s) => s.customers);
   const showStatistics = useStore((s) => s.showStatistics);
   const openModal = useStore((s) => s.openModal);
   const currency = useStore((s) => s.currency);
-  const fetchCustomers = useStore((s) => s.fetchCustomers);
-  const isCustomersLoading = useStore((s) => s.isCustomersLoading);
+  const storeFilters = useStore((s) => s.filters);
+  const resetStoreFilters = useStore((s) => s.resetFilters);
+  const mergeCustomers = useStore((s) => s.mergeCustomers);
 
-  // Synchronize customers with backend API on mount
+  const [tableQuery, setTableQuery] = useState<TableQuery>({
+    page: 1,
+    pageSize: 10,
+    search: '',
+    sort: [],
+    filters: {},
+  });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  const rawSearch = (tableQuery.search || storeFilters.searchQuery || '').trim();
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+    if (!rawSearch) {
+      setDebouncedSearch('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearch(rawSearch);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [rawSearch]);
 
-  // Live recalculate stats
-  const totalCustomers = customers.length;
-  const totalMRR = customers.reduce(
-    (sum, c) => sum + (c.status !== 'Disconnected' ? c.monthlyPrice : 0),
-    0
+  const handleQueryChange = useCallback((nextQuery: TableQuery) => {
+    setTableQuery(nextQuery);
+  }, []);
+
+  const queryParams = useMemo(() => {
+    const colFilters = tableQuery.filters || {};
+    const mergedStatuses =
+      Array.isArray(colFilters.status) && colFilters.status.length > 0
+        ? colFilters.status
+        : storeFilters.status;
+    const mergedPlans =
+      Array.isArray(colFilters.planName) && colFilters.planName.length > 0
+        ? colFilters.planName
+        : storeFilters.plan;
+    const mergedCities = colFilters.city
+      ? Array.isArray(colFilters.city)
+        ? colFilters.city
+        : [colFilters.city]
+      : storeFilters.city;
+
+    const primarySort = tableQuery.sort?.[0];
+    const balanceRange = colFilters.balanceDue;
+
+    return {
+      page: tableQuery.page,
+      limit: tableQuery.pageSize,
+      search: debouncedSearch || undefined,
+      sortBy: primarySort?.id || undefined,
+      sortDir: primarySort ? (primarySort.desc ? 'desc' : 'asc') : undefined,
+      status: mergedStatuses?.length ? mergedStatuses : undefined,
+      plan: mergedPlans?.length ? mergedPlans : undefined,
+      city: mergedCities?.length ? mergedCities : undefined,
+      connectionType: storeFilters.connectionType?.length ? storeFilters.connectionType : undefined,
+      nameFilter: typeof colFilters.fullName === 'string' && colFilters.fullName ? colFilters.fullName : undefined,
+      codeFilter: typeof colFilters.code === 'string' && colFilters.code ? colFilters.code : undefined,
+      minBalance: balanceRange?.min ?? storeFilters.minBalance ?? undefined,
+      maxBalance: balanceRange?.max ?? storeFilters.maxBalance ?? undefined,
+    };
+  }, [tableQuery, storeFilters, debouncedSearch]);
+
+  const statsQuery = useQuery({
+    queryKey: ['customer-stats'],
+    queryFn: ({ signal }) => api.customers.getStats(signal),
+    staleTime: 30_000,
+  });
+
+  const customersQuery = useQuery({
+    queryKey: ['customers', queryParams],
+    queryFn: async ({ signal }) => {
+      const res = await api.customers.listPaged(queryParams, signal);
+      return {
+        ...res,
+        items: (res.items || []).map(normalizeApiCustomer),
+      };
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const pageCustomers = useMemo(
+    () => customersQuery.data?.items ?? [],
+    [customersQuery.data?.items]
   );
-  const activeCount = customers.filter((c) => c.status === 'Active').length;
-  const avgUsage = Math.round(
-    customers.reduce((sum, c) => sum + (c.dataUsageGB || 0), 0) / (customers.length || 1)
+
+  // Sync current page rows into store cache so modals/drawer actions always resolve row records
+  useEffect(() => {
+    if (pageCustomers.length > 0) {
+      mergeCustomers(pageCustomers);
+    }
+  }, [pageCustomers, mergeCustomers]);
+
+  const totalCustomers = statsQuery.data?.totalCustomers ?? customersQuery.data?.total ?? 0;
+  const totalMRR = statsQuery.data?.totalMRR ?? 0;
+  const activeCount = statsQuery.data?.activeCount ?? 0;
+  const avgUsage = statsQuery.data?.avgUsage ?? 0;
+
+  const isAnyFilterActive = Boolean(
+    rawSearch ||
+      storeFilters.status.length > 0 ||
+      storeFilters.plan.length > 0 ||
+      storeFilters.city.length > 0 ||
+      storeFilters.connectionType.length > 0 ||
+      Object.keys(tableQuery.filters || {}).length > 0
   );
+
+  const handleRefresh = useCallback(() => {
+    customersQuery.refetch();
+    statsQuery.refetch();
+  }, [customersQuery, statsQuery]);
+
+  const handleClearAllFilters = useCallback(() => {
+    resetStoreFilters();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('status');
+      const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+      window.history.replaceState(null, '', nextUrl);
+    }
+  }, [resetStoreFilters]);
+
+  const isQuerySkeleton =
+    customersQuery.isLoading || (customersQuery.isFetching && customersQuery.isPlaceholderData);
 
   return (
     <div className="w-full pb-16 space-y-4 select-none">
@@ -57,12 +167,12 @@ export const CustomersPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchCustomers()}
-            disabled={isCustomersLoading}
+            onClick={handleRefresh}
+            disabled={customersQuery.isFetching}
             className="h-8 px-3 text-[12px] font-semibold gap-1.5 shrink-0"
             title="Refresh Customers from Server"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isCustomersLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${customersQuery.isFetching ? 'animate-spin' : ''}`} />
             <span className="hidden min-[480px]:inline">Refresh</span>
           </Button>
 
@@ -143,10 +253,27 @@ export const CustomersPage: React.FC = () => {
       </AnimatePresence>
 
       {/* 3. Status Tabs row (pills with counts + Show statistics switch on right) */}
-      <StatusTabs />
+      <StatusTabs
+        statusCounts={statsQuery.data?.statusCounts}
+      />
 
-      {/* 4. DataTable (own toolbar INSIDE with Search, Filter, Sort, View, Columns, Export, More) */}
-      <CustomerTable customers={customers} />
+      {/* 4. Server-Paginated DataTable */}
+      <CustomerTable
+        customers={pageCustomers}
+        total={customersQuery.data?.total}
+        loading={isQuerySkeleton}
+        fetching={customersQuery.isFetching}
+        loadingMode={isQuerySkeleton ? 'skeleton' : undefined}
+        error={customersQuery.error ? 'Unable to load customer directory.' : null}
+        onRetry={handleRefresh}
+        onRefresh={handleRefresh}
+        onQueryChange={handleQueryChange}
+        availableCities={statsQuery.data?.cities}
+        availablePlans={statsQuery.data?.plans}
+        isFilterActive={isAnyFilterActive}
+        externalFilterKey={JSON.stringify(storeFilters.status)}
+        onClearFilters={handleClearAllFilters}
+      />
 
       {/* Floating Bulk Action Bar */}
       <BulkActionBar />
