@@ -39,6 +39,8 @@ export interface ComboboxOption {
 }
 
 export interface ComboboxProps {
+  id?: string;
+  name?: string;
   options: ComboboxOption[];
   value: string | string[];
   onChange: (value: any) => void;
@@ -381,6 +383,8 @@ GroupedList.displayName = 'GroupedList';
 
 // ─── MAIN COMBOBOX ───────────────────────────────────────────────────────────
 export const Combobox: React.FC<ComboboxProps> = ({
+  id,
+  name,
   options,
   value,
   onChange,
@@ -418,6 +422,8 @@ export const Combobox: React.FC<ComboboxProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listboxRef   = useRef<HTMLDivElement>(null);
   const uniqueId     = useId();
+  const comboboxId   = id || `combobox-${uniqueId}`;
+  const comboboxName = name || id || comboboxId;
 
   // ── Floating coords ──────────────────────────────────────────────────────
   const [coords, setCoords] = useState<{
@@ -735,6 +741,8 @@ export const Combobox: React.FC<ComboboxProps> = ({
       {/* Trigger Button */}
       <button
         ref={triggerRef}
+        id={comboboxId}
+        name={comboboxName}
         type="button"
         role="combobox"
         data-combobox-trigger="true"
@@ -842,6 +850,12 @@ export const Combobox: React.FC<ComboboxProps> = ({
           )}
         </div>
       </button>
+
+      <input
+        type="hidden"
+        name={comboboxName}
+        value={Array.isArray(value) ? value.join(',') : (value ?? '')}
+      />
 
       {/* Popover Portal */}
       {typeof document !== 'undefined' &&

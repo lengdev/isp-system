@@ -44,7 +44,9 @@ export const Field: React.FC<FieldProps> = ({
   children,
 }) => {
   const generatedId = useId();
-  const fieldId = id || generatedId;
+  const explicitChildId =
+    React.isValidElement(children) && (children as React.ReactElement<any>).props?.id;
+  const fieldId = id || explicitChildId || generatedId;
 
   // Clean label: labels never contain "(Multi)" or "(Searchable)" hints
   const cleanLabel =
@@ -61,7 +63,7 @@ export const Field: React.FC<FieldProps> = ({
       {cleanLabel && (
         <label
           htmlFor={fieldId}
-          className="text-[13px] font-medium leading-[18px] text-[var(--text-secondary)] mb-1.5 flex items-center select-none"
+          className="text-[13px] font-medium leading-[18px] text-[var(--text-secondary)] mb-1.5 flex items-center select-none cursor-pointer"
         >
           {cleanLabel}
           {required && (
@@ -75,7 +77,14 @@ export const Field: React.FC<FieldProps> = ({
         </label>
       )}
 
-      <div className="relative w-full">{children}</div>
+      <div className="relative w-full">
+        {React.isValidElement(children)
+          ? React.cloneElement(children as React.ReactElement<any>, {
+              id: (children as React.ReactElement<any>).props.id || fieldId,
+              name: (children as React.ReactElement<any>).props.name || (children as React.ReactElement<any>).props.id || fieldId,
+            })
+          : children}
+      </div>
 
       {/* Helper text or animated error (animated in with alert icon + one shake) */}
       <AnimatePresence mode="wait">
@@ -198,6 +207,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
         <input
           ref={ref}
+          id={props.id}
+          name={props.name || props.id}
           type={type}
           value={value}
           defaultValue={defaultValue}
@@ -256,6 +267,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       >
         <textarea
           ref={ref}
+          id={props.id}
+          name={props.name || props.id}
           value={value}
           maxLength={maxLength}
           onChange={handleChange}

@@ -198,6 +198,8 @@ export const RecordPaymentModal: React.FC = () => {
         {/* Subscriber Account */}
         <Field label="Subscriber account" required helperText="Select account to receive payment credit">
           <Combobox
+            id="payment-subscriber-account"
+            name="customerId"
             options={customerOptions}
             value={selectedCustomerId}
             onChange={(val) => handleCustomerChange(val as string)}
@@ -212,6 +214,8 @@ export const RecordPaymentModal: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Payment amount" required helperText="Amount in customer currency">
             <Input
+              id="payment-amount"
+              name="amount"
               type="number"
               step="0.01"
               min="0.01"
@@ -229,6 +233,8 @@ export const RecordPaymentModal: React.FC = () => {
 
           <Field label="Payment method" required>
             <Combobox
+              id="payment-method"
+              name="paymentMethod"
               options={methodOptions}
               value={method}
               onChange={(val) => setMethod(val as string)}
@@ -242,6 +248,8 @@ export const RecordPaymentModal: React.FC = () => {
         {/* Reference / Monospace Transaction ID */}
         <Field label="Transaction reference" helperText="Monospace ledger or gateway authorization code">
           <Input
+            id="payment-transaction-reference"
+            name="reference"
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             className="font-mono uppercase"
