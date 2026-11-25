@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from '../../../components/ui/Modal';
-import { Button } from '../../../components/ui/Button';
-import type { RoleItem } from '../types';
+import { Modal } from '../../components/ui/Modal';
+import { Button } from '../../components/ui/Button';
+import type { RoleItem } from '../../types/roles';
 
 export interface RenameRoleModalProps {
   isOpen: boolean;

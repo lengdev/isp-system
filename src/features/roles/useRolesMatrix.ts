@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../../lib/api';
-import { useStore } from '../../../store/useStore';
+import { api } from '../../lib/api';
+import { useStore } from '../../store/useStore';
 import {
   computeDirtyDiff,
   countChangedCells,
   applyDependencyRules,
-} from '../utils/matrixUtils';
+} from './rolesUtils';
 import type {
   RoleItem,
   PermissionItem,
@@ -14,7 +14,7 @@ import type {
   UserWithRoles,
   CreateRolePayload,
   UpdateRolePayload,
-} from '../types';
+} from '../../types/roles';
 
 export function useRolesMatrix() {
   const queryClient = useQueryClient();

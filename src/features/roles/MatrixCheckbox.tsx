@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Check, Minus, Lock } from 'lucide-react';
-import { cn } from '../../../lib/utils';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { cn } from '../../lib/utils';
+import { Tooltip } from '../../components/ui/Tooltip';
 
 export interface MatrixCheckboxProps {
   checked: boolean;

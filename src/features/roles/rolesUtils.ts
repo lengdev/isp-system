@@ -1,5 +1,5 @@
-import { PERMISSION_DEPENDENCIES } from '../constants.ts';
-import type { RoleItem, RolePermissionDiff } from '../types.ts';
+import { PERMISSION_DEPENDENCIES } from './constants.ts';
+import type { RoleItem, RolePermissionDiff } from '../../types/roles.ts';
 
 /**
  * Computes the tri-state for a group of permissions for a single role

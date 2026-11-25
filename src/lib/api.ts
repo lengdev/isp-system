@@ -9,7 +9,7 @@ import type {
   UpdateRolePermissionsPayload,
   UpdateRolePermissionsResponse,
   FeatureItem,
-} from '../features/roles/types';
+} from '../types/roles';
 
 export interface NavigationItem {
   id: string;

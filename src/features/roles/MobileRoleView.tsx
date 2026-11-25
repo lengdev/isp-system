@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Search, ChevronDown, ChevronRight, Info, Lock } from 'lucide-react';
-import { Combobox } from '../../../components/ui/Combobox';
-import { Tooltip } from '../../../components/ui/Tooltip';
-import { Toggle } from '../../../components/ui/Toggle';
-import type { RoleItem, PermissionItem } from '../types';
-import { cn } from '../../../lib/utils';
+import { Combobox } from '../../components/ui/Combobox';
+import { Tooltip } from '../../components/ui/Tooltip';
+import { Toggle } from '../../components/ui/Toggle';
+import type { RoleItem, PermissionItem } from '../../types/roles';
+import { cn } from '../../lib/utils';
 
 export interface MobileRoleViewProps {
   roles: RoleItem[];

@@ -5,7 +5,7 @@ import {
   applyDependencyRules,
   computeDirtyDiff,
   countChangedCells,
-} from '../../src/features/roles/utils/matrixUtils.ts';
+} from './rolesUtils.ts';
 
 test('--- RBAC MATRIX UNIT TESTS ---', async (t) => {
   await t.test('1. computeTriState: correctly determines tri-state status', () => {

@@ -32,12 +32,12 @@ import {
   Layers,
   Mail,
 } from 'lucide-react';
-import { Combobox, ComboboxOption } from '../../../components/ui/Combobox';
-import { Tooltip } from '../../../components/ui/Tooltip';
-import { Skeleton } from '../../../components/ui/Skeleton';
-import { cn } from '../../../lib/utils';
-import type { FeatureItem } from '../types';
-import type { AdminPermissionItem } from '../../../lib/api';
+import { Combobox, ComboboxOption } from '../../components/ui/Combobox';
+import { Tooltip } from '../../components/ui/Tooltip';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { cn } from '../../lib/utils';
+import type { FeatureItem } from '../../types/roles';
+import type { AdminPermissionItem } from '../../lib/api';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,

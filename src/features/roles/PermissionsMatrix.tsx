@@ -14,11 +14,11 @@ import {
   Lock,
   X,
 } from 'lucide-react';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '../../components/ui/Tooltip';
 import { MatrixCheckbox } from './MatrixCheckbox';
-import { computeTriState } from '../utils/matrixUtils';
-import type { RoleItem, PermissionItem, CellCoord } from '../types';
-import { cn } from '../../../lib/utils';
+import { computeTriState } from './rolesUtils';
+import type { RoleItem, PermissionItem, CellCoord } from '../../types/roles';
+import { cn } from '../../lib/utils';
 
 export interface PermissionsMatrixProps {
   roles: RoleItem[];

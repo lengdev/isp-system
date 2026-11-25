@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Plus, Save, Undo2 } from 'lucide-react';
-import { Button } from '../../../components/ui/Button';
-import { cn } from '../../../lib/utils';
+import { Button } from '../../components/ui/Button';
+import { cn } from '../../lib/utils';
 
 export interface MatrixHeaderProps {
   activeTab: 'permissions' | 'users' | 'features';

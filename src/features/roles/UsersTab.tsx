@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { Search, UserCheck, ShieldAlert, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { Combobox } from '../../../components/ui/Combobox';
-import { Modal } from '../../../components/ui/Modal';
-import { Button } from '../../../components/ui/Button';
-import { Skeleton } from '../../../components/ui/Skeleton';
-import type { UserWithRoles, RoleItem } from '../types';
-import { cn } from '../../../lib/utils';
+import { Combobox } from '../../components/ui/Combobox';
+import { Modal } from '../../components/ui/Modal';
+import { Button } from '../../components/ui/Button';
+import { Skeleton } from '../../components/ui/Skeleton';
+import type { UserWithRoles, RoleItem } from '../../types/roles';
+import { cn } from '../../lib/utils';
 
 export interface UsersTabProps {
   users: UserWithRoles[];

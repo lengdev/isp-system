@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Modal } from '../../../components/ui/Modal';
-import { Button } from '../../../components/ui/Button';
-import { Combobox } from '../../../components/ui/Combobox';
-import type { RoleItem } from '../types';
+import { Modal } from '../../components/ui/Modal';
+import { Button } from '../../components/ui/Button';
+import { Combobox } from '../../components/ui/Combobox';
+import type { RoleItem } from '../../types/roles';
 
 export interface AddRoleModalProps {
   isOpen: boolean;

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, AdminPermissionItem } from '../../../lib/api';
-import { useStore } from '../../../store/useStore';
-import { useAuthStore } from '../../../store/authStore';
-import type { FeatureItem, FeatureDiff } from '../types';
+import { api, AdminPermissionItem } from '../../lib/api';
+import { useStore } from '../../store/useStore';
+import { useAuthStore } from '../../store/authStore';
+import type { FeatureItem, FeatureDiff } from '../../types/roles';
 
 export function useFeaturesManager(matrixPermissions?: { key: string }[], roleMatrix?: Record<string, string[]>) {
   const queryClient = useQueryClient();
