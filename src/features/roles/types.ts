@@ -73,3 +73,30 @@ export interface CellCoord {
   roleId: string;
   permissionKey: string;
 }
+
+export interface FeatureItem {
+  id: string;
+  key: string;
+  type: 'MENU' | 'PAGE' | 'TAB' | 'ACTION';
+  label: string;
+  path: string | null;
+  icon: string | null;
+  parentId: string | null;
+  parentKey: string | null;
+  parentLabel: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  locked: boolean;
+  permissionMode: 'ANY' | 'ALL';
+  permissionKeys: string[];
+  updatedAt: string;
+}
+
+export interface FeatureDiff {
+  id: string;
+  label?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  permissionMode?: 'ANY' | 'ALL';
+  permissionKeys?: string[];
+}

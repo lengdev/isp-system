@@ -1,5 +1,12 @@
 import { prisma, dbStore } from '../db/store.js';
 import { AuthService } from './auth.service.js';
+import {
+  ALL_REGISTRY_PERMISSIONS,
+  ALL_REGISTRY_FEATURES,
+  INITIAL_ROLES,
+  DEFAULT_ROLE_PERMISSION_KEYS,
+  RegistryPermission,
+} from '../rbac/registry/index.js';
 
 export interface PermissionItem {
   id?: string;
@@ -10,380 +17,26 @@ export interface PermissionItem {
   sortOrder: number;
 }
 
-export const PERMISSION_CATALOG: PermissionItem[] = [
-  // 1. Customers (CRM)
-  { key: 'customers.view', group: 'Customers (CRM)', label: 'View Customers', description: 'View customers, CRM accounts and profile data', sortOrder: 10 },
-  { key: 'customers.create', group: 'Customers (CRM)', label: 'Create Customer', description: 'Register new customer accounts', sortOrder: 11 },
-  { key: 'customers.edit', group: 'Customers (CRM)', label: 'Edit Customer', description: 'Update customer details, addresses and contacts', sortOrder: 12 },
-  { key: 'customers.delete', group: 'Customers (CRM)', label: 'Delete Customer', description: 'Archive or permanently delete customer accounts', sortOrder: 13 },
-
-  // 2. Packages & Subscriptions
-  { key: 'packages.view', group: 'Packages & Subscriptions', label: 'View Packages', description: 'View internet service packages and pricing tiers', sortOrder: 20 },
-  { key: 'packages.create', group: 'Packages & Subscriptions', label: 'Create Package', description: 'Define new internet plans and bandwidth limits', sortOrder: 21 },
-  { key: 'packages.edit', group: 'Packages & Subscriptions', label: 'Edit Package', description: 'Modify pricing, speeds and package parameters', sortOrder: 22 },
-  { key: 'packages.delete', group: 'Packages & Subscriptions', label: 'Delete Package', description: 'Archive or remove internet packages', sortOrder: 23 },
-  { key: 'subscriptions.view', group: 'Packages & Subscriptions', label: 'View Subscriptions', description: 'View customer subscriptions and status', sortOrder: 24 },
-  { key: 'subscriptions.create', group: 'Packages & Subscriptions', label: 'Create Subscription', description: 'Assign packages and activate subscriptions', sortOrder: 25 },
-  { key: 'subscriptions.edit', group: 'Packages & Subscriptions', label: 'Edit Subscription', description: 'Upgrade, downgrade or renew subscriptions', sortOrder: 26 },
-  { key: 'subscriptions.delete', group: 'Packages & Subscriptions', label: 'Delete Subscription', description: 'Cancel or terminate customer subscriptions', sortOrder: 27 },
-
-  // 3. Network (routers, PPPoE, VLANs, IPAM, reboot router)
-  { key: 'network.view', group: 'Network', label: 'View Network', description: 'Monitor network topology, devices and interface statuses', sortOrder: 30 },
-  { key: 'network.create', group: 'Network', label: 'Add Network Device', description: 'Provision new routers, switches and OLTs', sortOrder: 31 },
-  { key: 'network.edit', group: 'Network', label: 'Edit Network Config', description: 'Modify network configurations and interface bindings', sortOrder: 32 },
-  { key: 'network.delete', group: 'Network', label: 'Delete Network Device', description: 'Remove network hardware from inventory', sortOrder: 33 },
-  { key: 'routers.manage', group: 'Network', label: 'Manage Routers', description: 'Configure MikroTik and core routing devices', sortOrder: 34 },
-  { key: 'routers.reboot', group: 'Network', label: 'Reboot Router', description: 'Send remote reboot and reload commands to routers', sortOrder: 35 },
-  { key: 'pppoe.manage', group: 'Network', label: 'Manage PPPoE', description: 'Configure PPPoE server profiles, pools and active sessions', sortOrder: 36 },
-  { key: 'vlans.manage', group: 'Network', label: 'Manage VLANs', description: 'Configure VLAN IDs, trunk ports and access tags', sortOrder: 37 },
-  { key: 'ipam.manage', group: 'Network', label: 'Manage IPAM', description: 'Allocate IPv4/IPv6 subnets, pools and DHCP servers', sortOrder: 38 },
-
-  // 4. Billing & Payments (invoices, record payment, KHQR)
-  { key: 'billing.view', group: 'Billing & Payments', label: 'View Invoices', description: 'View customer invoices, balances and payment histories', sortOrder: 40 },
-  { key: 'billing.create', group: 'Billing & Payments', label: 'Generate Invoices', description: 'Run billing runs and generate invoices', sortOrder: 41 },
-  { key: 'billing.edit', group: 'Billing & Payments', label: 'Edit Invoices', description: 'Adjust line items, apply credits and discounts', sortOrder: 42 },
-  { key: 'billing.delete', group: 'Billing & Payments', label: 'Void Invoices', description: 'Cancel or delete draft and unpaid invoices', sortOrder: 43 },
-  { key: 'payments.view', group: 'Billing & Payments', label: 'View Payments', description: 'View payment transactions and payment method records', sortOrder: 44 },
-  { key: 'payments.record', group: 'Billing & Payments', label: 'Record Payment', description: 'Accept and process manual cash/bank payments', sortOrder: 45 },
-  { key: 'payments.khqr', group: 'Billing & Payments', label: 'Generate KHQR', description: 'Generate Bakong dynamic KHQR payment codes', sortOrder: 46 },
-  { key: 'payments.delete', group: 'Billing & Payments', label: 'Void Payment', description: 'Void, reverse or refund received payments', sortOrder: 47 },
-
-  // 5. Accounting (journals, reports)
-  { key: 'accounting.view', group: 'Accounting', label: 'View General Ledger', description: 'Inspect chart of accounts and journal entries', sortOrder: 50 },
-  { key: 'accounting.create', group: 'Accounting', label: 'Post Journal Entry', description: 'Create manual debit and credit journal entries', sortOrder: 51 },
-  { key: 'accounting.edit', group: 'Accounting', label: 'Edit Journal Entry', description: 'Adjust draft or unposted accounting journals', sortOrder: 52 },
-  { key: 'accounting.delete', group: 'Accounting', label: 'Reverse Journal', description: 'Reverse or void posted journal transactions', sortOrder: 53 },
-  { key: 'accounting.reports', group: 'Accounting', label: 'Financial Reports', description: 'Generate balance sheets, profit & loss and trial balances', sortOrder: 54 },
-
-  // 6. Inventory & Warehouses
-  { key: 'inventory.view', group: 'Inventory & Warehouses', label: 'View Inventory', description: 'View stock levels, serialized ONUs and hardware items', sortOrder: 60 },
-  { key: 'inventory.create', group: 'Inventory & Warehouses', label: 'Add Stock Item', description: 'Register new stock SKUs and receive hardware deliveries', sortOrder: 61 },
-  { key: 'inventory.edit', group: 'Inventory & Warehouses', label: 'Edit Stock Item', description: 'Update stock counts, condition and serial numbers', sortOrder: 62 },
-  { key: 'inventory.delete', group: 'Inventory & Warehouses', label: 'Delete Stock Item', description: 'Scrap or remove broken hardware from stock', sortOrder: 63 },
-  { key: 'warehouses.manage', group: 'Inventory & Warehouses', label: 'Manage Warehouses', description: 'Create warehouse locations and execute stock transfers', sortOrder: 64 },
-
-  // 7. Procurement
-  { key: 'procurement.view', group: 'Procurement', label: 'View Purchase Orders', description: 'View supplier catalog and purchase orders', sortOrder: 70 },
-  { key: 'procurement.create', group: 'Procurement', label: 'Create Purchase Order', description: 'Draft purchase orders and vendor requests', sortOrder: 71 },
-  { key: 'procurement.edit', group: 'Procurement', label: 'Edit Purchase Order', description: 'Update PO items, prices and delivery dates', sortOrder: 72 },
-  { key: 'procurement.delete', group: 'Procurement', label: 'Cancel Purchase Order', description: 'Cancel or purge vendor purchase orders', sortOrder: 73 },
-
-  // 8. Operations (installations, tickets, technicians)
-  { key: 'operations.view', group: 'Operations', label: 'View Operations', description: 'View operations dashboard, field dispatch and trouble tickets', sortOrder: 80 },
-  { key: 'installations.manage', group: 'Operations', label: 'Manage Installations', description: 'Schedule, dispatch and complete fiber/wireless installs', sortOrder: 81 },
-  { key: 'tickets.create', group: 'Operations', label: 'Create Ticket', description: 'Open customer support and network incident tickets', sortOrder: 82 },
-  { key: 'tickets.edit', group: 'Operations', label: 'Edit Ticket', description: 'Update ticket priority, assign engineers and resolve issues', sortOrder: 83 },
-  { key: 'tickets.delete', group: 'Operations', label: 'Delete Ticket', description: 'Remove invalid or duplicate support tickets', sortOrder: 84 },
-  { key: 'technicians.manage', group: 'Operations', label: 'Manage Technicians', description: 'Assign work orders, track technician locations and shifts', sortOrder: 85 },
-
-  // 9. Reports
-  { key: 'reports.view', group: 'Reports', label: 'View Reports', description: 'View subscriber analytics, revenue charts and network uptime', sortOrder: 90 },
-  { key: 'reports.create', group: 'Reports', label: 'Create Custom Reports', description: 'Build custom analytical queries and report definitions', sortOrder: 91 },
-  { key: 'reports.export', group: 'Reports', label: 'Export Reports', description: 'Export report metrics to Excel, CSV and PDF documents', sortOrder: 92 },
-
-  // 10. Automation
-  { key: 'automation.view', group: 'Automation', label: 'View Automations', description: 'View scheduled jobs, event triggers and webhook definitions', sortOrder: 100 },
-  { key: 'automation.create', group: 'Automation', label: 'Create Automation', description: 'Set up automated reminder messages and billing runs', sortOrder: 101 },
-  { key: 'automation.edit', group: 'Automation', label: 'Edit Automation', description: 'Update automation triggers, conditions and action steps', sortOrder: 102 },
-  { key: 'automation.delete', group: 'Automation', label: 'Delete Automation', description: 'Disable and remove automated workflows', sortOrder: 103 },
-
-  // 11. Settings & Audit Logs
-  { key: 'settings.view', group: 'Settings & Audit Logs', label: 'View Settings', description: 'View ISP system configurations and integration settings', sortOrder: 110 },
-  { key: 'settings.edit', group: 'Settings & Audit Logs', label: 'Edit Settings', description: 'Update ISP branding, SMS gateways and payment credentials', sortOrder: 111 },
-  { key: 'audit.view', group: 'Settings & Audit Logs', label: 'View Audit Logs', description: 'Inspect immutable security audit trails and user access logs', sortOrder: 112 },
-
-  // 12. Users & Roles (roles.manage, users.manage)
-  { key: 'users.view', group: 'Users & Roles', label: 'View Users', description: 'View staff user accounts and assignment status', sortOrder: 120 },
-  { key: 'users.manage', group: 'Users & Roles', label: 'Manage Users', description: 'Create, update and manage staff accounts and role assignments', sortOrder: 121 },
-  { key: 'roles.manage', group: 'Users & Roles', label: 'Manage Roles & Permissions', description: 'Configure custom roles and update permissions matrix', sortOrder: 122 },
-];
+/**
+ * Dynamically generated from the modular registry (single source of truth).
+ */
+export const PERMISSION_CATALOG: PermissionItem[] = ALL_REGISTRY_PERMISSIONS.map((p) => ({
+  key: p.key,
+  group: p.group,
+  label: p.label,
+  description: p.description,
+  sortOrder: p.sortOrder,
+}));
 
 /**
- * Dependency rule:
- * Action permissions require the resource's view permission.
+ * Dynamically generated from dependsOnKey in the modular registry.
  */
-export const PERMISSION_DEPENDENCIES: Record<string, string> = {
-  'customers.create': 'customers.view',
-  'customers.edit': 'customers.view',
-  'customers.delete': 'customers.view',
+export const PERMISSION_DEPENDENCIES: Record<string, string> = Object.fromEntries(
+  ALL_REGISTRY_PERMISSIONS.filter((p) => p.dependsOnKey).map((p) => [p.key, p.dependsOnKey!])
+);
 
-  'packages.create': 'packages.view',
-  'packages.edit': 'packages.view',
-  'packages.delete': 'packages.view',
-  'subscriptions.view': 'packages.view',
-  'subscriptions.create': 'subscriptions.view',
-  'subscriptions.edit': 'subscriptions.view',
-  'subscriptions.delete': 'subscriptions.view',
-
-  'network.create': 'network.view',
-  'network.edit': 'network.view',
-  'network.delete': 'network.view',
-  'routers.manage': 'network.view',
-  'routers.reboot': 'network.view',
-  'pppoe.manage': 'network.view',
-  'vlans.manage': 'network.view',
-  'ipam.manage': 'network.view',
-
-  'billing.create': 'billing.view',
-  'billing.edit': 'billing.view',
-  'billing.delete': 'billing.view',
-  'payments.view': 'billing.view',
-  'payments.record': 'payments.view',
-  'payments.khqr': 'payments.view',
-  'payments.delete': 'payments.view',
-
-  'accounting.create': 'accounting.view',
-  'accounting.edit': 'accounting.view',
-  'accounting.delete': 'accounting.view',
-  'accounting.reports': 'accounting.view',
-
-  'inventory.create': 'inventory.view',
-  'inventory.edit': 'inventory.view',
-  'inventory.delete': 'inventory.view',
-  'warehouses.manage': 'inventory.view',
-
-  'procurement.create': 'procurement.view',
-  'procurement.edit': 'procurement.view',
-  'procurement.delete': 'procurement.view',
-
-  'installations.manage': 'operations.view',
-  'tickets.create': 'operations.view',
-  'tickets.edit': 'operations.view',
-  'tickets.delete': 'operations.view',
-  'technicians.manage': 'operations.view',
-
-  'reports.create': 'reports.view',
-  'reports.export': 'reports.view',
-
-  'automation.create': 'automation.view',
-  'automation.edit': 'automation.view',
-  'automation.delete': 'automation.view',
-
-  'settings.edit': 'settings.view',
-  'audit.view': 'settings.view',
-
-  'users.manage': 'users.view',
-  'roles.manage': 'users.view',
-};
-
-// Initial role definitions
-export const INITIAL_ROLES = [
-  {
-    name: 'SUPER_ADMIN',
-    description: 'Super Administrator with full unrestricted access to all features and settings',
-    isSystem: true,
-  },
-  {
-    name: 'NETWORK_ENGINEER',
-    description: 'Network engineering, core routing, PPPoE pools, VLANs and field network operations',
-    isSystem: true,
-  },
-  {
-    name: 'BILLING_CASHIER',
-    description: 'Billing, invoicing, KHQR payments and cashier transactions',
-    isSystem: true,
-  },
-  {
-    name: 'FIELD_TECHNICIAN',
-    description: 'Field service, fiber installations, hardware provisioning and support tickets',
-    isSystem: true,
-  },
-  {
-    name: 'SUPPORT_AGENT',
-    description: 'Customer inquiries, tickets, subscriptions and customer care',
-    isSystem: true,
-  },
-  {
-    name: 'ACCOUNTANT',
-    description: 'General ledger, accounting entries, reconciliation and financial statements',
-    isSystem: false,
-  },
-  {
-    name: 'ADMINISTRATOR',
-    description: 'Administrative officer managing daily operations, customers and billing',
-    isSystem: false,
-  },
-  {
-    name: 'CASHIER',
-    description: 'Front-desk cashier accepting cash and bank payments',
-    isSystem: false,
-  },
-  {
-    name: 'TECHNICIAN',
-    description: 'Technical field engineer for dispatch and repairs',
-    isSystem: false,
-  },
-  {
-    name: 'SALES_STAFF',
-    description: 'Sales representative managing prospect customers and plan subscriptions',
-    isSystem: false,
-  },
-  {
-    name: 'WAREHOUSE_MANAGER',
-    description: 'Hardware inventory, warehouse stock control and equipment tracking',
-    isSystem: false,
-  },
-  {
-    name: 'PROCUREMENT_OFFICER',
-    description: 'Supplier purchasing, vendor quotes and purchase orders',
-    isSystem: false,
-  },
-];
-
-// Mapping from role name to default permission keys
-export const DEFAULT_ROLE_PERMISSION_KEYS: Record<string, string[]> = {
-  SUPER_ADMIN: PERMISSION_CATALOG.map((p) => p.key),
-  NETWORK_ENGINEER: [
-    'customers.view',
-    'network.view',
-    'network.create',
-    'network.edit',
-    'network.delete',
-    'routers.manage',
-    'routers.reboot',
-    'pppoe.manage',
-    'vlans.manage',
-    'ipam.manage',
-    'operations.view',
-    'installations.manage',
-    'tickets.create',
-    'tickets.edit',
-    'tickets.delete',
-    'technicians.manage',
-    'inventory.view',
-    'reports.view',
-    'reports.create',
-    'reports.export',
-  ],
-  BILLING_CASHIER: [
-    'customers.view',
-    'billing.view',
-    'billing.create',
-    'billing.edit',
-    'billing.delete',
-    'payments.view',
-    'payments.record',
-    'payments.khqr',
-    'payments.delete',
-    'accounting.view',
-  ],
-  FIELD_TECHNICIAN: [
-    'customers.view',
-    'operations.view',
-    'installations.manage',
-    'technicians.manage',
-    'tickets.create',
-    'tickets.edit',
-    'inventory.view',
-  ],
-  SUPPORT_AGENT: [
-    'customers.view',
-    'customers.create',
-    'customers.edit',
-    'packages.view',
-    'subscriptions.view',
-    'operations.view',
-    'tickets.create',
-    'tickets.edit',
-  ],
-  ACCOUNTANT: [
-    'customers.view',
-    'billing.view',
-    'billing.create',
-    'billing.edit',
-    'billing.delete',
-    'payments.view',
-    'payments.record',
-    'payments.khqr',
-    'payments.delete',
-    'accounting.view',
-    'accounting.create',
-    'accounting.edit',
-    'accounting.delete',
-    'accounting.reports',
-    'reports.view',
-    'reports.create',
-    'reports.export',
-    'procurement.view',
-  ],
-  ADMINISTRATOR: [
-    'customers.view',
-    'customers.create',
-    'customers.edit',
-    'packages.view',
-    'packages.create',
-    'packages.edit',
-    'subscriptions.view',
-    'subscriptions.create',
-    'subscriptions.edit',
-    'billing.view',
-    'billing.create',
-    'billing.edit',
-    'payments.view',
-    'payments.record',
-    'payments.khqr',
-    'network.view',
-    'inventory.view',
-    'accounting.view',
-    'operations.view',
-    'installations.manage',
-    'tickets.create',
-    'tickets.edit',
-    'technicians.manage',
-    'reports.view',
-    'settings.view',
-    'users.view',
-    'users.manage',
-  ],
-  CASHIER: [
-    'customers.view',
-    'billing.view',
-    'payments.view',
-    'payments.record',
-    'payments.khqr',
-    'accounting.view',
-  ],
-  TECHNICIAN: [
-    'customers.view',
-    'operations.view',
-    'installations.manage',
-    'technicians.manage',
-    'tickets.create',
-    'tickets.edit',
-    'inventory.view',
-  ],
-  SALES_STAFF: [
-    'customers.view',
-    'customers.create',
-    'customers.edit',
-    'packages.view',
-    'subscriptions.view',
-    'subscriptions.create',
-    'subscriptions.edit',
-    'billing.view',
-    'operations.view',
-    'installations.manage',
-    'tickets.create',
-  ],
-  WAREHOUSE_MANAGER: [
-    'inventory.view',
-    'inventory.create',
-    'inventory.edit',
-    'inventory.delete',
-    'warehouses.manage',
-    'procurement.view',
-    'procurement.create',
-    'procurement.edit',
-    'procurement.delete',
-  ],
-  PROCUREMENT_OFFICER: [
-    'procurement.view',
-    'procurement.create',
-    'procurement.edit',
-    'procurement.delete',
-    'inventory.view',
-  ],
-};
+// Re-export role definitions for backward compatibility
+export { INITIAL_ROLES, DEFAULT_ROLE_PERMISSION_KEYS };
 
 // In-Memory Role Permissions Cache (TTL = 30s)
 interface CacheEntry {
@@ -391,6 +44,26 @@ interface CacheEntry {
   timestamp: number;
 }
 const rolePermissionsCache = new Map<string, CacheEntry>();
+
+interface FeatureCacheEntry {
+  feature: {
+    id: string;
+    key: string;
+    type: string;
+    label: string;
+    path: string | null;
+    icon: string | null;
+    parentId: string | null;
+    sortOrder: number;
+    isActive: boolean;
+    locked: boolean;
+    permissionMode: 'ANY' | 'ALL';
+    permissionKeys: string[];
+  };
+  timestamp: number;
+}
+const featureCache = new Map<string, FeatureCacheEntry>();
+
 const CACHE_TTL_MS = 30 * 1000;
 
 export class RbacService {
@@ -402,16 +75,34 @@ export class RbacService {
       rolePermissionsCache.delete(roleIdentifier);
     } else {
       rolePermissionsCache.clear();
+      this.invalidateFeatureCache();
     }
   }
 
   /**
-   * Idempotently seeds all permissions, default roles, role-permissions,
-   * and links existing users to their respective roles in UserRole table.
+   * Invalidate feature cache
    */
-  static async seedRbac() {
-    // 1. Upsert Permissions
-    for (const p of PERMISSION_CATALOG) {
+  static invalidateFeatureCache(keyOrId?: string) {
+    if (keyOrId) {
+      featureCache.delete(keyOrId);
+    } else {
+      featureCache.clear();
+    }
+  }
+
+  /**
+   * Synchronizes code-defined permissions and features into the database.
+   * Runs at server startup and seeds.
+   * - Upserts permissions and features by key
+   * - Updates label, description, sortOrder, path, icon from code
+   * - Sets default feature->permission mapping ONLY when the feature is first created
+   * - Keys that disappeared from code become isActive = false (never deleted)
+   */
+  static async syncRegistry() {
+    // 1. Sync permissions from registry
+    const codePermKeys = new Set(ALL_REGISTRY_PERMISSIONS.map((p) => p.key));
+
+    for (const p of ALL_REGISTRY_PERMISSIONS) {
       await prisma.permission.upsert({
         where: { key: p.key },
         update: {
@@ -419,6 +110,8 @@ export class RbacService {
           label: p.label,
           description: p.description,
           sortOrder: p.sortOrder,
+          dependsOnKey: p.dependsOnKey || null,
+          isActive: true,
         },
         create: {
           key: p.key,
@@ -426,15 +119,131 @@ export class RbacService {
           label: p.label,
           description: p.description,
           sortOrder: p.sortOrder,
+          dependsOnKey: p.dependsOnKey || null,
+          isActive: true,
         },
       });
     }
 
+    // Deactivate missing permissions
+    await prisma.permission.updateMany({
+      where: {
+        key: { notIn: Array.from(codePermKeys) },
+        isActive: true,
+      },
+      data: { isActive: false },
+    });
+
     const allDbPerms = await prisma.permission.findMany();
     const permMap = new Map<string, string>(allDbPerms.map((p) => [p.key, p.id]));
 
-    // 2. Upsert Roles
+    // 2. Sync features from registry
+    const codeFeatureKeys = new Set(ALL_REGISTRY_FEATURES.map((f) => f.key));
+    const existingFeatures = await prisma.feature.findMany();
+    const existingFeatureMap = new Map(existingFeatures.map((f) => [f.key, f]));
+
+    for (const f of ALL_REGISTRY_FEATURES) {
+      const isNew = !existingFeatureMap.has(f.key);
+      const feature = await prisma.feature.upsert({
+        where: { key: f.key },
+        update: {
+          type: f.type as any,
+          label: f.label,
+          path: f.path || null,
+          icon: f.icon || null,
+          sortOrder: f.sortOrder,
+          locked: f.locked ?? false,
+          isActive: true,
+        },
+        create: {
+          key: f.key,
+          type: f.type as any,
+          label: f.label,
+          path: f.path || null,
+          icon: f.icon || null,
+          sortOrder: f.sortOrder,
+          locked: f.locked ?? false,
+          isActive: true,
+          permissionMode: (f.permissionMode || 'ANY') as any,
+        },
+      });
+
+      // Set default feature->permission mapping ONLY when the feature is first created
+      if (isNew && f.defaultPermissions && f.defaultPermissions.length > 0) {
+        for (const pKey of f.defaultPermissions) {
+          const permId = permMap.get(pKey);
+          if (permId) {
+            await prisma.featurePermission.upsert({
+              where: {
+                featureId_permissionId: {
+                  featureId: feature.id,
+                  permissionId: permId,
+                },
+              },
+              update: {},
+              create: {
+                featureId: feature.id,
+                permissionId: permId,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    // Second pass for parentId
+    const allDbFeatures = await prisma.feature.findMany();
+    const featureMapByKey = new Map(allDbFeatures.map((f) => [f.key, f.id]));
+
+    for (const f of ALL_REGISTRY_FEATURES) {
+      if (f.parentKey) {
+        const parentId = featureMapByKey.get(f.parentKey);
+        if (parentId) {
+          await prisma.feature.update({
+            where: { key: f.key },
+            data: { parentId },
+          });
+        }
+      }
+    }
+
+    // Deactivate missing features
+    await prisma.feature.updateMany({
+      where: {
+        key: { notIn: Array.from(codeFeatureKeys) },
+        isActive: true,
+      },
+      data: { isActive: false },
+    });
+
+    this.invalidateCache();
+    this.invalidateFeatureCache();
+  }
+
+  /**
+   * Idempotently seeds all permissions, default roles, role-permissions,
+   * and links existing users to their respective roles in UserRole table.
+   *
+   * Crucial rule: seedRbac must NOT re-grant defaults on every run.
+   * Grant DEFAULT_ROLE_PERMISSION_KEYS only when the Role (or Permission) row
+   * is newly created. Never re-add a grant an admin removed.
+   */
+  static async seedRbac() {
+    await this.syncRegistry();
+    // Check existing roles and permissions prior to upsert
+    const [existingRoles, existingPermissions] = await Promise.all([
+      prisma.role.findMany({ select: { name: true } }),
+      prisma.permission.findMany({ select: { key: true } }),
+    ]);
+    const existingRoleNames = new Set(existingRoles.map((r) => r.name));
+    const existingPermKeys = new Set(existingPermissions.map((p) => p.key));
+
+    const allDbPerms = await prisma.permission.findMany();
+    const permMap = new Map<string, string>(allDbPerms.map((p) => [p.key, p.id]));
+
+    // 2. Upsert Roles and assign default permissions only when newly created
     for (const r of INITIAL_ROLES) {
+      const isNewRole = !existingRoleNames.has(r.name);
       const role = await prisma.role.upsert({
         where: { name: r.name },
         update: {
@@ -449,25 +258,67 @@ export class RbacService {
       });
 
       // 3. Ensure Role Permissions
-      const defaultKeys = DEFAULT_ROLE_PERMISSION_KEYS[r.name] || [];
-      const keysToAssign = r.name === 'SUPER_ADMIN' ? PERMISSION_CATALOG.map((p) => p.key) : defaultKeys;
-
-      for (const key of keysToAssign) {
-        const permId = permMap.get(key);
-        if (permId) {
+      if (r.name === 'SUPER_ADMIN') {
+        // SUPER_ADMIN always has all permissions
+        for (const p of allDbPerms) {
           await prisma.rolePermission.upsert({
             where: {
               roleId_permissionId: {
                 roleId: role.id,
-                permissionId: permId,
+                permissionId: p.id,
               },
             },
             update: {},
             create: {
               roleId: role.id,
-              permissionId: permId,
+              permissionId: p.id,
             },
           });
+        }
+      } else if (isNewRole) {
+        // Only grant defaults if role is newly created
+        const defaultKeys = DEFAULT_ROLE_PERMISSION_KEYS[r.name] || [];
+        for (const key of defaultKeys) {
+          const permId = permMap.get(key);
+          if (permId) {
+            await prisma.rolePermission.upsert({
+              where: {
+                roleId_permissionId: {
+                  roleId: role.id,
+                  permissionId: permId,
+                },
+              },
+              update: {},
+              create: {
+                roleId: role.id,
+                permissionId: permId,
+              },
+            });
+          }
+        }
+      } else {
+        // Role already existed: ONLY grant permissions that are newly added to the catalog
+        // Never re-add a grant an admin removed!
+        const defaultKeys = DEFAULT_ROLE_PERMISSION_KEYS[r.name] || [];
+        for (const key of defaultKeys) {
+          if (!existingPermKeys.has(key)) {
+            const permId = permMap.get(key);
+            if (permId) {
+              await prisma.rolePermission.upsert({
+                where: {
+                  roleId_permissionId: {
+                    roleId: role.id,
+                    permissionId: permId,
+                  },
+                },
+                update: {},
+                create: {
+                  roleId: role.id,
+                  permissionId: permId,
+                },
+              });
+            }
+          }
         }
       }
     }
@@ -542,7 +393,8 @@ export class RbacService {
   }
 
   /**
-   * Check if role has a permission, supporting dot, colon and wildcard syntax
+   * Check if role has a permission.
+   * Strictly checks database permissions without legacy fallback or aliasing.
    */
   static async checkPermission(roleIdOrName: string, requiredPermission: string): Promise<boolean> {
     if (roleIdOrName === 'SUPER_ADMIN') return true;
@@ -550,31 +402,34 @@ export class RbacService {
     const perms = await this.getRolePermissions(roleIdOrName);
     if (perms.has('*') || perms.has(requiredPermission)) return true;
 
-    // Normalize separators: customers:read -> customers.view or customers.read
-    const normalized = requiredPermission.replace(':', '.');
-    if (perms.has(normalized)) return true;
-
-    // Handle common alias conversions (e.g., customers:read -> customers.view)
-    if (normalized.endsWith('.read')) {
-      const viewKey = normalized.replace(/\.read$/, '.view');
-      if (perms.has(viewKey)) return true;
-    }
-    if (normalized.endsWith('.update')) {
-      const editKey = normalized.replace(/\.update$/, '.edit');
-      if (perms.has(editKey)) return true;
-    }
-
-    // Check module wildcard (e.g. "billing.*" or "network.*")
-    const parts = normalized.split('.');
-    const module = parts[0];
-    if (perms.has(`${module}.*`)) return true;
-
-    // If still not matched, check legacy memory mapping
-    const legacyRolePerms = (AuthService as any).ROLE_PERMISSIONS?.[roleIdOrName] || [];
-    if (legacyRolePerms.includes('*') || legacyRolePerms.includes(requiredPermission)) return true;
-    if (legacyRolePerms.includes(`${module}:*`)) return true;
-
     return false;
+  }
+
+  /**
+   * Get user's effective permissions: Set union of permissions from all assigned roles.
+   */
+  static async getUserEffectivePermissions(userId: string, roleIdsOrNames: string[]): Promise<Set<string>> {
+    const effective = new Set<string>();
+
+    if (roleIdsOrNames.includes('SUPER_ADMIN')) {
+      effective.add('*');
+      for (const p of PERMISSION_CATALOG) effective.add(p.key);
+      return effective;
+    }
+
+    for (const roleIdentifier of roleIdsOrNames) {
+      const perms = await this.getRolePermissions(roleIdentifier);
+      if (perms.has('*')) {
+        effective.add('*');
+        for (const p of PERMISSION_CATALOG) effective.add(p.key);
+        return effective;
+      }
+      for (const p of perms) {
+        effective.add(p);
+      }
+    }
+
+    return effective;
   }
 
   /**
@@ -654,40 +509,44 @@ export class RbacService {
       throw new Error(`Role "${trimmedName}" already exists`);
     }
 
-    const newRole = await prisma.role.create({
-      data: {
-        name: trimmedName,
-        description: data.description?.trim() || null,
-        isSystem: false,
-      },
-    });
-
-    // If copying from an existing role
-    if (data.copyFromRoleId) {
-      const sourceRole = await prisma.role.findUnique({
-        where: { id: data.copyFromRoleId },
-        include: { permissions: true },
+    const newRole = await prisma.$transaction(async (tx) => {
+      const created = await tx.role.create({
+        data: {
+          name: trimmedName,
+          description: data.description?.trim() || null,
+          isSystem: false,
+        },
       });
 
-      if (sourceRole) {
-        if (sourceRole.name === 'SUPER_ADMIN') {
-          const allPerms = await prisma.permission.findMany();
-          await prisma.rolePermission.createMany({
-            data: allPerms.map((p) => ({
-              roleId: newRole.id,
-              permissionId: p.id,
-            })),
-          });
-        } else {
-          await prisma.rolePermission.createMany({
-            data: sourceRole.permissions.map((sp) => ({
-              roleId: newRole.id,
-              permissionId: sp.permissionId,
-            })),
-          });
+      // If copying from an existing role
+      if (data.copyFromRoleId) {
+        const sourceRole = await tx.role.findUnique({
+          where: { id: data.copyFromRoleId },
+          include: { permissions: true },
+        });
+
+        if (sourceRole) {
+          if (sourceRole.name === 'SUPER_ADMIN') {
+            const allPerms = await tx.permission.findMany();
+            await tx.rolePermission.createMany({
+              data: allPerms.map((p) => ({
+                roleId: created.id,
+                permissionId: p.id,
+              })),
+            });
+          } else {
+            await tx.rolePermission.createMany({
+              data: sourceRole.permissions.map((sp) => ({
+                roleId: created.id,
+                permissionId: sp.permissionId,
+              })),
+            });
+          }
         }
       }
-    }
+
+      return created;
+    });
 
     this.invalidateCache();
 
@@ -801,11 +660,26 @@ export class RbacService {
       throw err;
     }
 
-    // OCC Check: 409 if role changed since loaded
+    const allDbPerms = await prisma.permission.findMany();
+    const validPermMap = new Map(allDbPerms.map((p) => [p.key, p]));
+
+    const bodyAdd = body.add || [];
+    const bodyRemove = body.remove || [];
+
+    // Reject unknown permission keys with 400
+    for (const k of [...bodyAdd, ...bodyRemove]) {
+      if (!validPermMap.has(k)) {
+        const err: any = new Error(`Unknown permission key: "${k}"`);
+        err.status = 400;
+        throw err;
+      }
+    }
+
+    // OCC Check: 409 if role changed since loaded (exact comparison)
     if (body.expectedUpdatedAt) {
       const expectedTime = new Date(body.expectedUpdatedAt).getTime();
       const actualTime = role.updatedAt.getTime();
-      if (Math.abs(actualTime - expectedTime) > 1000) {
+      if (actualTime !== expectedTime) {
         const err: any = new Error('Role was modified by another user. Please reload the latest permissions.');
         err.status = 409;
         err.code = 'STALE_UPDATE';
@@ -813,8 +687,8 @@ export class RbacService {
       }
     }
 
-    const toAdd = new Set(body.add || []);
-    const toRemove = new Set(body.remove || []);
+    const toAdd = new Set(bodyAdd);
+    const toRemove = new Set(bodyRemove);
 
     const currentKeys = new Set(role.permissions.map((rp) => rp.permission.key));
     const targetKeys = new Set(currentKeys);
@@ -824,7 +698,8 @@ export class RbacService {
 
     // Rule: Dependency check - create/edit/delete on a resource require its view permission
     for (const key of targetKeys) {
-      const requiredView = PERMISSION_DEPENDENCIES[key];
+      const permRecord = validPermMap.get(key) as any;
+      const requiredView = permRecord?.dependsOnKey || PERMISSION_DEPENDENCIES[key];
       if (requiredView && !targetKeys.has(requiredView)) {
         const err: any = new Error(`Permission "${key}" requires "${requiredView}" to be enabled.`);
         err.status = 400;
@@ -864,7 +739,6 @@ export class RbacService {
     }
 
     // Fetch permission records for additions and removals
-    const allDbPerms = await prisma.permission.findMany();
     const permByKey = new Map(allDbPerms.map((p) => [p.key, p.id]));
 
     const permsToAdd = Array.from(toAdd)
@@ -1012,31 +886,35 @@ export class RbacService {
       copyName = `${sourceRole.name} (Copy ${counter})`;
     }
 
-    const newRole = await prisma.role.create({
-      data: {
-        name: copyName,
-        description: `Duplicated from ${sourceRole.name}. ${sourceRole.description || ''}`.trim(),
-        isSystem: false,
-      },
-    });
-
-    // Copy permissions
-    let permIds: string[];
-    if (sourceRole.name === 'SUPER_ADMIN') {
-      const allDbPerms = await prisma.permission.findMany();
-      permIds = allDbPerms.map((p) => p.id);
-    } else {
-      permIds = sourceRole.permissions.map((rp) => rp.permissionId);
-    }
-
-    if (permIds.length > 0) {
-      await prisma.rolePermission.createMany({
-        data: permIds.map((pid) => ({
-          roleId: newRole.id,
-          permissionId: pid,
-        })),
+    const newRole = await prisma.$transaction(async (tx) => {
+      const created = await tx.role.create({
+        data: {
+          name: copyName,
+          description: `Duplicated from ${sourceRole.name}. ${sourceRole.description || ''}`.trim(),
+          isSystem: false,
+        },
       });
-    }
+
+      // Copy permissions
+      let permIds: string[];
+      if (sourceRole.name === 'SUPER_ADMIN') {
+        const allDbPerms = await tx.permission.findMany();
+        permIds = allDbPerms.map((p) => p.id);
+      } else {
+        permIds = sourceRole.permissions.map((rp) => rp.permissionId);
+      }
+
+      if (permIds.length > 0) {
+        await tx.rolePermission.createMany({
+          data: permIds.map((pid) => ({
+            roleId: created.id,
+            permissionId: pid,
+          })),
+        });
+      }
+
+      return created;
+    });
 
     this.invalidateCache();
 
@@ -1240,5 +1118,436 @@ export class RbacService {
       username: targetUser.username,
       roles: targetRoles.map((r) => r.name),
     };
+  }
+
+  /**
+   * Get single feature with mapped permissions (30s cache)
+   */
+  static async getFeature(keyOrId: string) {
+    const cached = featureCache.get(keyOrId);
+    const now = Date.now();
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      return cached.feature;
+    }
+
+    const feature = await prisma.feature.findFirst({
+      where: {
+        OR: [{ id: keyOrId }, { key: keyOrId }],
+      },
+      include: {
+        permissions: {
+          include: { permission: true },
+        },
+      },
+    });
+
+    if (!feature) return null;
+
+    const formatted = {
+      id: feature.id,
+      key: feature.key,
+      type: feature.type,
+      label: feature.label,
+      path: feature.path,
+      icon: feature.icon,
+      parentId: feature.parentId,
+      sortOrder: feature.sortOrder,
+      isActive: feature.isActive,
+      locked: feature.locked,
+      permissionMode: feature.permissionMode as 'ANY' | 'ALL',
+      permissionKeys: feature.permissions.map((fp) => fp.permission.key),
+    };
+
+    featureCache.set(feature.id, { feature: formatted, timestamp: now });
+    featureCache.set(feature.key, { feature: formatted, timestamp: now });
+
+    return formatted;
+  }
+
+  /**
+   * Get navigation menu tree visible to a user given their effective permissions
+   */
+  static async getNavigationTree(userEffectivePerms: Set<string> | string[]) {
+    const permSet = userEffectivePerms instanceof Set ? userEffectivePerms : new Set(userEffectivePerms);
+    const features = await prisma.feature.findMany({
+      where: {
+        isActive: true,
+        type: { in: ['MENU', 'PAGE'] },
+      },
+      include: {
+        permissions: {
+          include: { permission: true },
+        },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    });
+
+    const isAllowed = (f: typeof features[0]) => {
+      const permKeys = f.permissions.map((fp) => fp.permission.key);
+      if (permKeys.length === 0) return true; // zero permissions = visible to any authenticated user
+      if (permSet.has('*')) return true;
+      if (f.permissionMode === 'ALL') {
+        return permKeys.every((k) => permSet.has(k));
+      }
+      return permKeys.some((k) => permSet.has(k));
+    };
+
+    const allowedFeatures = features.filter(isAllowed);
+    const allowedMap = new Map(allowedFeatures.map((f) => [f.id, f]));
+
+    // Build hierarchy
+    const rootItems: any[] = [];
+    const childrenByParent = new Map<string, any[]>();
+
+    for (const f of allowedFeatures) {
+      const item = {
+        id: f.id,
+        key: f.key,
+        type: f.type,
+        label: f.label,
+        path: f.path,
+        icon: f.icon,
+        sortOrder: f.sortOrder,
+        children: [] as any[],
+      };
+
+      if (!f.parentId || !allowedMap.has(f.parentId)) {
+        rootItems.push(item);
+      } else {
+        if (!childrenByParent.has(f.parentId)) {
+          childrenByParent.set(f.parentId, []);
+        }
+        childrenByParent.get(f.parentId)!.push(item);
+      }
+    }
+
+    for (const root of rootItems) {
+      if (childrenByParent.has(root.id)) {
+        root.children = childrenByParent.get(root.id)!.sort((a, b: any) => a.sortOrder - b.sortOrder);
+      }
+    }
+
+    return rootItems.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  /**
+   * Get all allowed feature keys for user
+   */
+  static async getAllowedFeatureKeys(userEffectivePerms: Set<string>): Promise<string[]> {
+    const features = await prisma.feature.findMany({
+      where: { isActive: true },
+      include: {
+        permissions: {
+          include: { permission: true },
+        },
+      },
+    });
+
+    const allowedKeys: string[] = [];
+    for (const f of features) {
+      const permKeys = f.permissions.map((fp) => fp.permission.key);
+      if (permKeys.length === 0 || userEffectivePerms.has('*')) {
+        allowedKeys.push(f.key);
+        continue;
+      }
+      const hasAccess = f.permissionMode === 'ALL'
+        ? permKeys.every((k) => userEffectivePerms.has(k))
+        : permKeys.some((k) => userEffectivePerms.has(k));
+
+      if (hasAccess) {
+        allowedKeys.push(f.key);
+      }
+    }
+
+    return allowedKeys;
+  }
+
+  /**
+   * List all features with mapped permissions for admin table
+   */
+  static async listFeaturesAdmin() {
+    const features = await prisma.feature.findMany({
+      include: {
+        permissions: {
+          include: { permission: true },
+        },
+        parent: {
+          select: { id: true, key: true, label: true },
+        },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    });
+
+    return features.map((f) => ({
+      id: f.id,
+      key: f.key,
+      type: f.type,
+      label: f.label,
+      path: f.path,
+      icon: f.icon,
+      parentId: f.parentId,
+      parentKey: f.parent?.key || null,
+      parentLabel: f.parent?.label || null,
+      sortOrder: f.sortOrder,
+      isActive: f.isActive,
+      locked: f.locked,
+      permissionMode: f.permissionMode,
+      permissionKeys: f.permissions.map((fp) => fp.permission.key),
+      updatedAt: f.updatedAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Update feature configuration (locked features reject permission changes)
+   */
+  static async updateFeature(
+    id: string,
+    body: {
+      label?: string;
+      sortOrder?: number;
+      parentId?: string | null;
+      isActive?: boolean;
+      permissionMode?: 'ANY' | 'ALL';
+      permissionKeys?: string[];
+    },
+    actor: { id: string; username: string; ip: string }
+  ) {
+    const feature = await prisma.feature.findUnique({
+      where: { id },
+      include: {
+        permissions: { include: { permission: true } },
+      },
+    });
+
+    if (!feature) {
+      const err: any = new Error('Feature not found');
+      err.status = 404;
+      throw err;
+    }
+
+    // Locked features reject permission changes
+    if (feature.locked) {
+      if (body.permissionKeys !== undefined || body.permissionMode !== undefined) {
+        const err: any = new Error(`Feature "${feature.key}" is locked for system integrity and its permissions cannot be remapped.`);
+        err.status = 400;
+        throw err;
+      }
+    }
+
+    const beforeMapping = {
+      label: feature.label,
+      sortOrder: feature.sortOrder,
+      isActive: feature.isActive,
+      permissionMode: feature.permissionMode,
+      permissionKeys: feature.permissions.map((fp) => fp.permission.key),
+    };
+
+    const updateData: any = {};
+    if (body.label !== undefined) updateData.label = body.label.trim();
+    if (body.sortOrder !== undefined) updateData.sortOrder = Number(body.sortOrder);
+    if (body.parentId !== undefined) updateData.parentId = body.parentId || null;
+    if (body.isActive !== undefined) updateData.isActive = Boolean(body.isActive);
+    if (body.permissionMode !== undefined) updateData.permissionMode = body.permissionMode;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.feature.update({
+        where: { id },
+        data: updateData,
+      });
+
+      if (body.permissionKeys !== undefined) {
+        // Find permission IDs for keys
+        const allDbPerms = await tx.permission.findMany();
+        const permByKey = new Map(allDbPerms.map((p) => [p.key, p.id]));
+
+        // Delete existing mappings
+        await tx.featurePermission.deleteMany({
+          where: { featureId: id },
+        });
+
+        // Insert new mappings
+        for (const pKey of body.permissionKeys) {
+          const permId = permByKey.get(pKey);
+          if (permId) {
+            await tx.featurePermission.create({
+              data: {
+                featureId: id,
+                permissionId: permId,
+              },
+            });
+          }
+        }
+      }
+    });
+
+    this.invalidateFeatureCache(feature.id);
+    this.invalidateFeatureCache(feature.key);
+
+    const updated = await this.getFeature(id);
+
+    await AuthService.logAudit(
+      'FEATURE_UPDATE',
+      'Feature',
+      id,
+      JSON.stringify({
+        featureKey: feature.key,
+        before: beforeMapping,
+        after: {
+          label: updated?.label,
+          sortOrder: updated?.sortOrder,
+          isActive: updated?.isActive,
+          permissionMode: updated?.permissionMode,
+          permissionKeys: updated?.permissionKeys,
+        },
+        actor: actor.username,
+      }),
+      actor.username,
+      actor.ip,
+      actor.id
+    );
+
+    return updated;
+  }
+
+  /**
+   * List all permissions with details for admin table
+   */
+  static async listPermissionsAdmin() {
+    const permissions = await prisma.permission.findMany({
+      include: {
+        rolePermissions: {
+          select: { roleId: true },
+        },
+      },
+      orderBy: [{ group: 'asc' }, { sortOrder: 'asc' }, { key: 'asc' }],
+    });
+
+    return permissions.map((p) => ({
+      id: p.id,
+      key: p.key,
+      group: p.group,
+      label: p.label,
+      description: p.description,
+      sortOrder: p.sortOrder,
+      dependsOnKey: p.dependsOnKey,
+      isActive: p.isActive,
+      roleCount: p.rolePermissions.length,
+      updatedAt: p.updatedAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Update permission metadata (key is immutable)
+   */
+  static async updatePermission(
+    id: string,
+    body: {
+      label?: string;
+      description?: string;
+      dependsOnKey?: string | null;
+      isActive?: boolean;
+    },
+    actor: { id: string; username: string; ip: string }
+  ) {
+    const permission = await prisma.permission.findUnique({ where: { id } });
+    if (!permission) {
+      const err: any = new Error('Permission not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const updateData: any = {};
+    if (body.label !== undefined) updateData.label = body.label.trim();
+    if (body.description !== undefined) updateData.description = body.description.trim();
+    if (body.dependsOnKey !== undefined) updateData.dependsOnKey = body.dependsOnKey || null;
+    if (body.isActive !== undefined) updateData.isActive = Boolean(body.isActive);
+
+    const updated = await prisma.permission.update({
+      where: { id },
+      data: updateData,
+    });
+
+    this.invalidateCache();
+    this.invalidateFeatureCache();
+
+    await AuthService.logAudit(
+      'PERMISSION_UPDATE',
+      'Permission',
+      id,
+      `Updated permission "${permission.key}": ${JSON.stringify(updateData)}`,
+      actor.username,
+      actor.ip,
+      actor.id
+    );
+
+    return updated;
+  }
+
+  /**
+   * Create custom feature (e.g. MENU internal/external link)
+   */
+  static async createFeature(
+    body: {
+      key: string;
+      type: 'MENU' | 'PAGE' | 'TAB' | 'ACTION';
+      label: string;
+      path?: string;
+      icon?: string;
+      parentId?: string;
+      sortOrder?: number;
+      permissionMode?: 'ANY' | 'ALL';
+      permissionKeys?: string[];
+    },
+    actor: { id: string; username: string; ip: string }
+  ) {
+    const key = body.key.trim();
+    const existing = await prisma.feature.findUnique({ where: { key } });
+    if (existing) {
+      const err: any = new Error(`Feature "${key}" already exists`);
+      err.status = 400;
+      throw err;
+    }
+
+    const feature = await prisma.feature.create({
+      data: {
+        key,
+        type: body.type as any,
+        label: body.label.trim(),
+        path: body.path?.trim() || null,
+        icon: body.icon?.trim() || null,
+        parentId: body.parentId || null,
+        sortOrder: body.sortOrder ? Number(body.sortOrder) : 0,
+        permissionMode: (body.permissionMode || 'ANY') as any,
+        isActive: true,
+        locked: false,
+      },
+    });
+
+    if (body.permissionKeys && body.permissionKeys.length > 0) {
+      const allDbPerms = await prisma.permission.findMany();
+      const permByKey = new Map(allDbPerms.map((p) => [p.key, p.id]));
+      for (const pKey of body.permissionKeys) {
+        const permId = permByKey.get(pKey);
+        if (permId) {
+          await prisma.featurePermission.create({
+            data: { featureId: feature.id, permissionId: permId },
+          });
+        }
+      }
+    }
+
+    this.invalidateFeatureCache();
+
+    await AuthService.logAudit(
+      'FEATURE_CREATE',
+      'Feature',
+      feature.id,
+      `Created feature "${feature.key}"`,
+      actor.username,
+      actor.ip,
+      actor.id
+    );
+
+    return await this.getFeature(feature.id);
   }
 }

@@ -96,7 +96,7 @@ export const MobileRoleView: React.FC<MobileRoleViewProps> = ({
 
       {/* Permission Search */}
       <div className="relative">
-        <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-3 pointer-events-none" />
+        <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
           type="text"
           placeholder="Filter permissions..."
@@ -119,7 +119,7 @@ export const MobileRoleView: React.FC<MobileRoleViewProps> = ({
               <button
                 type="button"
                 onClick={() => toggleGroup(group.name)}
-                className="w-full flex items-center justify-between p-3.5 bg-[var(--surface-subtle)] text-left hover:bg-[var(--surface-subtle)]/80 transition-colors"
+                className="w-full flex items-center justify-between p-3.5 bg-[var(--surface-subtle)] text-left hover:bg-[#F1F0EC] dark:hover:bg-[#22252B] transition-colors"
               >
                 <div className="flex items-center gap-2">
                   {isCollapsed ? (
@@ -146,7 +146,7 @@ export const MobileRoleView: React.FC<MobileRoleViewProps> = ({
                     return (
                       <div
                         key={perm.key}
-                        className="flex items-center justify-between p-3 hover:bg-[var(--surface-subtle)]/40 transition-colors gap-3"
+                        className="flex items-center justify-between p-3 hover:bg-[var(--surface-subtle)] transition-colors gap-3"
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">

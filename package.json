@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "node scripts/dev-all.mjs",
     "dev:ui": "vite",
+    "dev:server": "node --watch-path=dist-server dist-server/server.js",
+    "watch:server": "tsc -p server/tsconfig.json -w --preserveWatchOutput",
     "dev:all": "node scripts/dev-all.mjs",
     "db:seed": "node --experimental-strip-types prisma/seed.ts",
     "start": "node dist-server/server.js",

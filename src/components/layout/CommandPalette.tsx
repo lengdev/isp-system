@@ -19,6 +19,9 @@ import {
   ArrowRight,
   Boxes,
   Package,
+  Globe,
+  Mail,
+  Layers,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { cn } from '../../lib/utils';
@@ -70,9 +73,10 @@ export const CommandPalette: React.FC = () => {
     { title: 'Network Infrastructure', subtitle: 'OLT, ONT and router monitoring', icon: Radio, path: '/network' },
     { title: 'Field Technicians', subtitle: 'Staff assignments & daily install schedules', icon: Users, path: '/technicians' },
     { title: 'Reports & Analytics', subtitle: 'Plan saturation & churn metrics', icon: LayoutDashboard, path: '/reports' },
-    { title: 'Messages & Broadcast', subtitle: 'SMS and email notifications to subscribers', icon: Users, path: '/messages' },
+    { title: 'Customer Portal', subtitle: 'Self-service subscriber portal preview', icon: Globe, path: '/portal' },
+    { title: 'Messages & Broadcast', subtitle: 'SMS and email notifications to subscribers', icon: Mail, path: '/messages' },
     { title: 'Automation & Cron', subtitle: 'Automated suspension, backups and alert triggers', icon: Settings, path: '/automation' },
-    { title: 'System Integrations', subtitle: 'Mikrotik, Ubiquiti, Stripe & Twilio APIs', icon: Settings, path: '/integrations' },
+    { title: 'System Integrations', subtitle: 'Mikrotik, Ubiquiti, Stripe & Twilio APIs', icon: Layers, path: '/integrations' },
     { title: 'Settings', subtitle: 'System preferences & configurations', icon: Settings, path: '/settings' },
   ];
 

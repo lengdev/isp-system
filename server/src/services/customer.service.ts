@@ -240,11 +240,30 @@ export class CustomerService {
     };
   }
 
+  static getNextCustomerSequenceSync(): number {
+    let max = 1000;
+    if (dbStore && dbStore.customers) {
+      for (const c of dbStore.customers) {
+        const idMatch = c.id?.match(/^cust-(\d+)$/i);
+        if (idMatch) {
+          const num = parseInt(idMatch[1], 10);
+          if (num < 1000000 && num > max) max = num;
+        }
+        const codeMatch = c.code?.match(/^CUST-(\d+)$/i);
+        if (codeMatch) {
+          const num = parseInt(codeMatch[1], 10);
+          if (num < 1000000 && num > max) max = num;
+        }
+      }
+    }
+    return max + 1;
+  }
+
   // 3. Create Customer
   static createCustomer(data: any) {
-    const nextId = `cust-${Date.now()}`;
-    const codeNum = dbStore.customers.length + 1001;
-    const nextCode = `CUST-${codeNum}`;
+    const nextNum = CustomerService.getNextCustomerSequenceSync();
+    const nextId = `cust-${nextNum}`;
+    const nextCode = `CUST-${nextNum}`;
 
     const newCustomer: any = {
       id: nextId,
@@ -291,13 +310,38 @@ export class CustomerService {
           const router = await tx.router.findFirst();
           const routerId = router?.id || 'rtr-core-1';
 
-          let code = newCustomer.code;
-          let counter = dbStore.customers.length + 1000;
-          while (await tx.customer.findUnique({ where: { code } })) {
-            counter++;
-            code = `CUST-${counter}`;
+          // Determine next auto-increment sequence from database
+          const dbCustomers = await tx.customer.findMany({
+            select: { id: true, code: true },
+          });
+          let maxDbNum = 1000;
+          for (const c of dbCustomers) {
+            const idMatch = c.id?.match(/^cust-(\d+)$/i);
+            if (idMatch) {
+              const num = parseInt(idMatch[1], 10);
+              if (num < 1000000 && num > maxDbNum) maxDbNum = num;
+            }
+            const codeMatch = c.code?.match(/^CUST-(\d+)$/i);
+            if (codeMatch) {
+              const num = parseInt(codeMatch[1], 10);
+              if (num < 1000000 && num > maxDbNum) maxDbNum = num;
+            }
           }
-          newCustomer.code = code;
+
+          let counter = Math.max(nextNum, maxDbNum + 1);
+          let targetId = `cust-${counter}`;
+          let targetCode = `CUST-${counter}`;
+          while (
+            (await tx.customer.findUnique({ where: { id: targetId } })) ||
+            (await tx.customer.findUnique({ where: { code: targetCode } }))
+          ) {
+            counter++;
+            targetId = `cust-${counter}`;
+            targetCode = `CUST-${counter}`;
+          }
+
+          newCustomer.id = targetId;
+          newCustomer.code = targetCode;
 
           const existingByEmail = await tx.customer.findUnique({
             where: { email: newCustomer.email },
@@ -426,15 +470,80 @@ export class CustomerService {
           }
         }
 
-        if (updates.planId || updates.monthlyPrice !== undefined || updates.connectionType) {
+        if (updates.planId || updates.planName || updates.monthlyPrice !== undefined || updates.connectionType) {
+          let resolvedPackage: { id: string; monthlyPrice: any } | null = null;
+          if (updates.planId || updates.planName) {
+            // 1. Direct match by id
+            if (updates.planId) {
+              resolvedPackage = await tx.package.findUnique({
+                where: { id: updates.planId },
+                select: { id: true, monthlyPrice: true },
+              });
+              // 2. Mapped id (e.g. plan-2 -> pkg-2)
+              if (!resolvedPackage) {
+                const mappedId = updates.planId.replace(/^plan-/, 'pkg-');
+                resolvedPackage = await tx.package.findUnique({
+                  where: { id: mappedId },
+                  select: { id: true, monthlyPrice: true },
+                });
+              }
+            }
+
+            // 3. Match by name
+            if (!resolvedPackage && (updates.planName || updates.planId)) {
+              const nameToSearch = updates.planName || updates.planId;
+              resolvedPackage = await tx.package.findFirst({
+                where: {
+                  OR: [
+                    { name: { equals: nameToSearch, mode: 'insensitive' } },
+                    { name: { contains: nameToSearch, mode: 'insensitive' } },
+                  ],
+                },
+                select: { id: true, monthlyPrice: true },
+              });
+            }
+
+            // 4. Fallback to existing first package if planId was specified but not found
+            if (!resolvedPackage && updates.planId) {
+              resolvedPackage = await tx.package.findFirst({
+                select: { id: true, monthlyPrice: true },
+              });
+            }
+          }
+
           const sub = existing.subscriptions[0];
           if (sub) {
-            await tx.subscription.update({
-              where: { id: sub.id },
+            const subData: any = {};
+            if (resolvedPackage) {
+              subData.packageId = resolvedPackage.id;
+              if (updates.monthlyPrice === undefined) {
+                subData.monthlyFee = resolvedPackage.monthlyPrice;
+              }
+            }
+            if (updates.monthlyPrice !== undefined) {
+              subData.monthlyFee = new Prisma.Decimal(updates.monthlyPrice);
+            }
+            if (updates.connectionType) {
+              subData.technology = updates.connectionType.toUpperCase() as any;
+            }
+
+            if (Object.keys(subData).length > 0) {
+              await tx.subscription.update({
+                where: { id: sub.id },
+                data: subData,
+              });
+            }
+          } else if (resolvedPackage) {
+            const router = await tx.router.findFirst();
+            await tx.subscription.create({
               data: {
-                ...(updates.planId ? { packageId: updates.planId } : {}),
-                ...(updates.monthlyPrice !== undefined ? { monthlyFee: new Prisma.Decimal(updates.monthlyPrice) } : {}),
-                ...(updates.connectionType ? { technology: updates.connectionType.toUpperCase() as any } : {}),
+                subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                customerId: existing.id,
+                packageId: resolvedPackage.id,
+                routerId: router?.id || null,
+                technology: (updates.connectionType ? updates.connectionType.toUpperCase() : 'FIBER') as any,
+                status: (existing.status === 'ACTIVE' ? 'ACTIVE' : existing.status === 'SUSPENDED' ? 'SUSPENDED' : 'PENDING') as any,
+                monthlyFee: updates.monthlyPrice !== undefined ? new Prisma.Decimal(updates.monthlyPrice) : resolvedPackage.monthlyPrice,
               },
             });
           }

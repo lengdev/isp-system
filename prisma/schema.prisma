@@ -57,6 +57,18 @@ model User {
   @@index([role])
 }
 
+enum FeatureType {
+  MENU
+  PAGE
+  TAB
+  ACTION
+}
+
+enum PermissionMode {
+  ANY
+  ALL
+}
+
 model Role {
   id          String           @id @default(uuid())
   name        String           @unique
@@ -70,16 +82,56 @@ model Role {
 }
 
 model Permission {
-  id          String           @id @default(uuid())
-  key         String           @unique // e.g. "customers.view", "billing.create"
-  group       String           // e.g. "Customers (CRM)", "Billing & Payments"
-  label       String           // e.g. "View Customers"
-  description String?
-  sortOrder   Int              @default(0)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id           String           @id @default(uuid())
+  key          String           @unique // e.g. "customers.view", "billing.create"
+  group        String           // e.g. "Customers (CRM)", "Billing & Payments"
+  label        String           // e.g. "View Customers"
+  description  String?
+  sortOrder    Int              @default(0)
+  dependsOnKey String?
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  rolePermissions RolePermission[]
+  rolePermissions    RolePermission[]
+  featurePermissions FeaturePermission[]
+}
+
+model Feature {
+  id             String              @id @default(uuid())
+  key            String              @unique // e.g. "nav.customers", "customers.btn.delete"
+  type           FeatureType
+  label          String
+  path           String?
+  icon           String?
+  parentId       String?
+  sortOrder      Int                 @default(0)
+  isActive       Boolean             @default(true)
+  locked         Boolean             @default(false)
+  permissionMode PermissionMode      @default(ANY)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  parent         Feature?            @relation("FeatureHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children       Feature[]           @relation("FeatureHierarchy")
+  permissions    FeaturePermission[]
+
+  @@index([parentId])
+  @@index([type])
+}
+
+model FeaturePermission {
+  id           String     @id @default(uuid())
+  featureId    String
+  permissionId String
+  createdAt    DateTime   @default(now())
+
+  feature      Feature    @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, permissionId])
+  @@index([featureId])
+  @@index([permissionId])
 }
 
 model UserRole {

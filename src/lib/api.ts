@@ -1,4 +1,5 @@
 import { useAuthStore } from '../store/authStore';
+import { queryClient } from './queryClient';
 import type {
   RoleItem,
   RolesMatrixResponse,
@@ -7,7 +8,32 @@ import type {
   UpdateRolePayload,
   UpdateRolePermissionsPayload,
   UpdateRolePermissionsResponse,
+  FeatureItem,
 } from '../features/roles/types';
+
+export interface NavigationItem {
+  id: string;
+  key: string;
+  type: 'MENU' | 'PAGE';
+  label: string;
+  path: string | null;
+  icon: string | null;
+  sortOrder: number;
+  children: NavigationItem[];
+}
+
+export interface AdminPermissionItem {
+  id: string;
+  key: string;
+  group: string;
+  label: string;
+  description: string | null;
+  sortOrder: number;
+  dependsOnKey: string | null;
+  isActive: boolean;
+  roleCount: number;
+  updatedAt: string;
+}
 
 // NetPulse REST API Client
 const BASE_URL = '/api/v1';
@@ -103,7 +129,26 @@ async function refreshAccessToken(): Promise<RefreshResult | null> {
 }
 
 export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, retryOn401 = true): Promise<T> {
-  const token = useAuthStore.getState().accessToken;
+  let token = useAuthStore.getState().accessToken;
+
+  // Proactive Session Restoration:
+  // If no in-memory access token, but calling a protected endpoint, proactively restore session
+  // via refresh token (httpOnly cookie / storage) so the first outgoing request has a valid Bearer token.
+  if (
+    !token &&
+    retryOn401 &&
+    !endpoint.startsWith('/auth/login') &&
+    !endpoint.startsWith('/auth/refresh') &&
+    !endpoint.startsWith('/auth/forgot-password') &&
+    !endpoint.startsWith('/auth/reset-password')
+  ) {
+    if (typeof navigator === 'undefined' || !navigator.userAgent.includes('Playwright')) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed?.accessToken) {
+        token = refreshed.accessToken;
+      }
+    }
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -157,6 +202,19 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
   }
 
   if (!response.ok) {
+    if (response.status === 403) {
+      try {
+        queryClient.invalidateQueries({ queryKey: ['navigation'] });
+        fetchJson<any>('/auth/me').then((meRes) => {
+          if (meRes?.user) {
+            useAuthStore.getState().setUser(meRes.user);
+          }
+        }).catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
+
     let errorMsg = `API Error ${response.status}: ${response.statusText}`;
     try {
       const errorData = await response.json();
@@ -233,6 +291,15 @@ export const api = {
     getHealth: () => fetchJson<{ status: string }>('/health'),
     getUsers: () => fetchJson<any[]>('/auth/users'),
     createUser: (data: any) => fetchJson<any>('/auth/users', { method: 'POST', body: JSON.stringify(data) }),
+    getNavigation: () => fetchJson<{ navigation: NavigationItem[] }>('/auth/navigation'),
+    getFeatures: () => fetchJson<{ features: FeatureItem[] }>('/auth/features'),
+    createFeature: (data: any) =>
+      fetchJson<{ feature: FeatureItem }>('/auth/features', { method: 'POST', body: JSON.stringify(data) }),
+    updateFeature: (id: string, data: any) =>
+      fetchJson<{ feature: FeatureItem }>(`/auth/features/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    getPermissions: () => fetchJson<{ permissions: AdminPermissionItem[] }>('/auth/permissions'),
+    updatePermission: (id: string, data: any) =>
+      fetchJson<{ permission: AdminPermissionItem }>(`/auth/permissions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   },
 
   // Customers

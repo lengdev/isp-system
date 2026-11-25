@@ -134,10 +134,30 @@ router.post('/logout', async (req, res) => {
   }
 });
 
+// GET /api/v1/auth/navigation -> Dynamic menu tree for current user
+router.get('/navigation', authenticate, async (req, res) => {
+  try {
+    const user = req.user!;
+    const identifiers = (user.roleIds && user.roleIds.length > 0)
+      ? user.roleIds
+      : (user.roles && user.roles.length > 0 ? user.roles : [user.role]);
+    const effective = await RbacService.getUserEffectivePermissions(user.userId, identifiers);
+    const navigation = await RbacService.getNavigationTree(effective);
+    res.json({ navigation });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/v1/auth/me
 router.get('/me', authenticate, async (req, res) => {
   const user = req.user!;
-  const permissions = await AuthService.getUserPermissions(user.role);
+  const identifiers = (user.roleIds && user.roleIds.length > 0)
+    ? user.roleIds
+    : (user.roles && user.roles.length > 0 ? user.roles : [user.role]);
+  const effectivePermissions = await RbacService.getUserEffectivePermissions(user.userId, identifiers);
+  const features = await RbacService.getAllowedFeatureKeys(effectivePermissions);
+
   res.json({
     user: {
       id: user.userId,
@@ -146,7 +166,9 @@ router.get('/me', authenticate, async (req, res) => {
       fullName: user.fullName,
       role: user.role,
       roles: user.roles || [user.role],
-      permissions,
+      roleIds: user.roleIds || [],
+      permissions: Array.from(effectivePermissions),
+      features,
     },
   });
 });
@@ -317,6 +339,73 @@ router.post('/roles/:id/duplicate', authenticate, authorize('roles.manage'), asy
     };
     const role = await RbacService.duplicateRole(id, actor);
     res.status(201).json(role);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// GET /api/v1/auth/features -> All features with mapped permission keys
+router.get('/features', authenticate, authorize('roles.manage'), async (_req, res) => {
+  try {
+    const features = await RbacService.listFeaturesAdmin();
+    res.json({ features });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/auth/features -> Create new feature (e.g. custom menu item)
+router.post('/features', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const feature = await RbacService.createFeature(req.body, actor);
+    res.status(201).json({ feature });
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/v1/auth/features/:id -> Update feature config (permissions, mode, label, etc.)
+router.patch('/features/:id', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const feature = await RbacService.updateFeature(id, req.body, actor);
+    res.json({ feature });
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// GET /api/v1/auth/permissions -> All system permissions catalog with metadata
+router.get('/permissions', authenticate, authorize('roles.manage'), async (_req, res) => {
+  try {
+    const permissions = await RbacService.listPermissionsAdmin();
+    res.json({ permissions });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/v1/auth/permissions/:id -> Update permission metadata
+router.patch('/permissions/:id', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const permission = await RbacService.updatePermission(id, req.body, actor);
+    res.json({ permission });
   } catch (err: any) {
     res.status(err.status || 400).json({ error: err.message });
   }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Users,
@@ -37,11 +38,43 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { useAuthStore } from '../../store/authStore';
-import { api } from '../../lib/api';
+import { api, NavigationItem } from '../../lib/api';
 import { Avatar } from '../ui/Avatar';
 import { Tooltip } from '../ui/Tooltip';
+import { Skeleton } from '../ui/Skeleton';
 import { SPRING_SNAPPY } from '../../lib/motion';
 import { cn } from '../../lib/utils';
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  LayoutDashboard,
+  Users,
+  Boxes,
+  Box,
+  Warehouse: WarehouseIcon,
+  WarehouseIcon,
+  ShoppingBag,
+  Wifi,
+  Radio,
+  Receipt,
+  CreditCard,
+  Scale,
+  Wrench,
+  LifeBuoy,
+  BarChart3,
+  Zap,
+  Settings,
+  ShieldCheck,
+  Key,
+  Package,
+  Globe,
+  Mail,
+  Layers,
+};
+
+const getIcon = (iconName: string | null) => {
+  if (!iconName) return Box;
+  return ICON_MAP[iconName] || Box;
+};
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -60,16 +93,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
   const setSidebarUpgradeDismissed = useStore((s) => s.setSidebarUpgradeDismissed);
 
   const user = useAuthStore((s) => s.user);
-  const hasPermission = useAuthStore((s) => s.hasPermission);
-  const hasRole = useAuthStore((s) => s.hasRole);
+  const status = useAuthStore((s) => s.status);
+  const accessToken = useAuthStore((s) => s.accessToken);
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
 
-  const toggleSubmenu = (menuName: string, defaultPath?: string) => {
+  const isAuthenticated = Boolean(user && accessToken && status === 'authenticated');
+
+  const { data: navData, isLoading } = useQuery({
+    queryKey: ['navigation'],
+    queryFn: api.auth.getNavigation,
+    staleTime: 30000,
+    enabled: isAuthenticated,
+  });
+
+  const isNavLoading = isLoading || !isAuthenticated;
+
+  const navItems = navData?.navigation || [];
+  const mainNavItems = navItems.filter((item) => item.sortOrder < 100);
+  const toolsNavItems = navItems.filter((item) => item.sortOrder >= 100);
+
+  const toggleSubmenu = (menuKey: string) => {
     setOpenSubmenus((prev) => ({
       ...prev,
-      [menuName]: !prev[menuName],
+      [menuKey]: !prev[menuKey],
     }));
   };
 
@@ -103,146 +151,53 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
 
   const openTicketsCount = tickets.filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
 
-  interface NavSubItem {
-    name: string;
-    path: string;
-    icon?: any;
-    badge?: number | string;
-    permission?: string;
-    roles?: string[];
-  }
-
-  interface NavItemDef {
-    name: string;
-    path: string;
-    icon: any;
-    badge?: number | string;
-    submenu?: NavSubItem[];
-    permission?: string;
-    roles?: string[];
-  }
-
-  const mainNav: NavItemDef[] = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Customers', path: '/customers', icon: Users, permission: 'customers:read' },
-    {
-      name: 'Inventory',
-      path: '/inventory/products',
-      icon: Boxes,
-      permission: 'inventory:read',
-      submenu: [
-        { name: 'Product Catalog', path: '/inventory/products', icon: Box, permission: 'inventory:read' },
-        { name: 'Warehouses & Stock', path: '/inventory/warehouses', icon: WarehouseIcon, permission: 'inventory:read' },
-        { name: 'Procurement & POs', path: '/inventory/procurement', icon: ShoppingBag, permission: 'inventory:read' },
-      ],
-    },
-    { name: 'Plans', path: '/plans', icon: Wifi, permission: 'packages:read' },
-    {
-      name: 'Billing',
-      path: '/billing',
-      icon: Receipt,
-      roles: ['SUPER_ADMIN', 'BILLING_CASHIER'],
-      submenu: [
-        { name: 'Invoices', path: '/billing', icon: Receipt, roles: ['SUPER_ADMIN', 'BILLING_CASHIER'] },
-        { name: 'Payments & Cashier', path: '/payments', icon: CreditCard, roles: ['SUPER_ADMIN', 'BILLING_CASHIER'] },
-      ],
-    },
-    { name: 'Accounting & GL', path: '/accounting', icon: Scale, roles: ['SUPER_ADMIN', 'BILLING_CASHIER'] },
-    { name: 'Installations', path: '/installations', icon: Wrench, roles: ['SUPER_ADMIN', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER'] },
-    { name: 'Tickets', path: '/tickets', icon: LifeBuoy, badge: openTicketsCount || 21, roles: ['SUPER_ADMIN', 'SUPPORT_AGENT', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER'] },
-    { name: 'Network', path: '/network', icon: Radio, roles: ['SUPER_ADMIN', 'NETWORK_ENGINEER'] },
-    { name: 'Technicians', path: '/technicians', icon: Wrench, roles: ['SUPER_ADMIN', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER'] },
-    { name: 'Reports', path: '/reports', icon: BarChart3, permission: 'reports:read' },
-  ];
-
-  const toolsNav: NavItemDef[] = [
-    { name: 'Customer Portal', path: '/portal', icon: Globe },
-    { name: 'Messages', path: '/messages', icon: Mail },
-    { name: 'Automation', path: '/automation', icon: Zap, roles: ['SUPER_ADMIN'] },
-    { name: 'Integrations', path: '/integrations', icon: Layers, roles: ['SUPER_ADMIN'] },
-    {
-      name: 'Settings',
-      path: '/settings',
-      icon: Settings,
-      submenu: [
-        { name: 'System Settings', path: '/settings', icon: Settings, roles: ['SUPER_ADMIN'] },
-        { name: 'Roles & Permissions', path: '/settings/roles', icon: Key, permission: 'roles.manage' },
-        { name: 'Staff & Roles (RBAC)', path: '/settings/users', icon: Users, roles: ['SUPER_ADMIN'] },
-        { name: 'Audit Compliance Logs', path: '/settings/audit', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
-      ],
-    },
-  ];
-
-  const isItemVisible = (item: NavItemDef | NavSubItem): boolean => {
-    if (!user) return true; // Default fallback
-    if (user.role === 'SUPER_ADMIN') return true;
-    if ('submenu' in item && item.submenu && item.submenu.length > 0) {
-      const hasVisibleSub = item.submenu.some((sub) => isItemVisible(sub));
-      if (!hasVisibleSub) return false;
-    } else {
-      if (item.roles && item.roles.length > 0 && !hasRole(...item.roles)) {
-        return false;
-      }
-      if (item.permission && !hasPermission(item.permission)) {
-        return false;
-      }
+  const getBadge = (navItem: NavigationItem) => {
+    if (navItem.key === 'page.tickets') {
+      return openTicketsCount || 21;
     }
-    return true;
+    if (navItem.key === 'nav.operations' && navItem.children?.some((c) => c.key === 'page.tickets')) {
+      return openTicketsCount || 21;
+    }
+    return undefined;
   };
 
-  const filteredMainNav = mainNav
-    .filter(isItemVisible)
-    .map((item) => {
-      if (!item.submenu) return item;
-      return {
-        ...item,
-        submenu: item.submenu.filter((sub) => {
-          if (!user || user.role === 'SUPER_ADMIN') return true;
-          if (sub.roles && sub.roles.length > 0 && !hasRole(...sub.roles)) return false;
-          if (sub.permission && !hasPermission(sub.permission)) return false;
-          return true;
-        }),
-      };
-    });
-
-  const filteredToolsNav = toolsNav
-    .filter(isItemVisible)
-    .map((item) => {
-      if (!item.submenu) return item;
-      return {
-        ...item,
-        submenu: item.submenu.filter((sub) => {
-          if (!user || user.role === 'SUPER_ADMIN') return true;
-          if (sub.roles && sub.roles.length > 0 && !hasRole(...sub.roles)) return false;
-          if (sub.permission && !hasPermission(sub.permission)) return false;
-          return true;
-        }),
-      };
-    });
-
-  const renderNavList = (items: NavItemDef[]) => (
+  const renderNavList = (items: NavigationItem[]) => (
     <div className="space-y-0.5">
       {items.map((item) => {
-        const hasSubmenu = Boolean(item.submenu && item.submenu.length > 0);
-        const isSubmenuActive = hasSubmenu && item.submenu?.some((sub) => location.pathname === sub.path || location.pathname === '/inventory/product');
+        const hasSubmenu = Boolean(
+          item.children &&
+            (item.children.length > 1 ||
+              (item.children.length === 1 && item.children[0].path !== item.path))
+        );
+        const isSubmenuActive =
+          hasSubmenu &&
+          item.children?.some(
+            (sub) =>
+              sub.path &&
+              (location.pathname === sub.path ||
+                (sub.path === '/inventory/products' && location.pathname === '/inventory/product'))
+          );
         const isActive =
-          location.pathname === item.path ||
+          (item.path && location.pathname === item.path) ||
           (item.path === '/customers' && location.pathname === '/') ||
           isSubmenuActive;
-        const Icon = item.icon;
-        const isSubmenuOpen = Boolean(openSubmenus[item.name] || isSubmenuActive);
+
+        const Icon = getIcon(item.icon);
+        const isSubmenuOpen = Boolean(openSubmenus[item.key] ?? isSubmenuActive);
+        const badge = getBadge(item);
+        const targetPath = item.path || item.children?.[0]?.path || '#';
 
         // If item has submenu and sidebar is collapsed
         if (sidebarCollapsed && hasSubmenu) {
           return (
-            <div key={item.path} className="w-full flex justify-center py-0.5">
+            <div key={item.key} className="w-full flex justify-center py-0.5">
               <Tooltip
-                content={`${item.name} • ${item.submenu?.[0]?.name || ''}`}
+                content={`${item.label} • ${item.children?.[0]?.label || ''}`}
                 side="right"
                 className="flex justify-center"
               >
                 <NavLink
-                  to={item.path}
+                  to={targetPath}
                   onClick={onMobileClose}
                   className={cn(
                     'relative flex items-center justify-center w-9 h-[34px] rounded-lg text-[13px] font-medium tracking-[-0.01em] select-none group transition-colors',
@@ -273,10 +228,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
         // If item has submenu and sidebar is expanded
         if (hasSubmenu) {
           return (
-            <div key={item.path} className="space-y-0.5">
+            <div key={item.key} className="space-y-0.5">
               <button
                 type="button"
-                onClick={() => toggleSubmenu(item.name)}
+                onClick={() => toggleSubmenu(item.key)}
                 className={cn(
                   'relative flex items-center justify-between h-[34px] px-2.5 w-full rounded-lg text-[13px] font-medium tracking-[-0.01em] select-none group transition-colors',
                   isActive
@@ -291,7 +246,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                       isActive ? 'text-[var(--brand)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'
                     )}
                   />
-                  <span className="truncate">{item.name}</span>
+                  <span className="truncate">{item.label}</span>
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0 text-[var(--text-muted)]">
@@ -313,16 +268,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                     transition={{ duration: 0.16 }}
                     className="pl-5 space-y-0.5 overflow-hidden"
                   >
-                    {item.submenu?.map((sub) => {
+                    {item.children?.map((sub) => {
                       const isSubActive =
-                        location.pathname === sub.path ||
-                        location.pathname === '/inventory/product';
-                      const SubIcon = sub.icon || Box;
+                        sub.path &&
+                        (location.pathname === sub.path ||
+                          (sub.path === '/inventory/products' && location.pathname === '/inventory/product'));
+                      const SubIcon = getIcon(sub.icon);
+                      const subBadge = getBadge(sub);
 
                       return (
                         <NavLink
-                          key={sub.path}
-                          to={sub.path}
+                          key={sub.key}
+                          to={sub.path || '#'}
                           onClick={onMobileClose}
                           className={cn(
                             'relative flex items-center justify-between h-[30px] px-2.5 rounded-lg text-[12px] font-medium transition-colors select-none group',
@@ -338,11 +295,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
                                 isSubActive ? 'text-[var(--brand)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'
                               )}
                             />
-                            <span className="truncate">{sub.name}</span>
+                            <span className="truncate">{sub.label}</span>
                           </div>
-                          {sub.badge !== undefined && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--surface-subtle)] text-[var(--text-muted)]">
-                              {sub.badge}
+                          {subBadge !== undefined && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--surface-subtle)] text-[var(--text-muted)] font-semibold">
+                              {subBadge}
                             </span>
                           )}
                         </NavLink>
@@ -358,9 +315,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
         // Normal single nav item
         const content = (
           <NavLink
-            key={item.path}
-            to={item.path}
-            title={item.name}
+            key={item.key}
+            to={targetPath}
+            title={item.label}
             onClick={onMobileClose}
             className={cn(
               'relative flex items-center h-[34px] rounded-lg text-[13px] font-medium tracking-[-0.01em] select-none group transition-colors',
@@ -383,26 +340,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
               <Icon
                 className={cn(
                   'w-4 h-4 shrink-0 transition-colors',
-                  isActive
-                    ? 'text-[var(--brand)]'
-                    : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'
+                  isActive ? 'text-[var(--brand)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'
                 )}
               />
-              {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
+              {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
             </div>
 
-            {!sidebarCollapsed && item.badge !== undefined && (
+            {!sidebarCollapsed && badge !== undefined && (
               <span className="relative z-10 flex items-center justify-center min-w-4 h-4 px-1.5 rounded-full text-[11px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-muted)]">
-                {item.badge}
+                {badge}
               </span>
             )}
           </NavLink>
         );
 
         return sidebarCollapsed ? (
-          <div key={item.path} className="w-full flex justify-center py-0.5">
+          <div key={item.key} className="w-full flex justify-center py-0.5">
             <Tooltip
-              content={`${item.name}${item.badge ? ` (${item.badge})` : ''}`}
+              content={`${item.label}${badge ? ` (${badge})` : ''}`}
               side="right"
               className="flex justify-center"
             >
@@ -498,20 +453,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
 
       {/* 3. Navigation List (flex-1 min-h-0 overflow-y-auto scrollbar-thin) */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-0.5 scrollbar-thin">
-        {renderNavList(filteredMainNav)}
-
-        {/* Tools Section */}
-        {filteredToolsNav.length > 0 && (
-          <div>
-            {!sidebarCollapsed ? (
-              <div className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                Tools
-              </div>
-            ) : (
-              <div className="my-2 border-t border-[var(--border-subtle)]" />
-            )}
-            {renderNavList(filteredToolsNav)}
+        {isNavLoading ? (
+          <div className="space-y-2 px-1">
+            {[...Array(8)].map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full rounded-lg" />
+            ))}
           </div>
+        ) : (
+          <>
+            {renderNavList(mainNavItems)}
+
+            {/* Tools Section */}
+            {toolsNavItems.length > 0 && (
+              <div>
+                {!sidebarCollapsed ? (
+                  <div className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    System
+                  </div>
+                ) : (
+                  <div className="my-2 border-t border-[var(--border-subtle)]" />
+                )}
+                {renderNavList(toolsNavItems)}
+              </div>
+            )}
+          </>
         )}
       </div>
 

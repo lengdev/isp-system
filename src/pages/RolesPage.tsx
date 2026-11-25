@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { AlertCircle, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useRolesMatrix } from '../features/roles/hooks/useRolesMatrix';
+import { useFeaturesManager } from '../features/roles/hooks/useFeaturesManager';
 import { MatrixHeader } from '../features/roles/components/MatrixHeader';
 import { PermissionsMatrix } from '../features/roles/components/PermissionsMatrix';
 import { MobileRoleView } from '../features/roles/components/MobileRoleView';
 import { UsersTab } from '../features/roles/components/UsersTab';
+import { FeaturesTab } from '../features/roles/components/FeaturesTab';
 import { AddRoleModal } from '../features/roles/components/AddRoleModal';
 import { RenameRoleModal } from '../features/roles/components/RenameRoleModal';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -23,7 +25,7 @@ export const RolesPage: React.FC = () => {
     user?.roles?.includes('SUPER_ADMIN') ||
     hasPermission('roles.manage');
 
-  const [activeTab, setActiveTab] = useState<'permissions' | 'users'>('permissions');
+  const [activeTab, setActiveTab] = useState<'permissions' | 'users' | 'features'>('permissions');
   const [userTabRoleFilter, setUserTabRoleFilter] = useState<string | null>(null);
 
   // Modals state
@@ -54,6 +56,21 @@ export const RolesPage: React.FC = () => {
     deleteRole,
     updateUserRoles,
   } = useRolesMatrix();
+
+  const {
+    features,
+    permissions: adminPermissions,
+    unassignedPermsMap,
+    dirtyCount: featureDirtyCount,
+    isSaving: isSavingFeatures,
+    isLoading: isFeaturesLoading,
+    updateFeaturePermissions,
+    updateFeatureMode,
+    toggleFeatureActive,
+    reorderFeature,
+    saveChanges: saveFeatureChanges,
+    discardChanges: discardFeatureChanges,
+  } = useFeaturesManager(permissions, currentMatrix);
 
   // 403 Forbidden State for unauthorized users
   if (!canManageRoles) {
@@ -104,18 +121,18 @@ export const RolesPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 animate-fadeIn">
+    <div className="flex flex-col gap-5 pb-6 animate-fadeIn">
       {/* Page Header */}
       <MatrixHeader
         activeTab={activeTab}
         onTabChange={(tab) => {
-          if (tab === 'permissions') setUserTabRoleFilter(null);
+          if (tab !== 'users') setUserTabRoleFilter(null);
           setActiveTab(tab);
         }}
-        dirtyCount={dirtyCount}
-        isSaving={isSaving}
-        onSave={saveChanges}
-        onDiscard={discardChanges}
+        dirtyCount={activeTab === 'features' ? featureDirtyCount : dirtyCount}
+        isSaving={activeTab === 'features' ? isSavingFeatures : isSaving}
+        onSave={activeTab === 'features' ? saveFeatureChanges : saveChanges}
+        onDiscard={activeTab === 'features' ? discardFeatureChanges : discardChanges}
         onAddRole={() => setIsAddModalOpen(true)}
         onBack={() => navigate('/settings')}
         canManage={canManageRoles}
@@ -169,6 +186,18 @@ export const RolesPage: React.FC = () => {
             />
           </div>
         </>
+      ) : activeTab === 'features' ? (
+        <FeaturesTab
+          features={features}
+          permissions={adminPermissions}
+          unassignedPermsMap={unassignedPermsMap}
+          canManage={canManageRoles}
+          isLoading={isFeaturesLoading}
+          onUpdatePermissions={updateFeaturePermissions}
+          onUpdateMode={updateFeatureMode}
+          onToggleActive={toggleFeatureActive}
+          onReorder={reorderFeature}
+        />
       ) : (
         /* Users Tab */
         <UsersTab

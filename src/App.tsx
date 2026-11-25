@@ -102,6 +102,32 @@ export const AppContent: React.FC = () => {
     document.documentElement.setAttribute('data-motion', animations || 'system');
   }, [darkMode, themeMode, comfort, density, animations]);
 
+  // Throttled window focus refetch for /auth/me and /auth/navigation
+  useEffect(() => {
+    let lastFocusTime = Date.now();
+    const handleWindowFocus = async () => {
+      const now = Date.now();
+      if (now - lastFocusTime < 30000) return; // 30-second throttle
+      lastFocusTime = now;
+
+      const currentAuth = useAuthStore.getState();
+      if (currentAuth.status === 'authenticated' && currentAuth.accessToken) {
+        try {
+          const meRes = await api.auth.me();
+          if (meRes?.user) {
+            currentAuth.setUser(meRes.user);
+          }
+          queryClient.invalidateQueries({ queryKey: ['navigation'] });
+        } catch {
+          // background refresh fallback
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, []);
+
   // Silently restore session on mount via refresh token (httpOnly cookie)
   useEffect(() => {
     let isMounted = true;
@@ -124,14 +150,6 @@ export const AppContent: React.FC = () => {
         const refreshRes = await api.auth.refresh();
         if (refreshRes && refreshRes.accessToken) {
           setAuth(refreshRes.accessToken, refreshRes.user);
-          try {
-            const meRes = await api.auth.me();
-            if (meRes?.user) {
-              setAuth(refreshRes.accessToken, meRes.user);
-            }
-          } catch {
-            // Background profile refresh fallback
-          }
         } else {
           clearAuth();
         }
@@ -226,7 +244,7 @@ export const AppContent: React.FC = () => {
                   path="/customers"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission permission="customers:read">
+                      <RequirePermission feature="page.customers">
                         <AnimatedRouteWrapper>
                           <CustomersPage />
                         </AnimatedRouteWrapper>
@@ -240,7 +258,7 @@ export const AppContent: React.FC = () => {
                   path="/inventory/products"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission permission="inventory:read">
+                      <RequirePermission feature="page.products">
                         <AnimatedRouteWrapper>
                           <ProductsPage />
                         </AnimatedRouteWrapper>
@@ -252,7 +270,7 @@ export const AppContent: React.FC = () => {
                   path="/inventory/warehouses"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission permission="inventory:read">
+                      <RequirePermission feature="page.warehouses">
                         <AnimatedRouteWrapper>
                           <WarehousesPage />
                         </AnimatedRouteWrapper>
@@ -264,7 +282,7 @@ export const AppContent: React.FC = () => {
                   path="/inventory/procurement"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission permission="inventory:read">
+                      <RequirePermission feature="page.procurement">
                         <AnimatedRouteWrapper>
                           <ProcurementPage />
                         </AnimatedRouteWrapper>
@@ -280,7 +298,7 @@ export const AppContent: React.FC = () => {
                   path="/accounting"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN', 'BILLING_CASHIER']}>
+                      <RequirePermission feature="page.accounting">
                         <AnimatedRouteWrapper>
                           <AccountingPage />
                         </AnimatedRouteWrapper>
@@ -292,7 +310,7 @@ export const AppContent: React.FC = () => {
                   path="/payments"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN', 'BILLING_CASHIER']}>
+                      <RequirePermission feature="page.payments">
                         <AnimatedRouteWrapper>
                           <PaymentsPage />
                         </AnimatedRouteWrapper>
@@ -304,7 +322,7 @@ export const AppContent: React.FC = () => {
                   path="/billing"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN', 'BILLING_CASHIER']}>
+                      <RequirePermission feature="page.billing">
                         <AnimatedRouteWrapper>
                           <BillingPage />
                         </AnimatedRouteWrapper>
@@ -318,7 +336,7 @@ export const AppContent: React.FC = () => {
                   path="/plans"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission permission="packages:read">
+                      <RequirePermission feature="page.plans">
                         <AnimatedRouteWrapper>
                           <PlansPage />
                         </AnimatedRouteWrapper>
@@ -332,7 +350,7 @@ export const AppContent: React.FC = () => {
                   path="/installations"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER']}>
+                      <RequirePermission feature="page.installations">
                         <AnimatedRouteWrapper>
                           <InstallationsPage />
                         </AnimatedRouteWrapper>
@@ -344,7 +362,7 @@ export const AppContent: React.FC = () => {
                   path="/technicians"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER']}>
+                      <RequirePermission feature="page.technicians">
                         <AnimatedRouteWrapper>
                           <TechniciansPage />
                         </AnimatedRouteWrapper>
@@ -356,7 +374,7 @@ export const AppContent: React.FC = () => {
                   path="/tickets"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN', 'SUPPORT_AGENT', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER']}>
+                      <RequirePermission feature="page.tickets">
                         <AnimatedRouteWrapper>
                           <TicketsPage />
                         </AnimatedRouteWrapper>
@@ -370,7 +388,7 @@ export const AppContent: React.FC = () => {
                   path="/network"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN', 'NETWORK_ENGINEER']}>
+                      <RequirePermission feature="page.network">
                         <AnimatedRouteWrapper>
                           <NetworkPage />
                         </AnimatedRouteWrapper>
@@ -384,9 +402,11 @@ export const AppContent: React.FC = () => {
                   path="/portal"
                   element={
                     <ProtectedRoute>
-                      <AnimatedRouteWrapper>
-                        <CustomerPortalPage />
-                      </AnimatedRouteWrapper>
+                      <RequirePermission feature="page.portal">
+                        <AnimatedRouteWrapper>
+                          <CustomerPortalPage />
+                        </AnimatedRouteWrapper>
+                      </RequirePermission>
                     </ProtectedRoute>
                   }
                 />
@@ -396,7 +416,7 @@ export const AppContent: React.FC = () => {
                   path="/settings/users"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN']}>
+                      <RequirePermission feature="page.users">
                         <AnimatedRouteWrapper>
                           <StaffUsersPage />
                         </AnimatedRouteWrapper>
@@ -408,7 +428,7 @@ export const AppContent: React.FC = () => {
                   path="/settings/audit"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN']}>
+                      <RequirePermission feature="page.audit">
                         <AnimatedRouteWrapper>
                           <AuditLogsPage />
                         </AnimatedRouteWrapper>
@@ -420,7 +440,7 @@ export const AppContent: React.FC = () => {
                   path="/reports"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission permission="reports:read">
+                      <RequirePermission feature="page.reports">
                         <AnimatedRouteWrapper>
                           <ReportsPage />
                         </AnimatedRouteWrapper>
@@ -432,9 +452,11 @@ export const AppContent: React.FC = () => {
                   path="/messages"
                   element={
                     <ProtectedRoute>
-                      <AnimatedRouteWrapper>
-                        <MessagesPage />
-                      </AnimatedRouteWrapper>
+                      <RequirePermission feature="page.messages">
+                        <AnimatedRouteWrapper>
+                          <MessagesPage />
+                        </AnimatedRouteWrapper>
+                      </RequirePermission>
                     </ProtectedRoute>
                   }
                 />
@@ -442,7 +464,7 @@ export const AppContent: React.FC = () => {
                   path="/automation"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN']}>
+                      <RequirePermission feature="page.automation">
                         <AnimatedRouteWrapper>
                           <AutomationPage />
                         </AnimatedRouteWrapper>
@@ -454,7 +476,7 @@ export const AppContent: React.FC = () => {
                   path="/integrations"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN']}>
+                      <RequirePermission feature="page.integrations">
                         <AnimatedRouteWrapper>
                           <IntegrationsPage />
                         </AnimatedRouteWrapper>
@@ -466,7 +488,7 @@ export const AppContent: React.FC = () => {
                   path="/settings"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission roles={['SUPER_ADMIN']}>
+                      <RequirePermission feature="page.settings">
                         <AnimatedRouteWrapper>
                           <SettingsPage />
                         </AnimatedRouteWrapper>
@@ -478,7 +500,7 @@ export const AppContent: React.FC = () => {
                   path="/settings/roles"
                   element={
                     <ProtectedRoute>
-                      <RequirePermission permission="roles.manage">
+                      <RequirePermission feature="page.roles">
                         <AnimatedRouteWrapper>
                           <RolesPage />
                         </AnimatedRouteWrapper>

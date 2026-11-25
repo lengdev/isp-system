@@ -137,7 +137,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-xs">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
           <div className="relative flex-1 max-w-sm">
-            <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-3 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search user by name, username or email..."
@@ -153,6 +153,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
               value={selectedRoleFilter}
               onChange={(val) => setSelectedRoleFilter(val || '')}
               placeholder="Filter by role..."
+              size="sm"
               clearable={Boolean(selectedRoleFilter)}
             />
           </div>
@@ -167,7 +168,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       <div className="overflow-x-auto rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)]">
         <table className="w-full border-collapse text-left min-w-[720px]">
           <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--surface-subtle)]/70 h-10 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+            <tr className="border-b border-[var(--border)] bg-[var(--surface-subtle)] h-10 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
               <th className="px-4 py-2">User</th>
               <th className="px-4 py-2">Username</th>
               <th className="px-4 py-2">Role</th>
@@ -189,7 +190,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                 return (
                   <tr
                     key={user.id}
-                    className="hover:bg-[var(--surface-subtle)]/50 transition-colors h-14"
+                    className="hover:bg-[var(--surface-subtle)] transition-colors h-14"
                   >
                     {/* User Name & Email */}
                     <td className="px-4 py-2.5">
@@ -221,7 +222,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                           value={currentRoleObj?.id || ''}
                           onChange={(newRoleId) => handleRoleSelect(user, newRoleId)}
                           clearable={false}
-                          className="h-8 text-xs"
+                          size="sm"
                         />
                       ) : (
                         <span className="font-medium text-[var(--text)] px-2.5 py-1 rounded-md bg-[var(--surface-subtle)] border border-[var(--border)]">
@@ -292,7 +293,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                   {pendingChange.user.role}
                 </span>
                 <span className="text-[var(--text-muted)]">→</span>
-                <span className="px-2 py-0.5 rounded bg-[var(--brand-soft)] text-[var(--brand)] font-bold border border-[var(--brand)]/20">
+                <span className="px-2 py-0.5 rounded bg-[var(--brand-soft)] text-[var(--brand)] font-bold border border-[#EA6A3C]/25">
                   {pendingChange.newRoleName}
                 </span>
               </div>

@@ -1,200 +1,231 @@
-# NetPulse - Modern ISP Customer Management & Operations Platform
+# NetPulse — ISP ERP, CRM & Network Operations Platform
 
-NetPulse is a production-grade ISP (Internet Service Provider) Customer Management and Network Operations web application. It features a SaaS administrative dashboard designed with an orange accent visual language (`#F26B3A`), warm off-white background (`#FAF7F5`), collapsible statistics, interactive Recharts graphs, and full dark-mode support.
-
----
-
-## 🌟 Key Features
-
-### 1. Customers Page (Main Hub)
-- **Live Stat Cards**: Total Subscribers, Monthly Recurring Revenue (MRR), Active Connections, and Average Monthly Usage with animated count-ups and month-over-month indicators.
-- **Collapsible Stats Toolbar**: Animated height expand/collapse toggle ("Show Statistics").
-- **Dynamic Filter Pills**: Live subscriber count pills for `All Customers`, `Active`, `Suspended`, `Overdue`, `Pending`, and `Disconnected`.
-- **Advanced Filter Popover**: Filter by Internet Plan, Connection Type (Fiber, Wireless, DSL), City, Balance status, and Date ranges.
-- **Interactive Data Table**:
-  - Checkbox selection with select-all and animated floating **Bulk Action Bar** (Activate, Suspend, Message, Export CSV, Bulk Delete).
-  - Sortable column headers with animated direction arrows.
-  - Row hover and selected row warm peach tint (`#FFF6F2` / `dark:bg-orange-950/20`).
-  - Inline status changer directly from status badges.
-  - Star ratings, data usage progress bars, and "..." row actions menu.
-  - Multi-view switcher: **Table View**, **Compact View**, and **Card Grid View**.
-- **Customer Detail Drawer**:
-  - Slides in smoothly from the right on row click.
-  - 6 interactive tabs: **Overview**, **Billing History**, **Traffic & Usage Chart** (14-day interactive Recharts Area Chart), **Tickets**, **Activity Log**, and **Internal Notes**.
-- **Modals & Dialogs**:
-  - **Add / Edit Subscriber**: 3-step animated onboarding wizard with Zod validation.
-  - **Customize View**: Toggle and persist column visibility.
-  - **Delete Confirmation**: Single and bulk safety dialog (requires typing "DELETE").
-  - **Record Payment**: Ledger adjustment with real-time balance deductions.
-  - **Send Message**: SMS and Email templates with character counters.
-  - **Diagnostic Speed Test**: Live mock gauge measuring Latency, Jitter, Download, and Upload throughput.
-  - **Status Change**: Suspension reason modal.
-
-### 2. Operational Pages & Features
-- **Dashboard**: Core transit traffic graph (Gbps), MRR growth bars, hardware health, and audit trail.
-- **Internet Plans Catalog**: Full CRUD for Fiber, Wireless, and DSL broadband plans.
-- **Billing & Invoices**: Invoice management, status filtering, "Mark as Paid", and receipt downloads.
-- **Support Tickets & Dispatch**: Priority management, ticket statuses, technician assignment.
-- **Network Infrastructure**: OLT and Core Router fleet monitoring with remote hardware reboot action.
-- **Technicians & Installations**: Engineer roster and daily optical installation schedule.
-- **Subscriber Messaging**: SMS & Email broadcast dispatch to subscriber cohorts.
-- **ISP Automation**: Configurable automated triggers (e.g. past-due suspension, auto-backup, signal alerts).
-- **Integrations**: Mikrotik RouterOS, Ubiquiti UISP, Stripe, Twilio, and FreeRADIUS.
-- **System Settings**: Business profile customization, regional currency selection (`$`, `€`, `£`, `₹`), theme switcher, and demo data reset.
-- **Command Palette (`Ctrl+K` / `⌘K`)**: Fast global search across subscribers, IP addresses, MAC addresses, navigation, and quick actions.
-- **Toast Notifications**: Animated toast stack in bottom right with **Undo** capability for deletes.
+NetPulse is a full-stack **ISP (Internet Service Provider)** ERP, CRM, and Network Operations platform built with **React 18, TypeScript, Vite, Express 5, Prisma ORM, and PostgreSQL 16**. It covers subscriber CRM, broadband packages & subscriptions, MikroTik RouterOS / VLAN / IPAM operations, billing & Bakong KHQR payments, double-entry accounting, multi-warehouse inventory & procurement, field dispatch, customer self-service portal, and a database-backed **Roles, Permissions & Dynamic Navigation** engine.
 
 ---
 
-## 🛠️ Tech Stack
-- **Framework**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS with CSS Variables & Dark Mode
-- **Animations**: Framer Motion (page transitions, spring modals, drawers, floating action bars)
-- **State Management**: Zustand with `localStorage` persistence
-- **Icons**: Lucide React
-- **Charts**: Recharts (Responsive Area, Bar, and Line charts)
-- **Forms & Validation**: React Hook Form + Zod
-- **Date Handling**: date-fns
+## Key Features
+
+### 1. Subscriber CRM & Operations
+- **Customers Hub (`/customers`)**: Search, multi-filter toolbar, status tabs (`Active`, `Suspended`, `Overdue`, `Pending`, `Disconnected`), bulk actions bar, table/compact/card views, column customization, CSV/XLSX export, and a 6-tab **Customer Detail Drawer** (Overview, Billing History, 14-day Usage Chart, Tickets, Activity Log, Internal Notes).
+- **Modals & Diagnostics**: 3-step subscriber onboarding wizard (`React Hook Form` + `Zod`), payment recording, SMS/Email broadcast messaging, suspension status workflow, and diagnostic line speed tests.
+- **Broadband Plans (`/plans`)**: Fiber, Wireless, and DSL package catalog synced with PostgreSQL via Prisma.
+- **Network & Infrastructure (`/network`)**: MikroTik RouterOS fleet monitoring, PPPoE provisioning & active session telemetry, scope-aware VLAN catalog, and IPAM subnet/pool allocation (with built-in RouterOS simulator fallback).
+- **Billing, Payments & Accounting (`/billing`, `/payments`, `/accounting`)**: Invoice lifecycle, cashier counter payments, Bakong KHQR payload generation, Chart of Accounts, balanced Journal Entries, Trial Balance, P&L, Balance Sheet, and AR Aging.
+- **Inventory & Procurement (`/inventory/products`, `/inventory/warehouses`, `/inventory/procurement`)**: Multi-warehouse stock movements (`IN`, `OUT`, `TRANSFER`), serialized ONT/CPE tracking, suppliers, purchase orders, and Goods Received Notes (GRN).
+- **Field Operations & Support (`/installations`, `/technicians`, `/tickets`)**: Installation dispatch workflow, technician roster, and support ticket queues.
+- **Customer Portal (`/portal`) & Platform Tools (`/reports`, `/messages`, `/automation`, `/integrations`, `/settings`, `/settings/users`, `/settings/audit`)**: Self-service portal preview, automated billing/overdue/router health jobs, command palette (`Ctrl+K` / `⌘K`), and audit log viewer.
+
+### 2. Dynamic RBAC, Permissions Matrix & Feature Navigation (`/settings/roles`)
+- **Modular Registry (`server/src/rbac/registry/`)**: Single source of truth for permissions, UI features (`MENU`, `PAGE`, `TAB`, `ACTION`), dependency chains (`dependsOnKey`), and default role mappings, automatically synchronized to PostgreSQL at startup via `RbacService.syncRegistry()`.
+- **Permissions Matrix**: Role-by-permission matrix with sticky column headers, tri-state module toggles, cascading dependency rules, keyboard navigation, Shift+click range selection, optimistic concurrency checks (`expectedUpdatedAt` / `409 STALE_UPDATE`), and custom role creation/duplication/renaming/deletion.
+- **Users & Dynamic Menus**: Assign staff roles in the **Users** tab and configure sidebar menu items, route permissions, `ANY`/`ALL` evaluation mode, sort order, and active flags in the **Menus & Features** tab (`page.roles` is locked against accidental admin lockout).
 
 ---
 
-## 🚀 Getting Started
+## Tech Stack
+
+- **Frontend**: React 18, TypeScript, Vite 5, Tailwind CSS 3 (CSS variables, dark mode, eye-comfort & density modes), Framer Motion, Zustand, TanStack Query / Table / Virtual, Recharts, React Hook Form, Zod, Lucide React, SheetJS (`xlsx`).
+- **Backend**: Node.js, Express 5, TypeScript, Prisma ORM, PostgreSQL 16, `jsonwebtoken`, `bcryptjs`, `cookie-parser`, `helmet`, `cors`, `zod`, OpenAPI 3.0 + Swagger UI (`/api/docs`).
+- **Testing & Tooling**: Node built-in test runner (`node --test`), Playwright E2E (`@playwright/test`), ESLint 10, Docker & Nginx.
+
+---
+
+## Project Structure
+
+```text
+isp-system-2/
+├── .env.example                 # Environment variable template
+├── docker-compose.yml           # Postgres 16, Redis 7, Backend (:5000), Frontend Nginx (:80)
+├── Dockerfile.backend           # Multi-stage Node 20 backend image
+├── Dockerfile.frontend          # Vite build + Nginx runner image
+├── nginx.conf                   # SPA fallback + /api reverse proxy
+├── package.json                 # Scripts & workspace dependencies
+├── playwright.config.ts         # Playwright E2E config (baseURL http://127.0.0.1:5173)
+├── tailwind.config.js           # Tailwind theme tokens mapped to CSS variables
+├── vite.config.ts               # Vite dev server (:5173) + /api proxy -> 127.0.0.1:5000
+├── prisma/
+│   ├── schema.prisma            # 56-model PostgreSQL schema
+│   ├── seed.ts                  # Super Admin, dev demo users, and RBAC matrix seed
+│   ├── migrations/              # Prisma SQL migrations
+│   └── backups/                 # SQL backup snapshots
+├── scripts/
+│   ├── dev-all.mjs              # Compiles server, runs tsc -w + node --watch + vite
+│   ├── seed-admin.mjs           # Standalone admin/demo user seed script
+│   ├── db-backup.sh             # Compressed pg_dump backup script
+│   ├── db-restore.sh            # Compressed psql restore script
+│   ├── test-regression.mjs      # DataTable & UI regression test suite (22 checks)
+│   └── test-auth-frontend.mjs   # Frontend auth & RBAC validation test suite (7 tests)
+├── server/
+│   ├── tsconfig.json            # Compiles server/src -> dist-server/
+│   ├── src/
+│   │   ├── server.ts            # Express app, DB startup check, RBAC sync, route mounts
+│   │   ├── db/
+│   │   │   ├── store.ts         # Prisma client, initDatabaseConnection(), in-memory dbStore
+│   │   │   └── seedData.ts      # In-memory domain seed data
+│   │   ├── docs/openapi.ts      # OpenAPI 3.0 spec served at /api/v1/openapi.json
+│   │   ├── middleware/
+│   │   │   └── auth.middleware.ts # JWT authenticate, authorize, requireRole, requireFeature, Zod
+│   │   ├── rbac/registry/       # Modular permissions, features & default role definitions
+│   │   ├── routes/              # Express v1 route modules (14 domain route files)
+│   │   └── services/            # Domain & auth/RBAC services
+│   └── test/
+│       ├── netpulse.test.mjs    # Backend service integration suite
+│       ├── rbac.test.mjs        # RBAC API & DB matrix suite
+│       └── features-frontend.test.mjs # Feature permission mode evaluation tests
+├── src/
+│   ├── main.tsx                 # React 18 mount
+│   ├── App.tsx                  # Router, theme/comfort/density init, session restore, route guards
+│   ├── index.css                # Global CSS tokens (--brand #EA6A3C, light/dark themes)
+│   ├── components/
+│   │   ├── auth/                # ProtectedRoute, RequirePermission
+│   │   ├── layout/              # Sidebar (dynamic navigation), TopBar, CommandPalette, NotificationPanel
+│   │   └── ui/                  # Button, Combobox, DataTable, DatePicker, Drawer, Modal, etc.
+│   ├── features/
+│   │   ├── customers/           # CustomerTable, CustomerDetailDrawer, onboarding & action modals
+│   │   ├── inventory/           # ProductsPage & product modals
+│   │   └── roles/               # PermissionsMatrix, MatrixHeader, UsersTab, FeaturesTab, MobileRoleView
+│   ├── lib/                     # api.ts (SHA-256 pre-hash + auto-refresh), permissions.ts, motion.ts
+│   ├── pages/                   # Route pages (Dashboard, Billing, Network, RolesPage, etc.)
+│   └── store/                   # authStore.ts (in-memory JWT) & useStore.ts (UI preferences)
+├── test/unit/
+│   └── rbac-matrix.test.mjs     # Matrix tri-state, dependency & diff unit tests
+└── tests/                       # Playwright E2E specs (*.spec.ts)
+```
+
+---
+
+## Local Setup & Installation
 
 ### Prerequisites
-- Node.js (v18+ recommended)
-- npm or pnpm
+- **Node.js**: `v22.6+` recommended (`npm run db:seed` uses `node --experimental-strip-types` to run `prisma/seed.ts`; Node 20 works for build/runtime and `scripts/seed-admin.mjs`).
+- **PostgreSQL 16**: Local instance or Docker container (`docker compose up -d postgres`).
+- **npm**
 
-### Installation & Run
+### 1. Install Dependencies & Configure Environment
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Start the local development server (Backend API on port 5000 + Frontend on port 5173)
-npm run dev
+cp .env.example .env
 ```
 
-The application will launch at `http://localhost:5173/` (or the port specified in terminal).
+Update `.env` so `DATABASE_URL` matches your PostgreSQL credentials:
+- `.env.example` defaults to `postgresql://netpulse:netpulse@localhost:5432/netpulse?schema=public`
+- `docker-compose.yml` provisions `POSTGRES_USER=netpulse`, `POSTGRES_PASSWORD=netpulse123`, `POSTGRES_DB=netpulse`
 
-### Production Build
-
-```bash
-npm run build
-npm run preview
-```
-
----
-
-## 🎨 Visual Language & Design Tokens
-- **Primary Brand Accent**: `#F26B3A` (Warm Vibrant Orange)
-- **Brand Tint / Selected**: `#FFF1EA` / `#FFF6F2`
-- **Warm Background**: `#FAF7F5`
-- **Dark Mode Surface**: `#141416` / `#1C1C1F`
-- **Typography**: Plus Jakarta Sans / Inter
-
----
-
-## 🏛️ Application Bootstrapping & Database Layer (Dual-Storage Resilience)
-
-NetPulse is built with an enterprise decoupled architecture with two primary application entry points:
-
-### 1. Application Entry Points
-- **Backend Gateway Root Entry (`server/src/server.ts`)**:
-  - Executed by `npm run dev` (`node --watch dist-server/server.js`).
-  - Sets up Express, Helmet security headers, CORS with credentials (`credentials: true`), CookieParser, and JSON parsers.
-  - Connects to the database via `initDatabaseConnection()` from `server/src/db/store.ts`.
-  - Registers REST controllers under `/api/v1` and starts listening on port `5000`.
-- **Frontend SPA Root Entry (`src/main.tsx` & `src/App.tsx`)**:
-  - Loaded by `index.html` via Vite on port `5173`.
-  - Mounts React 18 tree, initializes themes, and silently restores sessions via `httpOnly` refresh cookies.
-  - Proxies all `/api/*` requests to the backend gateway at `http://127.0.0.1:5000` via `vite.config.ts`.
-
-### 2. Database Connection & Prisma ORM
-- Managed in `server/src/db/store.ts`:
-  ```ts
-  export const prisma = new PrismaClient();
-  let isPostgresConnected = false;
-
-  export async function initDatabaseConnection() {
-    try {
-      await prisma.$connect();
-      isPostgresConnected = true;
-      console.log('✓ Successfully connected to PostgreSQL via Prisma ORM');
-    } catch {
-      isPostgresConnected = false;
-      console.log('ℹ PostgreSQL daemon offline or sandbox restricted. Operating in high-performance memory-store mode.');
-    }
-  }
-
-  export function isUsingPostgres(): boolean {
-    return isPostgresConnected;
-  }
-  ```
-
-### 3. Why the System Still Works If `initDatabaseConnection()` Is Removed or Offline
-NetPulse implements an enterprise **Dual-Storage Resilience Architecture**:
-- In `server/src/db/store.ts`, a complete in-memory repository (`dbStore`) is pre-loaded with comprehensive seed data (users, subscribers, routers, billing packages, and general ledger accounts).
-- Every service (`CustomerService`, `AuthService`, `BillingService`, etc.) checks `isUsingPostgres()`.
-- If `initDatabaseConnection()` is removed, commented out, or if PostgreSQL is offline:
-  1. `isPostgresConnected` defaults to `false`.
-  2. All services gracefully route operations directly to `dbStore`.
-  3. The Express REST API continues serving HTTP 200 responses to the frontend.
-  4. Authentication sessions are persisted across server restarts via the local `.sessions-cache.json`.
-- **Benefits**:
-  - **Zero Downtime**: Temporary database downtime never crashes the operational dashboard.
-  - **Instant CI/CD**: Unit test suites (`npm test`) run in under 600ms without requiring a live PostgreSQL daemon.
-  - **Local Portability**: Developers can immediately test UI workflows without setting up Docker or PostgreSQL.
-
----
-
-## 🔐 Authentication, RBAC & Security Architecture
-
-NetPulse features a complete, enterprise-grade authentication system end-to-end:
-
-### 1. Token Lifetimes & Storage
-- **Access Tokens (JWT)**: Valid for **15 minutes**. Held in-memory only inside the client-side Zustand `authStore` (never stored in `localStorage` or `sessionStorage` to mitigate XSS attacks).
-- **Refresh Tokens**: Cryptographically random 256-bit entropy tokens, stored SHA-256 hashed in PostgreSQL (`Session` table) and issued to clients exclusively via `httpOnly`, `Secure`, `SameSite=Strict` cookies.
-  - **Standard session**: 7-day expiration.
-  - **"Remember Me"**: 30-day sliding window expiration.
-- **Silent Refresh & Interceptor**: On page reloads or token expiration, the Axios/Fetch client automatically requests `/api/v1/auth/refresh`. When a 401 occurs on any protected API call, the interceptor refreshes the access token once and transparently retries the in-flight request.
-- **Token Rotation & Family Reuse Detection**: Every refresh operation invalidates the previous refresh token and issues a new pair. If an expired or already-rotated token is reused (indicating token theft), the entire session family for that user is immediately revoked and an audit event (`REFRESH_REUSE_DETECTED`) is logged.
-
-### 2. Brute-Force & Lockout Controls
-- **Rate Limiting**: Sliding rate limit of **5 failed login attempts per 15 minutes** per IP and username.
-- **Account Lockout**: After 5 consecutive failed attempts on an existing account, the user account is automatically locked for 15 minutes (`lockedUntil`), and an `ACCOUNT_LOCKED` security event is written to `AuditLog`.
-- **Constant-Time Timing Attack Mitigation**: Non-existent usernames trigger a dummy bcrypt comparison against a pre-computed hash to prevent username enumeration timing side-channels.
-- **Security Headers**: Standard HTTP security headers powered by `helmet`, strict origin CORS with credentials, and Zod input validation on all request bodies.
-
-### 3. Role-Based Access Control (RBAC) Matrix
-The system enforces granular RBAC permissions across Express middleware (`authenticate`, `authorize`, `requireRole`) and React router guards (`<ProtectedRoute>`, `<RequirePermission>`):
-
-| Role | Responsibilities | Key Access Permissions |
-|---|---|---|
-| `SUPER_ADMIN` | Unrestricted ISP Administrator | Wildcard (`*`) access across all modules, user administration, and system settings |
-| `NETWORK_ENGINEER` | NOC & Infrastructure Operations | `network:*`, `router:*`, `pppoe:*`, `vlan:*`, `ipam:*`, `ticket:*`, customer views |
-| `BILLING_CASHIER` | Cashier, Invoicing & Counter Payments | `billing:*`, `payment:*`, `invoice:*`, accounting views, customer views |
-| `FIELD_TECHNICIAN` | On-site Installations & Repairs | `installation:*`, `ticket:*`, `equipment:assign`, inventory views |
-| `SUPPORT_AGENT` | Customer Service & Desk Help | `ticket:*`, `customer:view`, `message:*` |
-
-### 4. Database Seeding & Admin Setup
-Super Admin credentials are populated from environment variables (never hardcoded in source control):
+### 2. Initialize PostgreSQL, Generate Prisma Client & Seed
 
 ```bash
-# Seed initial Super Admin and demo accounts for each role
+# Start PostgreSQL (if using Docker for DB only)
+docker compose up -d postgres
+
+# Generate Prisma Client and apply migrations
+npx prisma generate
+npx prisma migrate deploy
+
+# Build the server first (prisma/seed.ts imports dist-server/services/rbac.service.js)
+npm run build:server
+
+# Seed Super Admin, dev demo users, roles, permissions, and features
 npm run db:seed
 ```
 
-Environment variables configured in `.env`:
-```ini
-ADMIN_USERNAME="admin"
-ADMIN_EMAIL="admin@netpulse.net"
-ADMIN_PASSWORD="StrongSuperAdminPassword2026!"
-```
-
-### 5. Authentication Test Suite
-Run the full test suite (DataTable regressions, backend service tests, and frontend authentication schemas):
+### 3. Run Development Servers
 
 ```bash
-npm test
+npm run dev
 ```
 
+`npm run dev` (alias for `npm run dev:all` / `scripts/dev-all.mjs`) runs:
+1. Initial TypeScript compile of `server/` into `dist-server/`.
+2. `tsc -p server/tsconfig.json -w` for incremental backend compilation.
+3. `node --watch-path=dist-server dist-server/server.js` on **`http://localhost:5000`** (`PORT=5000`).
+4. Vite frontend dev server on **`http://localhost:5173`**, proxying `/api/*` to `http://127.0.0.1:5000`.
+
+Useful URLs in development:
+- Frontend App: `http://localhost:5173`
+- API Gateway: `http://localhost:5000/api/v1`
+- Swagger API Docs: `http://localhost:5000/api/docs`
+
+### Production Build & Docker Compose
+
+```bash
+# Local production build (backend -> dist-server/, frontend -> dist/)
+npm run build:all
+npm run start
+
+# Full container stack (Postgres, Redis, Backend, Nginx Frontend on port 80)
+docker compose up -d --build
+```
+
+> **Note for `NODE_ENV=production`:** `server/src/server.ts` requires `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `COOKIE_SECURE` to be defined in the environment and exits at startup if any are missing.
+
+---
+
+## Database & Persistence Architecture
+
+- **Startup Requirement (`server/src/db/store.ts` & `server/src/server.ts`)**:
+  - `initDatabaseConnection()` connects via Prisma (`prisma.$connect()`) and executes `SELECT 1`.
+  - `startServer()` runs `await initDatabaseConnection()` and `await RbacService.syncRegistry()` before binding Express to port `5000`. If PostgreSQL is unreachable, startup aborts with exit code `1`.
+  - Runtime Prisma connectivity errors (`P1001`, `P1002`, `P1017`, `PrismaClientInitializationError`) are mapped to HTTP `503 Service temporarily unavailable`.
+- **Current Service Storage Split**:
+  - **PostgreSQL (Prisma ORM)**: Authentication, sessions, audit logs, staff users (`auth.service.ts`), RBAC roles/permissions/features/navigation (`rbac.service.ts`), customer profiles & subscriptions (`customer.service.ts`), and internet packages (`package.routes.ts`).
+  - **In-Memory `dbStore` (`server/src/db/store.ts` + `seedData.ts`)**: Operational modules (`accounting`, `automation`, `billing`, `inventory`, `mikrotik`, `network`, `operations`, `payment`, `procurement`, `report`) currently operate on the pre-seeded in-memory `NetPulseDataStore` (`dbStore`).
+
+---
+
+## Authentication, Security & Seeded Accounts
+
+- **Client Pre-Hashing**: `src/lib/api.ts` hashes passwords client-side with Web Crypto SHA-256 (`hashPasswordClient`) before sending login, password-reset, and password-change requests.
+- **Tokens & Cookies**:
+  - **Access Token (JWT)**: 15-minute lifetime, stored in memory in Zustand (`authStore.ts`).
+  - **Refresh Token**: 256-bit random token stored as a SHA-256 hash in the PostgreSQL `Session` table, sent in an `httpOnly` `refresh_token` cookie (`path: '/api/v1/auth'`, `sameSite: 'lax'`, `secure` in production; 7-day default / 30-day Remember Me). Supports atomic token rotation, 5-second concurrent request grace window, and family-wide revocation on reuse detection.
+- **Brute-Force Protection**: Sliding 15-minute window rate limiting (5 attempts per IP + username) and 15-minute account lockout (`lockedUntil`) recorded in `AuditLog`.
+
+### Default Seeded Accounts (`prisma/seed.ts`)
+
+| Role | Username | Email | Password |
+|---|---|---|---|
+| `SUPER_ADMIN` | `admin` | `admin@netpulse.net` | `ADMIN_PASSWORD` env var (default `StrongSuperAdminPassword2026!`) |
+| `NETWORK_ENGINEER` | `engineer` | `noc@netpulse.net` | `Password123!` *(non-production only)* |
+| `BILLING_CASHIER` | `cashier` | `cashier@netpulse.net` | `Password123!` *(non-production only)* |
+| `FIELD_TECHNICIAN` | `tech` | `tech@netpulse.net` | `Password123!` *(non-production only)* |
+| `SUPPORT_AGENT` | `support` | `support@netpulse.net` | `Password123!` *(non-production only)* |
+| `ACCOUNTANT` | `accountant` | `finance@netpulse.net` | `Password123!` *(non-production only)* |
+
+---
+
+## Visual Design Tokens (`src/index.css`)
+
+- **Primary Brand Accent**: `#EA6A3C` (`--brand`), hover `#D95A2C`, soft tint `#FDEFE8`
+- **Light Mode Surfaces**: App background `#F7F7F5`, surface `#FFFFFF`, subtle `#F8F7F4` (plus `soft`, `standard`, and `high-contrast` comfort modes)
+- **Dark Mode Surfaces**: App background `#111214`, sidebar `#16181D`, surface `#1A1C20`, raised `#212429`
+- **Typography**: `Inter`, `Noto Sans Khmer`, `Kantumruy Pro`, `Plus Jakarta Sans`
+
+---
+
+## Scripts & Verification
+
+```bash
+# Lint & Typecheck / Build
+npm run lint
+npm run build:server
+npm run build            # tsc -b && vite build
+npm run build:all        # build:server && build
+
+# Automated Tests
+npm run test:unit        # DataTable & UI regression checks (scripts/test-regression.mjs)
+npm run test:frontend-auth # Frontend auth & RBAC validation tests (scripts/test-auth-frontend.mjs)
+npm run test:backend     # Backend domain suite (server/test/netpulse.test.mjs)
+npm test                 # Runs test:unit, test:backend, and test:frontend-auth
+
+# Additional Unit & Integration Suites
+node --test test/unit/rbac-matrix.test.mjs
+node --test server/test/features-frontend.test.mjs
+node --test server/test/rbac.test.mjs   # Requires built dist-server & seeded PostgreSQL
+
+# Playwright End-to-End Tests
+npm run test:pw
+```
+
+For full architectural, schema, API, and RBAC details, see [documentation.md](./documentation.md).

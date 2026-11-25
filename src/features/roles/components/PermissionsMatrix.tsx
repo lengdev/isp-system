@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -11,6 +12,7 @@ import {
   Trash2,
   Users,
   Lock,
+  X,
 } from 'lucide-react';
 import { Tooltip } from '../../../components/ui/Tooltip';
 import { MatrixCheckbox } from './MatrixCheckbox';
@@ -52,8 +54,14 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [hoveredPermKey, setHoveredPermKey] = useState<string | null>(null);
+  const [hoveredGroupName, setHoveredGroupName] = useState<string | null>(null);
   const [hoveredRoleId, setHoveredRoleId] = useState<string | null>(null);
-  const [activeMenuRoleId, setActiveMenuRoleId] = useState<string | null>(null);
+  const [isScrolledHorizontally, setIsScrolledHorizontally] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<{
+    roleId: string;
+    top: number;
+    left: number;
+  } | null>(null);
 
   // Keyboard navigation & range selection state
   const [focusedCoord, setFocusedCoord] = useState<{ roleIdx: number; permIdx: number } | null>(null);
@@ -138,15 +146,27 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
     }
   }, [focusedColumnId]);
 
-  // Global click listener to dismiss role dropdown menus
+  // Global click, scroll, and resize listener to dismiss role dropdown menus
   useEffect(() => {
-    const handleGlobalClick = () => setActiveMenuRoleId(null);
-    window.addEventListener('click', handleGlobalClick);
-    return () => window.removeEventListener('click', handleGlobalClick);
-  }, []);
+    if (!activeMenu) return;
+    const handleDismiss = () => setActiveMenu(null);
+    window.addEventListener('click', handleDismiss);
+    window.addEventListener('resize', handleDismiss);
+    window.addEventListener('scroll', handleDismiss, true);
+    return () => {
+      window.removeEventListener('click', handleDismiss);
+      window.removeEventListener('resize', handleDismiss);
+      window.removeEventListener('scroll', handleDismiss, true);
+    };
+  }, [activeMenu]);
 
   // Keyboard navigation inside grid
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setActiveMenu(null);
+      return;
+    }
+
     if (!focusedCoord || visiblePermissions.length === 0 || roles.length === 0) {
       return;
     }
@@ -187,8 +207,6 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
         onToggleCell(currentRole.id, currentPerm.key, nextChecked);
         setLastSelectedCell({ roleId: currentRole.id, permKey: currentPerm.key });
       }
-    } else if (e.key === 'Escape') {
-      setActiveMenuRoleId(null);
     }
   };
 
@@ -232,21 +250,43 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
     );
   };
 
+  const activeRoleForMenu = activeMenu
+    ? roles.find((r) => r.id === activeMenu.roleId) || null
+    : null;
+
+  const stickyColumnShadow = isScrolledHorizontally
+    ? 'shadow-[4px_0_12px_-4px_rgba(16,24,40,0.10)] dark:shadow-[4px_0_12px_-4px_rgba(0,0,0,0.45)]'
+    : '';
+
   return (
     <div
       ref={gridContainerRef}
       role="grid"
       aria-label="Roles and Permissions Matrix"
       onKeyDown={handleKeyDown}
+      onScroll={(e) => {
+        const scrolled = e.currentTarget.scrollLeft > 0;
+        if (scrolled !== isScrolledHorizontally) {
+          setIsScrolledHorizontally(scrolled);
+        }
+        if (activeMenu) {
+          setActiveMenu(null);
+        }
+      }}
       tabIndex={0}
       className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-[var(--shadow-card)] overflow-x-auto focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
     >
-      <table className="w-full border-collapse text-left select-none min-w-[760px]">
-        {/* Sticky Header Row */}
+      <table className="w-full border-separate border-spacing-0 text-left select-none [&_tbody_tr:last-child_td]:border-b-0">
+        {/* Header Row */}
         <thead>
-          <tr className="border-b border-[var(--border)] bg-[var(--surface)] h-12 sticky top-0 z-30 shadow-[0_1px_0_0_var(--border)]">
+          <tr className="h-14">
             {/* Sticky Left Search Header */}
-            <th className="sticky left-0 z-40 bg-[var(--surface)] w-[280px] min-w-[280px] max-w-[280px] px-3.5 py-2 border-r border-[var(--border)] shadow-[1px_0_0_0_var(--border)]">
+            <th
+              className={cn(
+                'sticky left-0 z-30 bg-[var(--surface)] w-[280px] min-w-[280px] max-w-[280px] px-3.5 py-2.5 border-b border-r border-[var(--border)] align-middle transition-shadow',
+                stickyColumnShadow
+              )}
+            >
               <div className="relative flex items-center">
                 <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 pointer-events-none" />
                 <input
@@ -254,16 +294,26 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                   placeholder="Search permission..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-8 pl-8 pr-3 text-xs bg-[var(--surface-subtle)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] focus:border-[var(--brand)] transition-colors"
+                  className="w-full h-8 pl-8 pr-7 text-xs bg-[var(--surface-subtle)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] focus:border-[var(--brand)] transition-colors"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </th>
 
             {/* Role Columns Headers */}
-            {roles.map((role, colIdx) => {
+            {roles.map((role) => {
               const isSuperAdmin = role.name === 'SUPER_ADMIN';
               const isColHovered = hoveredRoleId === role.id;
-              const isMenuOpen = activeMenuRoleId === role.id;
+              const isMenuOpen = activeMenu?.roleId === role.id;
 
               return (
                 <th
@@ -272,117 +322,53 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                   onMouseEnter={() => setHoveredRoleId(role.id)}
                   onMouseLeave={() => setHoveredRoleId(null)}
                   className={cn(
-                    'px-4 py-2 min-w-[145px] max-w-[200px] text-center border-r border-[var(--border)] transition-colors relative group',
+                    'px-7 py-2.5 min-w-[168px] text-center border-b border-r border-[var(--border)] last:border-r-0 transition-colors relative group align-middle',
                     isColHovered ? 'bg-[var(--surface-subtle)]' : 'bg-[var(--surface)]'
                   )}
                 >
-                  <div className="flex items-center justify-between gap-1.5">
-                    <div className="flex-1 text-center truncate">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs font-semibold text-[var(--text)] truncate">
-                          {role.name}
-                        </span>
-                        {isSuperAdmin && (
-                          <Lock className="w-3 h-3 text-[var(--brand)] shrink-0" />
-                        )}
-                      </div>
-                      <div className="text-[11px] font-normal text-[var(--text-muted)]">
-                        {role.userCount} {role.userCount === 1 ? 'user' : 'users'}
-                      </div>
+                  <div className="flex flex-col items-center justify-center min-w-0">
+                    <div className="flex items-center justify-center gap-1 max-w-full">
+                      <span className="text-xs font-semibold text-[var(--text)] truncate">
+                        {role.name}
+                      </span>
+                      {isSuperAdmin && (
+                        <Lock className="w-3 h-3 text-[var(--brand)] shrink-0" />
+                      )}
                     </div>
-
-                    {/* Role ⋮ Menu */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        aria-label={`Options for ${role.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuRoleId(isMenuOpen ? null : role.id);
-                        }}
-                        className={cn(
-                          'p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] opacity-0 group-hover:opacity-100 transition-opacity',
-                          isMenuOpen && 'opacity-100 bg-[var(--surface-subtle)]'
-                        )}
-                      >
-                        <MoreVertical className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Dropdown Menu */}
-                      <AnimatePresence>
-                        {isMenuOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                            transition={{ duration: 0.12 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute right-0 top-7 z-50 w-44 p-1 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-lg text-left"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveMenuRoleId(null);
-                                onViewUsers(role.name);
-                              }}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
-                            >
-                              <Users className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                              <span>View Users ({role.userCount})</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveMenuRoleId(null);
-                                onDuplicateRole(role);
-                              }}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                              <span>Duplicate Role</span>
-                            </button>
-
-                            {!isSuperAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveMenuRoleId(null);
-                                  onRenameRole(role);
-                                }}
-                                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
-                              >
-                                <Edit2 className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                                <span>Rename / Details</span>
-                              </button>
-                            )}
-
-                            {!role.isSystem && role.userCount === 0 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveMenuRoleId(null);
-                                  onDeleteRole(role);
-                                }}
-                                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[#B42318] hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Delete Role</span>
-                              </button>
-                            )}
-
-                            {(role.isSystem || role.userCount > 0) && (
-                              <div className="px-2.5 py-1 text-[10px] text-[var(--text-muted)] border-t border-[var(--border)] mt-1">
-                                {role.isSystem
-                                  ? 'System role cannot be deleted'
-                                  : 'Cannot delete role with assigned users'}
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                    <div className="text-[11px] font-normal text-[var(--text-muted)] whitespace-nowrap">
+                      {role.userCount} {role.userCount === 1 ? 'user' : 'users'}
                     </div>
                   </div>
+
+                  {/* Role ⋮ Menu Trigger */}
+                  <button
+                    type="button"
+                    aria-label={`Options for ${role.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isMenuOpen) {
+                        setActiveMenu(null);
+                      } else {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const menuWidth = 176;
+                        const left = Math.max(
+                          12,
+                          Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 12)
+                        );
+                        setActiveMenu({
+                          roleId: role.id,
+                          top: rect.bottom + 6,
+                          left,
+                        });
+                      }
+                    }}
+                    className={cn(
+                      'absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity',
+                      isMenuOpen && 'opacity-100 bg-[var(--surface)] text-[var(--text)]'
+                    )}
+                  >
+                    <MoreVertical className="w-3.5 h-3.5" />
+                  </button>
                 </th>
               );
             })}
@@ -395,7 +381,7 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
             <tr>
               <td
                 colSpan={roles.length + 1}
-                className="py-12 text-center text-xs text-[var(--text-muted)]"
+                className="py-12 text-center text-xs text-[var(--text-muted)] bg-[var(--surface)]"
               >
                 No permissions matching "{searchQuery}"
               </td>
@@ -404,26 +390,38 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
             filteredGroups.map((group) => {
               const collapsed = isGroupCollapsed(group.name);
               const groupPermKeys = group.items.map((p) => p.key);
+              const isGroupHovered = hoveredGroupName === group.name;
+              const groupBgClass = isGroupHovered
+                ? 'bg-[#F1F0EC] dark:bg-[#22252B]'
+                : 'bg-[var(--surface-subtle)]';
 
               return (
                 <React.Fragment key={group.name}>
-                  {/* Group Header Row (36px) */}
+                  {/* Group Header Row */}
                   <tr
-                    className="border-b border-[var(--border)] bg-[var(--surface-subtle)]/80 hover:bg-[var(--surface-subtle)] cursor-pointer h-9 transition-colors"
+                    className="cursor-pointer h-9"
+                    onMouseEnter={() => setHoveredGroupName(group.name)}
+                    onMouseLeave={() => setHoveredGroupName(null)}
                     onClick={() => toggleGroupCollapse(group.name)}
                   >
-                    {/* Left Sticky Group Column */}
-                    <td className="sticky left-0 z-20 bg-[inherit] px-3.5 py-1.5 border-r border-[var(--border)] shadow-[1px_0_0_0_var(--border)]">
-                      <div className="flex items-center gap-2">
+                    {/* Left Sticky Group Column (Opaque) */}
+                    <td
+                      className={cn(
+                        'sticky left-0 z-20 w-[280px] min-w-[280px] max-w-[280px] px-3.5 py-2 border-b border-r border-[var(--border)] transition-colors',
+                        groupBgClass,
+                        stickyColumnShadow
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
                         {collapsed ? (
                           <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
                         ) : (
                           <ChevronDown className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
                         )}
-                        <span className="text-xs font-semibold text-[var(--text)] tracking-[-0.01em]">
+                        <span className="text-xs font-semibold text-[var(--text)] tracking-[-0.01em] truncate">
                           {highlightMatch(group.name, searchQuery)}
                         </span>
-                        <span className="px-1.5 py-0.2 rounded-full text-[10px] font-medium bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)]">
+                        <span className="px-1.5 py-0.5 leading-none rounded-full text-[10px] font-medium bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
                           {group.items.length}
                         </span>
                       </div>
@@ -440,7 +438,10 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                       return (
                         <td
                           key={role.id}
-                          className="px-4 py-1.5 text-center border-r border-[var(--border)]"
+                          className={cn(
+                            'px-4 py-1.5 text-center border-b border-r border-[var(--border)] last:border-r-0 transition-colors',
+                            groupBgClass
+                          )}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <MatrixCheckbox
@@ -464,7 +465,7 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                     })}
                   </tr>
 
-                  {/* Permission Items Rows (40px) */}
+                  {/* Permission Items Rows */}
                   {!collapsed &&
                     group.items.map((perm) => {
                       const isRowHovered = hoveredPermKey === perm.key;
@@ -475,23 +476,19 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                           role="row"
                           onMouseEnter={() => setHoveredPermKey(perm.key)}
                           onMouseLeave={() => setHoveredPermKey(null)}
-                          className={cn(
-                            'border-b border-[var(--border)] h-10 transition-colors',
-                            isRowHovered
-                              ? 'bg-[var(--surface-subtle)]'
-                              : 'hover:bg-[var(--surface-subtle)]/50'
-                          )}
+                          className="h-10"
                         >
-                          {/* Left Sticky Permission Label & Info */}
+                          {/* Left Sticky Permission Label & Info (Opaque) */}
                           <td
                             className={cn(
-                              'sticky left-0 z-10 px-3.5 py-2 border-r border-[var(--border)] shadow-[1px_0_0_0_var(--border)] transition-colors',
+                              'sticky left-0 z-20 w-[280px] min-w-[280px] max-w-[280px] px-3.5 py-2 border-b border-r border-[var(--border)] transition-colors',
                               isRowHovered
                                 ? 'bg-[var(--surface-subtle)]'
-                                : 'bg-[var(--surface)]'
+                                : 'bg-[var(--surface)]',
+                              stickyColumnShadow
                             )}
                           >
-                            <div className="flex items-center justify-between gap-2 pl-4">
+                            <div className="flex items-center justify-between gap-2 pl-4 min-w-0">
                               <span className="text-xs font-normal text-[var(--text)] truncate">
                                 {highlightMatch(perm.label, searchQuery)}
                               </span>
@@ -533,9 +530,12 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                                 onMouseEnter={() => setHoveredRoleId(role.id)}
                                 onMouseLeave={() => setHoveredRoleId(null)}
                                 className={cn(
-                                  'px-4 py-1.5 text-center border-r border-[var(--border)] transition-colors relative',
-                                  isCrosshair && 'bg-[var(--surface-subtle)]',
-                                  isRowHovered && isColHovered && 'bg-[var(--brand-soft)]/50 dark:bg-[var(--brand)]/10'
+                                  'px-4 py-1.5 text-center border-b border-r border-[var(--border)] last:border-r-0 transition-colors',
+                                  isRowHovered && isColHovered
+                                    ? 'bg-[var(--brand-soft)]'
+                                    : isCrosshair
+                                    ? 'bg-[var(--surface-subtle)]'
+                                    : 'bg-[var(--surface)]'
                                 )}
                               >
                                 <MatrixCheckbox
@@ -576,6 +576,94 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
           )}
         </tbody>
       </table>
+
+      {/* Portal Role Options Dropdown Menu */}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {activeMenu && activeRoleForMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                transition={{ duration: 0.12 }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: 'fixed',
+                  top: `${activeMenu.top}px`,
+                  left: `${activeMenu.left}px`,
+                  zIndex: 9999,
+                }}
+                className="w-44 p-1 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-lg text-left"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = activeRoleForMenu;
+                    setActiveMenu(null);
+                    onViewUsers(target.name);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
+                >
+                  <Users className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                  <span>View Users ({activeRoleForMenu.userCount})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = activeRoleForMenu;
+                    setActiveMenu(null);
+                    onDuplicateRole(target);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                  <span>Duplicate Role</span>
+                </button>
+
+                {activeRoleForMenu.name !== 'SUPER_ADMIN' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = activeRoleForMenu;
+                      setActiveMenu(null);
+                      onRenameRole(target);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--surface-subtle)] rounded-lg transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                    <span>Rename / Details</span>
+                  </button>
+                )}
+
+                {!activeRoleForMenu.isSystem && activeRoleForMenu.userCount === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = activeRoleForMenu;
+                      setActiveMenu(null);
+                      onDeleteRole(target);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[#B42318] hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Role</span>
+                  </button>
+                )}
+
+                {(activeRoleForMenu.isSystem || activeRoleForMenu.userCount > 0) && (
+                  <div className="px-2.5 py-1 text-[10px] text-[var(--text-muted)] border-t border-[var(--border)] mt-1">
+                    {activeRoleForMenu.isSystem
+                      ? 'System role cannot be deleted'
+                      : 'Cannot delete role with assigned users'}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
     </div>
   );
 };

@@ -1,192 +1,202 @@
-# NetPulse – Complete ISP ERP, CRM & Network Management System
-**Production Release Architecture, Implementation & Operating Guide**
+# NetPulse — Complete ISP ERP, CRM & Network Management System
+
+**Architecture, Setup, Implementation & Operating Guide**
 
 ---
 
 ## 1. Executive Summary & Architecture Overview
 
-**NetPulse** is an enterprise-grade ISP ERP, CRM, and Network Operations platform specifically engineered for Internet Service Providers operating mixed **FTTH (Fiber to the Home)** and **Wireless (WISP)** distribution networks with **MikroTik RouterOS** infrastructure, managing 500 to 2,000+ active subscribers.
+**NetPulse** is a full-stack ISP (Internet Service Provider) ERP, CRM, and Network Operations platform built for operators running mixed **FTTH (Fiber to the Home)** and **Wireless (WISP)** networks with **MikroTik RouterOS** infrastructure.
 
-The system is built on a high-concurrency **PERN (PostgreSQL, Express, React, Node.js)** architecture in strict TypeScript, adhering to single-source-of-truth domain models, double-entry financial controls, carrier-grade network operations safety, and enterprise authentication standards.
+The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)** TypeScript architecture featuring database-backed authentication and dynamic RBAC, double-entry accounting invariants, multi-warehouse inventory tracking, and responsive UI primitives.
 
-```
-                           +------------------------------------------------+
-                           |             NetPulse Unified UI                |
-                           |   (React 18, Vite, Tailwind CSS, Lucide,       |
-                           |    Framer Motion, TanStack, Zustand Store)     |
-                           +-----------------------+------------------------+
-                                                   |
-                                                   | HTTP / REST API & SSE (Cookies + Bearer)
-                                                   v
-                           +------------------------------------------------+
-                           |           NetPulse API Gateway / Server        |
-                           |   (Node.js 24, Express, TypeScript, JWT,       |
-                           |    Role-Based Access Control, Swagger Docs)    |
-                           +--+-------------+-------------+--------------+--+
-                              |             |             |              |
-          +-------------------+             |             |              +-------------------+
-          |                                 |             |                                  |
-          v                                 v             v                                  v
-+-------------------+             +------------------+  +------------------+       +-------------------+
-| MikroTik RouterOS |             |   Prisma ORM     |  | Double-Entry     |       | Automated Tasks   |
-| API Integration   |             |   Data Layer     |  | Accounting Engine|       | & Cron Service    |
-| - PPPoE Secrets   |             | - 30+ Entities   |  | - General Ledger |       | - Recurring Bill  |
-| - Rate Queues     |             | - Strict UUIDs   |  | - Trial Balance  |       | - Auto-Suspension |
-| - Active Sessions |             | - High-Precision |  | - P&L & Balance  |       | - Health Probes   |
-| - Interface Stats |             |   Decimals       |  |   Sheet          |       | - Low-Stock Alerts|
-+-------------------+             +--------+---------+  +------------------+       +-------------------+
-                                           |
-                                           v
-                                  +------------------+
-                                  | PostgreSQL 16 DB |
-                                  | (Dual Store Fall-|
-                                  |  back in Sandbox)|
-                                  +------------------+
+```text
++------------------------------------------------------------------+
+|                        NetPulse Unified UI                       |
+|   React 18 · TypeScript · Vite 5 · Tailwind CSS 3 · Zustand      |
+|   TanStack Query / Table / Virtual · Framer Motion · Recharts    |
++---------------------------------+--------------------------------+
+                                  |
+                                  | HTTP / REST API (/api/v1, httpOnly Cookies + Bearer JWT)
+                                  v
++------------------------------------------------------------------+
+|                    NetPulse API Gateway (Express 5)              |
+|   Node.js · TypeScript · Helmet · Zod · JWT · Dynamic RBAC       |
+|   Swagger / OpenAPI 3.0 (/api/docs)                              |
++--------+-----------------+-------------------+-------------------+
+         |                 |                   |
+         v                 v                   v
++-----------------+ +---------------+ +----------------------------+
+| Prisma ORM +    | | In-Memory     | | MikroTik RouterOS Layer    |
+| PostgreSQL 16   | | dbStore       | | - Fleet Metrics & Ping     |
+| - Auth & Session| | - Accounting  | | - PPPoE Secrets & Sessions |
+| - Audit Logs    | | - Billing/Pay | | - Simulator Fallback       |
+| - RBAC & Menus  | | - Inventory   | +----------------------------+
+| - Customers     | | - Procurement |
+| - Packages/Subs | | - Network/Ops |
++-----------------+ +---------------+
 ```
 
 ---
 
-## 2. Core Modules Implemented
+## 2. Repository Structure
 
-### 2.1 Enterprise Authentication & Session Management
-- **Client-Side SHA-256 Pre-Hashing**: Plaintext passwords are automatically hashed with SHA-256 via the Web Crypto API prior to network transmission, ensuring raw passwords never traverse HTTP payloads or appear in browser DevTools Network inspectors.
-- **In-Memory JWT Access Tokens**: Short-lived (15 minutes) JWTs kept strictly in memory (Zustand authStore) and never persisted to `localStorage` or `sessionStorage` to eliminate XSS token theft vectors.
-- **Secure Refresh Token Cookies**: 256-bit cryptographically secure random refresh tokens stored as SHA-256 hashes in the `Session` database table. Sent to clients via `httpOnly`, `Secure` (production), `SameSite=Lax/Strict` cookies (7 days default, 30 days if "Remember me" is checked).
-- **Token Rotation & Concurrency Grace Window**: Strict refresh token rotation invalidates the old token upon issuing a new pair. Includes an RFC 6749/6819 compliant 10-second concurrency grace window to prevent React 18 StrictMode double-mounts from triggering false positive token reuse revocations.
-- **Reuse Detection & Family Revocation**: Reusing an old or invalidated refresh token indicates potential token interception; the system instantly revokes the entire session family and clears all client credentials.
-- **Brute-Force Defense & Account Lockout**: Automatic 15-minute account lockout after 5 consecutive failed login attempts, tracked per user and IP address.
-- **Timing-Safe Comparison & Anti-Enumeration**: Bcrypt (cost factor 10–12) with generic error responses (`Invalid username or password`) for both non-existent users and incorrect passwords.
-- **Security Audit Logging**: Every authentication event (`LOGIN_SUCCESS`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `LOGOUT`, `PASSWORD_CHANGED`, `PASSWORD_RESET_REQUESTED`) is committed to the immutable `AuditLog` table with actor ID, IP address, and UTC timestamp.
-- **Session Cache Resilience**: Active sessions are cached locally (`server/src/db/.sessions-cache.json`) so development sessions seamlessly survive backend restarts and reloads.
-
-### 2.2 Granular Role-Based Access Control (RBAC)
-NetPulse implements strict role-based access control with 5 primary ISP operational roles:
-
-| Role | Responsibilities | Permitted Modules & Views |
-|---|---|---|
-| `SUPER_ADMIN` | Full unrestricted authority | All modules, billing, settings, users, network, accounting, operations |
-| `NETWORK_ENGINEER` | Network infrastructure & field NOC | MikroTik routers, PPPoE, VLANs, IPAM, installations, technician roster, inventory, technical reports |
-| `BILLING_CASHIER` | Subscriber billing & payments | Customers, packages, invoices, payments, KHQR settlement, financial statements |
-| `FIELD_TECHNICIAN` | Dispatch & physical deployment | Scheduled installations, work orders, technician roster, support tickets, inventory dispatch |
-| `SUPPORT_AGENT` | Subscriber CRM & helpdesk | Customer lookup, line speedtests, support tickets, customer communications |
-
-- **Backend Protection**: Layered Express middleware (`authenticate`, `requireRole`, `authorize`) enforces permission barriers across all REST controllers.
-- **Frontend Route Protection**: `<ProtectedRoute>` validates authenticated sessions, `<RequirePermission>` protects granular UI views, and the sidebar dynamically filters items matching user permissions with a dedicated `403 Forbidden` page.
-
-### 2.3 MikroTik Network Management & RouterOS API
-- **Fleet Management**: Secure registration of core routers, distribution switches, and wireless towers with encrypted API credentials (`api-ssl` port 8729, standard port 8728).
-- **PPPoE Provisioning**: Automated creation, modification, suspension, and deletion of `/ppp/secret` records on MikroTik routers with rate-limit queue profiles (`rx-bits-per-second / tx-bits-per-second`).
-- **Session Telemetry**: Real-time inspection of active PPPoE sessions (`/ppp/active`), assigned IP addresses, caller MAC addresses, session uptime, and byte counters.
-- **Diagnostics**: Router health telemetry (CPU load %, memory usage %, system uptime) and remote diagnostic actions (connectivity ping and controlled reboot).
-- **Graceful Simulator Fallback**: When testing or deploying in sandbox environments without live hardware connectivity, an embedded RouterOS simulator ensures full workflow validation without failing transactions.
-
-### 2.4 Carrier-Grade Network Segmentation (VLAN & IPAM)
-- **VLAN Management**: Scope-aware VLAN catalog supporting Management, Fiber Internet, Wireless Internet, Transport, and Corporate VLANs. Built-in uniqueness validation prevents conflicting VLAN IDs on the same physical router interface.
-- **IP Address Management (IPAM)**: Subnet definition, gateway/DNS configuration, dynamic pool management, and static IP allocation with duplicate assignment prevention across active subscribers.
-
-### 2.5 Double-Entry Accounting & Financial Invariants
-NetPulse enforces an uncompromised double-entry general ledger based on standard GAAP/IFRS principles:
-- **Zero-Sum Ledger Rule**: Every journal entry validates that $\sum \text{Debits} \equiv \sum \text{Credits}$ to the exact cent.
-- **Automated Accrual Billing**: Invoice issuance records:
-  - $\text{Debit: Accounts Receivable (1100)}$
-  - $\text{Credit: Fiber/Wireless Internet Revenue (4010/4020)}$
-  - $\text{Credit: Sales Tax Payable (2200)}$
-- **Automated Payment Settlement**: Receipt of subscriber payments records:
-  - $\text{Debit: Cash on Hand (1010) or Operating Bank Account (1020/1030)}$
-  - $\text{Credit: Accounts Receivable (1100)}$
-- **Procurement AP Posting**: Receiving purchase orders via Goods Received Notes (GRN) records:
-  - $\text{Debit: Hardware Inventory Asset (1300)}$
-  - $\text{Credit: Accounts Payable (2000)}$
-- **Fixed Asset Depreciation**: Automated monthly depreciation posts:
-  - $\text{Debit: Depreciation Expense (6100)}$
-  - $\text{Credit: Accumulated Depreciation (1510)}$
-- **Financial Statements**: Dynamic generation of **Trial Balance**, **Profit & Loss (P&L)**, **Balance Sheet**, and **AR Aging Reports** (Current, 1–30 days, 31–60 days, 61–90 days, 90+ days).
-
-### 2.6 Multi-Warehouse Inventory & Serialized Tracking
-- **Warehouses**: Multi-facility management (Central Warehouse, Regional Depots, Technician Vehicle Vans).
-- **Stock Movement Controls**: Complete audit trail for Receipts (`IN`), Dispatches (`OUT`), and Site-to-Site Transfers (`TRANSFER`) with automated negative stock prevention.
-- **Serialized Equipment**: Unit-level tracking for ONUs/ONTs, MikroTik routers, and Wireless CPEs with MAC/Serial number verification and customer assignment locking.
-
-### 2.7 Procurement & Supplier Operations
-- **Vendor Management**: Approved hardware and fiber optic vendor profiles.
-- **Purchase Orders & Receiving**: Workflow from `DRAFT` $\to$ `APPROVED` $\to$ `RECEIVED`. Generating a Goods Received Note (GRN) automatically increments warehouse stock levels, posts the Accounts Payable journal entry, and prepares supplier invoice payment.
-
-### 2.8 Operations & Field Installations Workflow
-- **End-to-End Work Order Lifecycle**:
-  1. Customer order registered and installation work order created.
-  2. Field technician assigned with scheduled installation date.
-  3. Specific ONT/CPE serial number reserved from technician van inventory.
-  4. Technician completes site drop cable, mounts ONT, and triggers field activation.
-  5. NetPulse backend provisions the PPPoE secret on the target MikroTik router, attaches the subscription, transitions customer status to `Active`, and issues the first month's invoice.
-
-### 2.9 Customer Self-Service Portal
-- Direct subscriber portal interface allowing customers to:
-  - Check real-time PPPoE connection status, IP address, and bandwidth plan.
-  - Review invoice history and outstanding balances.
-  - Generate instant **Bakong KHQR** payment barcodes for mobile banking checkout.
-  - Open support tickets directly with network dispatch.
+```text
+isp-system-2/
+├── .env.example                     # Environment configuration template
+├── docker-compose.yml               # Postgres 16, Redis 7, Backend (:5000), Frontend Nginx (:80)
+├── Dockerfile.backend               # Production backend container (Node 20 Alpine)
+├── Dockerfile.frontend              # Production frontend container (Node 20 build + Nginx)
+├── nginx.conf                       # Nginx SPA fallback & /api proxy to backend:5000
+├── eslint.config.js                 # ESLint configuration
+├── index.html                       # SPA root document
+├── package.json                     # npm scripts and dependencies
+├── playwright.config.ts             # Playwright Chromium E2E configuration
+├── postcss.config.js                # PostCSS configuration
+├── tailwind.config.js               # Tailwind theme mapped to CSS custom properties
+├── tsconfig.json                    # Frontend TypeScript configuration
+├── tsconfig.node.json               # Vite/Node config TypeScript configuration
+├── vite.config.ts                   # Vite dev server (:5173) + /api proxy -> 127.0.0.1:5000
+├── prisma/
+│   ├── schema.prisma                # PostgreSQL schema (56 models)
+│   ├── seed.ts                      # Database seed (Super Admin, demo staff, RBAC matrix)
+│   ├── migrations/                  # Prisma migration history (5 migrations)
+│   └── backups/                     # SQL backup dumps
+├── scripts/
+│   ├── dev-all.mjs                  # Builds server, starts tsc -w, node --watch, and vite
+│   ├── seed-admin.mjs               # Standalone Super Admin & dev user seed script
+│   ├── db-backup.sh                 # Automated gzipped pg_dump script
+│   ├── db-restore.sh                # Automated gunzip + psql restore script
+│   ├── eslint-motion-rules.js       # Custom Framer Motion ESLint rule helpers
+│   ├── test-auth-frontend.mjs       # Frontend auth schema & RBAC logic suite
+│   ├── test-chip.mjs                # Chip UI script test
+│   ├── test-combobox-styles.mjs     # Combobox style verification script
+│   ├── test-datepicker.mjs          # DatePicker verification script
+│   ├── test-regression.mjs          # DataTable & UI regression suite (22 checks)
+│   └── test-search-boxes.mjs        # Search input verification script
+├── server/
+│   ├── tsconfig.json                # Compiles server/src -> dist-server/ (NodeNext)
+│   ├── src/
+│   │   ├── server.ts                # Express gateway, startup DB & RBAC sync, route mounts
+│   │   ├── db/
+│   │   │   ├── store.ts             # PrismaClient, initDatabaseConnection(), NetPulseDataStore
+│   │   │   └── seedData.ts          # In-memory domain seed fixtures
+│   │   ├── docs/openapi.ts          # OpenAPI 3.0 specification
+│   │   ├── middleware/
+│   │   │   └── auth.middleware.ts   # authenticate, authorize, requireRole, requireFeature, validateBody
+│   │   ├── rbac/registry/           # Modular RBAC permissions, features & default roles (19 files)
+│   │   ├── routes/                  # 14 Express route modules mounted under /api/v1
+│   │   └── services/                # 13 backend service modules
+│   └── test/
+│       ├── netpulse.test.mjs        # Core domain & auth service integration tests
+│       ├── netpulse.test.ts         # TypeScript source test reference
+│       ├── rbac.test.mjs            # RBAC matrix, features & requireFeature API tests
+│       └── features-frontend.test.mjs # Dynamic permission & ANY/ALL feature mode tests
+├── src/
+│   ├── main.tsx                     # React 18 entrypoint
+│   ├── App.tsx                      # BrowserRouter, theme/comfort/density init, session restore, routes
+│   ├── index.css                    # Design tokens & global field/search styles
+│   ├── components/
+│   │   ├── auth/                    # ProtectedRoute.tsx, RequirePermission.tsx
+│   │   ├── layout/                  # Sidebar.tsx, TopBar.tsx, CommandPalette.tsx, NotificationPanel.tsx, ErrorBoundary.tsx
+│   │   └── ui/                      # Reusable UI kit + DataTable/
+│   ├── data/mockData.ts             # Static frontend helper/mock fixtures
+│   ├── features/
+│   │   ├── customers/               # CustomersPage, CustomerTable, CustomerDetailDrawer, modals
+│   │   ├── inventory/               # ProductsPage, ProductModal, ProductLogModal, DeleteProductModal
+│   │   └── roles/                   # RolesPage feature: PermissionsMatrix, FeaturesTab, UsersTab, hooks, utils
+│   ├── lib/                         # api.ts, permissions.ts, motion.ts, queryClient.ts, utils.ts
+│   ├── pages/                       # 28 application & dev pages
+│   ├── store/                       # authStore.ts, useStore.ts
+│   └── types/                       # Shared frontend TypeScript definitions
+├── test/unit/
+│   └── rbac-matrix.test.mjs         # Matrix tri-state, dependency & dirty diff unit tests
+└── tests/
+    ├── customers.spec.ts            # Customers Playwright E2E spec
+    ├── features-permissions.spec.ts # Menus & Features tab E2E spec
+    ├── inventory.spec.ts            # Inventory Playwright E2E spec
+    ├── modals.spec.ts               # Modals Playwright E2E spec
+    ├── responsive-and-motion.spec.ts# Responsive & reduced-motion E2E spec
+    ├── roles-permissions.spec.ts    # Roles & Permissions matrix E2E spec
+    └── smoke.spec.ts                # Application smoke E2E spec
+```
 
 ---
 
-## 3. Application Bootstrapping, Database Layer & Dual-Mode Architecture
+## 3. Core Modules & Security Architecture
 
-### 3.1 Application Bootstrapping & Root Entry Points
+### 3.1 Enterprise Authentication & Session Management
+- **Client-Side SHA-256 Pre-Hashing**: `src/lib/api.ts` (`hashPasswordClient`) hashes user passwords using `window.crypto.subtle.digest('SHA-256', ...)` before sending `/auth/login`, `/auth/reset-password`, and `/auth/change-password` payloads.
+- **In-Memory JWT Access Tokens**: Access tokens expire in **15 minutes** (`JWT_ACCESS_EXPIRES_IN = '15m'`) and are held strictly in memory in `useAuthStore` (`src/store/authStore.ts`).
+- **Secure Refresh Token Cookies**: 256-bit cryptographically random refresh tokens are stored as SHA-256 hashes in the PostgreSQL `Session` table and issued via `httpOnly`, `sameSite: 'lax'`, `path: '/api/v1/auth'` cookies (`secure: true` when `NODE_ENV === 'production'`; 7-day default or 30-day when "Remember Me" is enabled).
+- **Token Rotation, Grace Window & Reuse Detection**: Every `/auth/refresh` atomically revokes the used session and creates a new session within the same `familyId` via `prisma.$transaction`. Reusing an already-revoked token outside the **5-second** same-client concurrency grace window revokes the entire session family and records a `REFRESH_REUSE_DETECTED` entry in `AuditLog`.
+- **Brute-Force Defense & Account Lockout**: Sliding 15-minute attempt counter (5 failed attempts per IP + username) triggers rate limiting and locks existing accounts for **15 minutes** (`lockedUntil`), logging `ACCOUNT_LOCKED` to `AuditLog`.
+- **Timing-Safe Comparison**: Non-existent usernames run a dummy `bcrypt.compare` against `DUMMY_HASH` to mitigate username enumeration timing differences.
 
-The NetPulse platform consists of two concurrent processes (API Gateway and Single Page Application) that bootstrap independently and communicate over HTTP/REST:
+### 3.2 Dynamic RBAC, Permissions & Feature Registry
+NetPulse replaces static hardcoded role checks with a database-synchronized modular registry (`server/src/rbac/registry/`):
 
-```
-[npm run dev] / [scripts/dev-all.mjs]
+- **Registry Modules (`server/src/rbac/registry/`)**:
+  - Domain definitions for `dashboard`, `customers`, `packages`, `network`, `billing`, `accounting`, `inventory`, `procurement`, `operations`, `reports`, `automation`, `portal`, `messages`, `integrations`, `settings`, and `users-roles`.
+  - `roles.ts` defines **12 default roles**:
+    - **5 System Roles (`isSystem: true`)**: `SUPER_ADMIN`, `NETWORK_ENGINEER`, `BILLING_CASHIER`, `FIELD_TECHNICIAN`, `SUPPORT_AGENT`.
+    - **7 Predefined Custom-Editable Roles (`isSystem: false`)**: `ACCOUNTANT`, `ADMINISTRATOR`, `CASHIER`, `TECHNICIAN`, `SALES_STAFF`, `WAREHOUSE_MANAGER`, `PROCUREMENT_OFFICER`.
+  - Custom roles can also be created, duplicated, renamed, and deleted from the UI.
+- **Startup & Seed Synchronization (`RbacService.syncRegistry()` / `RbacService.seedRbac()`)**:
+  - Runs automatically on server startup (`server/src/server.ts`) and during `npm run db:seed`.
+  - Upserts `Permission` and `Feature` (`MENU`, `PAGE`, `TAB`, `ACTION`) records by `key`, marks removed code keys as `isActive: false` without deleting rows, and initializes default `FeaturePermission` links only when a feature is first created so admin edits are preserved.
+- **Backend Enforcement (`server/src/middleware/auth.middleware.ts`)**:
+  - `authenticate`: Verifies Bearer JWT and loads current `UserRole` assignments from PostgreSQL.
+  - `authorize(...permissions)`: Checks effective role permissions (cached in-memory with a 30-second TTL, invalidated on role/permission updates).
+  - `requireFeature(featureKey)`: Evaluates database-backed `Feature` + `FeaturePermission` mappings (`ANY` vs `ALL` mode; features with zero mapped permissions are open to all authenticated users).
+  - `requireRole(...roles)`: Enforces route-level role groups in `server/src/server.ts`.
+- **Frontend Enforcement & Navigation**:
+  - `GET /api/v1/auth/navigation` builds the dynamic sidebar tree (`Sidebar.tsx`) filtered by the user's effective permissions.
+  - `GET /api/v1/auth/me` returns effective `permissions` and `features` arrays.
+  - `<ProtectedRoute>`, `<RequirePermission feature="...">`, `can()`, `useCan()`, and `<Can>` (`src/lib/permissions.ts`) guard pages and UI controls.
+- **Roles & Permissions UI (`/settings/roles`, `src/pages/RolesPage.tsx`)**:
+  - **Permissions Tab (`PermissionsMatrix.tsx` / `MobileRoleView.tsx`)**: Sticky-column matrix, tri-state module checkboxes, dependency cascading (`src/features/roles/utils/matrixUtils.ts`), keyboard navigation, Shift+click range selection, dirty counters, optimistic concurrency (`expectedUpdatedAt` returning `409 STALE_UPDATE`), and role management modals (`AddRoleModal`, `RenameRoleModal`).
+  - **Users Tab (`UsersTab.tsx`)**: Search/filter staff accounts and reassign roles with confirmation modal.
+  - **Menus & Features Tab (`FeaturesTab.tsx`)**: Hierarchical feature tree, multi-permission assignment, `ANY`/`ALL` mode toggle, active switch, sort reordering, locked anti-lockout protection (`page.roles`), and unassigned permission warnings.
+
+### 3.3 Operational Domain Modules
+- **MikroTik Network Management & RouterOS API (`mikrotik.service.ts`, `network.service.ts`)**: Fleet management, PPPoE secret provisioning/suspension/reconnection, active session inspection, CPU/memory/uptime metrics, controlled reboot, VLAN conflict validation, and IPAM pool/static IP allocation (with built-in simulator fallback when no live router hardware is reachable).
+- **Double-Entry Accounting (`accounting.service.ts`)**: Zero-sum ledger validation ($\sum \text{Debits} \equiv \sum \text{Credits}$), Chart of Accounts, journal entries & reversals, Trial Balance, Profit & Loss, Balance Sheet, AR Aging, Expenses, and Fixed Asset tracking.
+- **Multi-Warehouse Inventory & Procurement (`inventory.service.ts`, `procurement.service.ts`)**: Multi-location stock levels, `IN` / `OUT` / `TRANSFER` movements with negative stock prevention, serialized ONT/CPE tracking, suppliers, purchase orders, and Goods Received Notes (GRN).
+- **Field Operations & Installations (`operations.service.ts`)**: Installation scheduling, technician roster, hardware serial allocation, PPPoE activation, and support ticket tracking.
+- **Customer Self-Service Portal (`portal.routes.ts`, `CustomerPortalPage.tsx`)**: Customer login, connection/billing overview, Bakong KHQR payment checkout, and support ticket creation.
+
+---
+
+## 4. Application Bootstrapping, Startup & Database Layer
+
+### 4.1 Concurrent Dev & Runtime Architecture
+
+```text
+[npm run dev] / [npm run dev:all] -> scripts/dev-all.mjs
        │
-       ├──► Backend Gateway: node --watch dist-server/server.js  (Port :5000)
-       │         ▲
-       │         └── Source: server/src/server.ts
-       │
-       └──► Frontend Client: vite  (Port :5173, Proxies /api -> :5000)
-                 ▲
-                 ├── Entry HTML: index.html
-                 └── TSX Entry:  src/main.tsx  ──►  src/App.tsx
+       ├──► 1. Initial server build: npm run build:server (tsc -p server/tsconfig.json -> dist-server/)
+       ├──► 2. Compiler watcher:     npx tsc -p server/tsconfig.json -w
+       ├──► 3. Backend Gateway:      node --watch-path=dist-server dist-server/server.js (Port :5000)
+       └──► 4. Frontend Client:      npx vite (Port :5173, proxies /api/* -> http://127.0.0.1:5000)
 ```
 
-#### A. Backend Gateway Entry Point (`server/src/server.ts`)
-1. **Middleware Setup**: Configures Express, `helmet` security headers, CORS with credentials (`credentials: true`), `cookieParser()`, and JSON body parsing.
-2. **Database Initialization**: If not running in unit test mode (`process.env.NODE_ENV !== 'test'`), it executes `initDatabaseConnection()` from `server/src/db/store.ts`.
-3. **Route Registration**: Mounts REST endpoints under `/api/v1` (`/auth`, `/customers`, `/billing`, `/network`, `/routers`, etc.) with RBAC middleware (`authenticate`, `requireRole`).
-4. **Port Binding**: Binds to `0.0.0.0:5000`.
+### 4.2 Database Connection & Startup Sequence (`server/src/db/store.ts` & `server/src/server.ts`)
 
-#### B. Frontend Client Entry Point (`src/main.tsx` & `src/App.tsx`)
-1. **HTML Bootstrap**: `index.html` loads `<script type="module" src="/src/main.tsx"></script>`.
-2. **React Root**: `src/main.tsx` mounts `<App />` into the `#root` DOM element.
-3. **App Architecture (`src/App.tsx`)**:
-   - Initializes color theme, contrast comfort mode, density, and animation preferences.
-   - **Silent Session Restoration**: Invokes `api.auth.refresh()` to silently restore user session from the server's `httpOnly` cookie on reload without storing tokens in `localStorage`.
-   - **Route Guards**: Evaluates `<ProtectedRoute>` (redirects unauthenticated users to `/login`) and `<RequirePermission>` (validates granular RBAC permissions).
-   - **Feature Pages**: Mounts `<CustomersPage />`, `<DashboardPage />`, `<NetworkPage />`, etc.
-   - **Reverse Proxy**: In development, `vite.config.ts` proxies all `/api/*` network requests to `http://127.0.0.1:5000`.
-
----
-
-### 3.2 Database Communication & Prisma ORM Layer
-
-The database connection is defined and managed in `server/src/db/store.ts`:
+In `server/src/db/store.ts`:
 
 ```ts
-import { PrismaClient } from '@prisma/client';
-
 export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 });
 
 let isPostgresConnected = false;
 
-export async function initDatabaseConnection() {
-  try {
-    await prisma.$connect();
-    isPostgresConnected = true;
-    console.log('✓ Successfully connected to PostgreSQL via Prisma ORM');
-  } catch (err: any) {
-    isPostgresConnected = false;
-    console.log('ℹ PostgreSQL daemon offline or sandbox restricted. Operating in high-performance memory-store mode.');
-  }
+export async function initDatabaseConnection(): Promise<void> {
+  await prisma.$connect();
+  await prisma.$queryRaw`SELECT 1`;
+  isPostgresConnected = true;
+  console.log('✓ Successfully connected to PostgreSQL via Prisma ORM');
 }
 
 export function isUsingPostgres(): boolean {
@@ -194,252 +204,177 @@ export function isUsingPostgres(): boolean {
 }
 ```
 
-- **Prisma Client (`prisma`)**: Connects to PostgreSQL using the `DATABASE_URL` environment variable defined in `.env` (e.g. `postgresql://netpulse:netpulse123@localhost:5432/netpulse?schema=public`).
-- **Connection Handshake**: `await prisma.$connect()` tests the socket connection and authenticates against PostgreSQL.
-- **State Tracker (`isPostgresConnected`)**: A private module-level boolean tracks whether a live PostgreSQL connection was established.
-- **Accessor Function (`isUsingPostgres()`)**: Exposes the live database connection status to all backend services.
+In `server/src/server.ts`:
 
----
+```ts
+async function startServer() {
+  try {
+    await initDatabaseConnection();
+    await RbacService.syncRegistry();
+  } catch (err: any) {
+    console.error('[NetPulse FATAL]: Database connection failed. Aborting startup.');
+    process.exit(1);
+  }
+  ...
+}
+```
 
-### 3.3 The Dual-Storage Architecture: Why the System Works Even If `initDatabaseConnection()` Is Removed
+- **PostgreSQL Required on Startup**: If PostgreSQL is offline or `DATABASE_URL` is invalid, `initDatabaseConnection()` throws and `startServer()` exits with code `1`.
+- **Runtime Database Error Mapping**: Express error middleware maps Prisma initialization/connection errors (`P1001`, `P1002`, `P1017`, `PrismaClientInitializationError`) to HTTP `503 Service temporarily unavailable`.
+- **Hybrid Storage Across Services**:
+  - **PostgreSQL via Prisma**: `auth.service.ts` (users, sessions, audit logs), `rbac.service.ts` (roles, permissions, features, role/feature/user mappings), `customer.service.ts` (customers, addresses, subscriptions, packages, activities), and `package.routes.ts` (packages).
+  - **In-Memory `dbStore` (`NetPulseDataStore` in `server/src/db/store.ts`)**: `accounting.service.ts`, `automation.service.ts`, `billing.service.ts`, `inventory.service.ts`, `mikrotik.service.ts`, `network.service.ts`, `operations.service.ts`, `payment.service.ts`, `procurement.service.ts`, and `report.service.ts` currently read and mutate the seeded in-memory `dbStore` repository (and `auth.service.ts` mirrors audit log entries to `dbStore.logAudit(...)` as well as PostgreSQL).
 
-A core architectural feature of NetPulse is its **Dual-Storage Resilience Pattern (Hybrid Mode)**.
+### 4.3 Database Schema & Migrations (`prisma/schema.prisma`)
 
-#### How It Works:
-In `server/src/db/store.ts`, NetPulse instantiates `dbStore`, an instance of `NetPulseDataStore`. This is a fully functional in-memory ISP enterprise repository pre-loaded with comprehensive seed data:
-- `dbStore.users`: Super Admin, Network Engineers, Cashiers, Technicians (`SEED_USERS`)
-- `dbStore.customers`: Active, Pending, Suspended, and Overdue subscribers (`SEED_CUSTOMERS`)
-- `dbStore.routers`: MikroTik Core and Distribution routers (`SEED_ROUTERS`)
-- `dbStore.packages`: Broadband internet plans (`SEED_PACKAGES`)
-- `dbStore.invoices`, `payments`, `tickets`, `warehouses`, `chartOfAccounts`, etc.
-- `dbStore.sessions`: Active user sessions preserved in a local file cache (`server/src/db/.sessions-cache.json`).
+The Prisma schema defines **56 models** across 5 applied migrations (`20261123000000_init`, `20261123010000_auth_enhancements`, `20261123153906_session_family_id`, `20261124180000_rbac_permissions_matrix`, `20261124193500_features_and_permissions`):
 
-#### What Happens When `initDatabaseConnection()` is Removed or Disabled:
-If you remove or comment out `export async function initDatabaseConnection()`, or if the PostgreSQL Docker container is turned off:
-1. `isPostgresConnected` remains `false`.
-2. `isUsingPostgres()` returns `false`.
-3. Every service in the backend automatically routes requests to `dbStore` instead of Prisma:
-   - **`CustomerService.listCustomers`**: Returns subscribers from `dbStore.customers`.
-   - **`CustomerService.getCustomerProfile`**: Resolves subscriber 360 profile from `dbStore.customers`.
-   - **`CustomerService.createCustomer` / `updateCustomer` / `deleteCustomer`**: Mutates `dbStore.customers`.
-   - **`AuthService.login`**: Authenticates users against `dbStore.users`.
-   - **`BillingService`, `PaymentService`, `NetworkService`**: Query and mutate `dbStore`.
-4. The Express HTTP server continues running on port 5000 and answers all REST calls (`GET /api/v1/customers`, `POST /api/v1/auth/login`, etc.) with HTTP 200 responses.
-5. The frontend Vite client (`http://localhost:5173`) communicates with `/api/v1/customers` through the proxy, receives the customer list, and renders all UI tables, cards, and charts with zero errors.
-
-#### Why This Was Designed This Way:
-- **Zero-Downtime High Availability**: If PostgreSQL restarts, encounters network partitions, or crashes in production, the ISP platform gracefully falls back without catastrophic 500 crashes or total system lockouts.
-- **Sandbox & Offline Portability**: In secure developer sandboxes or constrained environments without root/network access to run Docker/PostgreSQL daemons, developers can run the entire platform with full feature fidelity.
-- **Synchronous & Lightning-Fast CI/CD Testing**: The test suite (`npm test`, `netpulse.test.mjs`) executes 45 end-to-end tests in under 600ms directly against the in-memory repository without spinning up test databases.
-
----
-
-### 3.4 Database Schema Overview
-
-The database is defined in `prisma/schema.prisma` with over 30 normalized entities using strict UUID primary keys, decimal precision for currency, and comprehensive referential integrity:
-
-| Domain | Key Models |
+| Domain | Models |
 |---|---|
-| **Identity & Access** | `User`, `Role`, `Permission`, `UserRole`, `Session`, `AuditLog` |
-| **CRM & Services** | `Customer`, `Address`, `Attachment`, `Activity`, `Package`, `Subscription`, `SubscriptionHistory` |
-| **Network Infrastructure** | `Router`, `RouterMetric`, `NetworkDevice`, `PPPoEProfile`, `PPPoEAccount`, `PPPoESession`, `VLAN`, `IPPool`, `IPAddress`, `ProvisionJob` |
+| **Identity, RBAC & Features** | `User`, `Role`, `Permission`, `Feature`, `FeaturePermission`, `UserRole`, `RolePermission`, `Session`, `AuditLog` |
+| **CRM & Subscriptions** | `Customer`, `CustomerAddress`, `CustomerAttachment`, `CustomerActivity`, `Package`, `Subscription`, `SubscriptionHistory` |
+| **Network & Provisioning** | `Router`, `RouterMetric`, `NetworkDevice`, `PPPoEProfile`, `PPPoEAccount`, `PPPoESession`, `VLAN`, `IPPool`, `IPAddress`, `NetworkProvisionJob` |
 | **Billing & Payments** | `Invoice`, `InvoiceItem`, `Payment`, `PaymentAllocation`, `CreditNote` |
-| **Inventory & Procurement** | `Product`, `Category`, `Warehouse`, `StockBalance`, `SerialNumber`, `StockMovement`, `Supplier`, `PurchaseOrder`, `PurchaseOrderItem`, `GoodsReceivedNote`, `SupplierInvoice` |
-| **Accounting & General Ledger** | `Account`, `AccountingPeriod`, `JournalEntry`, `JournalLine`, `Expense`, `FixedAsset`, `FixedAssetDepreciation` |
-| **Operations & Dispatch** | `Installation`, `Technician`, `SupportTicket`, `TicketComment` |
-| **Automation & Settings** | `Message`, `Notification`, `AutomationRule`, `CompanySetting` |
-
-### 3.5 Auth Schema Enhancements (`20261123010000_auth_enhancements`):
-- `User`: Added `failedLoginAttempts`, `lockedUntil`, `mustChangePassword`, `resetPasswordTokenHash`, `resetPasswordExpiresAt`.
-- `Session`: Added `refreshTokenHash`, `ip`, `revokedAt`.
-- `UserRoleType`: Added `BILLING_CASHIER`, `FIELD_TECHNICIAN`, `SUPPORT_AGENT`.
-- `AuditLog`: Added `ip`.
+| **Inventory & Procurement** | `ProductCategory`, `Product`, `Warehouse`, `StockBalance`, `SerialNumber`, `StockMovement`, `Supplier`, `PurchaseOrder`, `PurchaseOrderItem`, `GoodsReceivedNote`, `GoodsReceivedItem`, `SupplierInvoice` |
+| **Accounting & Ledger** | `Account`, `AccountingPeriod`, `JournalEntry`, `JournalEntryLine`, `Expense`, `FixedAsset` |
+| **Operations, Automation & Config** | `Installation`, `Technician`, `SupportTicket`, `TicketMessage`, `Notification`, `AutomationRule`, `CompanySetting` |
 
 ---
 
-## 4. API Endpoints Reference
+## 5. API Endpoints Reference
 
-All endpoints are prefixed with `/api/v1` and documented via OpenAPI 3.0 at `/api/docs`.
-
-### Authentication & Sessions
-- `POST /api/v1/auth/login` – Authenticate with username and password; returns JWT access token + httpOnly refresh cookie.
-- `POST /api/v1/auth/refresh` – Rotates refresh token and returns new 15-minute access token.
-- `POST /api/v1/auth/logout` – Revokes session in database and clears authentication cookie.
-- `GET /api/v1/auth/me` – Retrieve profile, roles, and permissions of authenticated user.
-- `POST /api/v1/auth/forgot-password` – Initiates password reset flow with secure one-time token.
-- `POST /api/v1/auth/reset-password` – Completes password reset with token verification.
-- `POST /api/v1/auth/change-password` – Authenticated password update.
-- `GET /api/v1/auth/users` – List administrative and staff users (Super Admin only).
-- `POST /api/v1/auth/users` – Create new staff user with role assignment.
+All API routes are mounted under `/api/v1` (with `/api/health` and OpenAPI docs at `/api/docs` and `/api/v1/openapi.json`).
 
 ### System & Health
-- `GET /api/v1/health` – Public health probe returning `{ status: "ok" }` for the "System Operational" status pill.
+- `GET /api/v1/health` / `GET /api/health` – Public health probe
+- `GET /api/v1/openapi.json` / `GET /api/docs` – OpenAPI JSON spec and Swagger UI
 
-### CRM & Customers
-- `GET /api/v1/customers` – Search, filter, and paginate customer directory.
-- `GET /api/v1/customers/:id` – Retrieve 360-degree customer profile with subscriptions, network info, and invoices.
-- `POST /api/v1/customers` – Create new customer record with optional auto-subscription.
-- `PUT /api/v1/customers/:id` – Update customer contact, billing, or address details.
-- `POST /api/v1/customers/:id/status` – Update subscriber status (`Active`, `Suspended`, `Terminated`).
-- `POST /api/v1/customers/:id/speedtest` – Run latency and throughput diagnostic test on customer line.
+### Authentication, Navigation & RBAC (`/api/v1/auth`)
+- `POST /api/v1/auth/login` – Authenticate with username/email + password (client SHA-256 pre-hashed); returns JWT access token and `refresh_token` httpOnly cookie
+- `POST /api/v1/auth/refresh` – Rotate refresh token and issue new access token
+- `POST /api/v1/auth/logout` – Revoke session and clear refresh cookies
+- `GET /api/v1/auth/me` – Authenticated user profile, roles, effective `permissions`, and `features`
+- `GET /api/v1/auth/navigation` – Dynamic sidebar menu tree for the authenticated user
+- `POST /api/v1/auth/forgot-password` / `POST /api/v1/auth/reset-password` / `POST /api/v1/auth/change-password`
+- `GET /api/v1/auth/users` / `POST /api/v1/auth/users` / `PATCH /api/v1/auth/users/:id/roles` *(requires `roles.manage`)*
+- `GET /api/v1/auth/roles` / `POST /api/v1/auth/roles` / `PATCH /api/v1/auth/roles/:id` / `PUT /api/v1/auth/roles/:id/permissions` / `DELETE /api/v1/auth/roles/:id` / `POST /api/v1/auth/roles/:id/duplicate` *(requires `roles.manage`)*
+- `GET /api/v1/auth/features` / `POST /api/v1/auth/features` / `PATCH /api/v1/auth/features/:id` *(requires `roles.manage`)*
+- `GET /api/v1/auth/permissions` / `PATCH /api/v1/auth/permissions/:id` *(requires `roles.manage`)*
 
-### Packages & Subscriptions
-- `GET /api/v1/packages` – List all available Fiber and Wireless packages.
-- `POST /api/v1/packages` – Create new internet package with PPPoE profile link.
-- `PUT /api/v1/packages/:id` – Modify speeds, pricing, or status.
-- `DELETE /api/v1/packages/:id` – Archive an internet package.
+### Customers & Packages
+- `GET /api/v1/customers` / `GET /api/v1/customers/:id` / `POST /api/v1/customers` / `PUT /api/v1/customers/:id` / `DELETE /api/v1/customers/:id` / `POST /api/v1/customers/:id/status` / `POST /api/v1/customers/:id/speedtest`
+- `GET /api/v1/packages` / `POST /api/v1/packages` / `PUT /api/v1/packages/:id` / `DELETE /api/v1/packages/:id`
 
-### Network & MikroTik
-- `GET /api/v1/network/routers` – List registered MikroTik routers with live health status.
-- `POST /api/v1/network/routers` – Register a new MikroTik router.
-- `GET /api/v1/network/routers/:id/metrics` – Get CPU load, memory usage, and uptime telemetry.
-- `POST /api/v1/network/routers/:id/test` – Verify connectivity to MikroTik API.
-- `POST /api/v1/network/routers/:id/reboot` – Controlled router reboot.
-- `GET /api/v1/network/pppoe` – List all provisioned PPPoE accounts and active sessions.
-- `POST /api/v1/network/pppoe` – Manually provision PPPoE account on router.
-- `POST /api/v1/network/pppoe/:id/disconnect` – Disconnect active PPPoE session.
-- `GET /api/v1/network/vlans` – List VLANs across routers.
-- `POST /api/v1/network/vlans` – Provision new VLAN with conflict validation.
-- `GET /api/v1/network/ipam/pools` – List IP pools and subnet allocations.
-- `POST /api/v1/network/ipam/allocate` – Allocate static IP address to subscriber.
+### Network & MikroTik (`/api/v1/network` & `/api/v1/routers`)
+- `GET /api/v1/network/routers` / `GET /api/v1/network/routers/:id/metrics` / `POST /api/v1/network/routers/:id/test` / `POST /api/v1/network/routers/:id/reboot`
+- `GET /api/v1/network/pppoe` / `GET /api/v1/network/vlans` / `POST /api/v1/network/vlans` / `GET /api/v1/network/ipam/pools` / `POST /api/v1/network/ipam/allocate`
 
-### Invoicing & Payments
-- `GET /api/v1/invoices` – List invoices with filtering by status and date range.
-- `POST /api/v1/invoices` – Generate custom or recurring invoice (posts accrual journal).
-- `PUT /api/v1/invoices/:id/pay` – Mark invoice paid and balance customer account.
-- `GET /api/v1/payments` – Retrieve customer payment history.
-- `POST /api/v1/payments/record` – Record cashier payment, post cash journal, and reconnect customer if overdue.
-- `POST /api/v1/payments/khqr` – Generate Bakong KHQR dynamic payment payload.
+### Billing, Payments & Accounting
+- `GET /api/v1/invoices` / `POST /api/v1/invoices` / `PUT /api/v1/invoices/:id/pay` (also mounted at `/api/v1/billing`)
+- `GET /api/v1/payments` / `POST /api/v1/payments/record` / `POST /api/v1/payments/khqr`
+- `GET /api/v1/accounting/dashboard` / `/accounts` / `/ledger` / `/trial-balance` / `/pnl` / `/balance-sheet` / `/ar-aging`
+- `POST /api/v1/accounting/journal` / `POST /api/v1/accounting/journal/:entryNumber/reverse`
 
-### Double-Entry Accounting
-- `GET /api/v1/accounting/dashboard` – Real-time financial summary (Revenue, Cash, AP, AR).
-- `GET /api/v1/accounting/accounts` – Chart of accounts (Assets, Liabilities, Equity, Revenue, Expenses).
-- `POST /api/v1/accounting/journal` – Post balanced manual journal entry.
-- `POST /api/v1/accounting/journal/:entryNumber/reverse` – Reversal journal entry.
-- `GET /api/v1/accounting/ledger` – Complete general ledger transaction history.
-- `GET /api/v1/accounting/trial-balance` – Period trial balance with verified debits === credits.
-- `GET /api/v1/accounting/pnl` – Profit & Loss statement.
-- `GET /api/v1/accounting/balance-sheet` – Balance Sheet with Assets = Liabilities + Equity verification.
-- `GET /api/v1/accounting/ar-aging` – AR aging breakdown by days overdue.
+### Inventory & Purchasing
+- `GET /api/v1/inventory/products` / `POST /api/v1/inventory/products` / `PUT /api/v1/inventory/products/:id`
+- `GET /api/v1/inventory/warehouses` / `POST /api/v1/inventory/movements` / `GET /api/v1/inventory/serials` / `POST /api/v1/inventory/serials/assign`
+- `GET /api/v1/purchasing/suppliers` / `POST /api/v1/purchasing/suppliers` / `GET /api/v1/purchasing/orders` / `POST /api/v1/purchasing/orders` / `POST /api/v1/purchasing/orders/:id/receive` / `POST /api/v1/purchasing/suppliers/:id/pay`
 
-### Inventory & Procurement
-- `GET /api/v1/inventory/warehouses` – List warehouses and depot locations.
-- `GET /api/v1/inventory/balances` – Stock balances per product and warehouse.
-- `POST /api/v1/inventory/movements` – Record Stock In, Stock Out, or Transfer.
-- `GET /api/v1/purchasing/suppliers` – Hardware and fiber suppliers directory.
-- `POST /api/v1/purchasing/orders` – Create Purchase Order.
-- `POST /api/v1/purchasing/orders/:id/receive` – Issue Goods Received Note, increment stock, and post AP journal.
-
-### Operations & Field Management
-- `GET /api/v1/operations/installations` – Installation work orders queue.
-- `POST /api/v1/operations/installations` – Schedule new installation.
-- `POST /api/v1/operations/installations/:id/complete` – Complete installation workflow (provision PPPoE, reserve ONT, activate subscriber, bill).
-- `GET /api/v1/operations/technicians` – Field technicians directory with active job counts.
-- `GET /api/v1/operations/tickets` – Support tickets queue.
-- `POST /api/v1/operations/tickets` – Create support ticket.
-
-### Subscriber Self-Service Portal
-- `GET /api/v1/portal/:customerCode/overview` – Subscriber portal dashboard.
-- `POST /api/v1/portal/:customerCode/pay` – Subscriber self-service payment checkout.
-- `POST /api/v1/portal/:customerCode/tickets` – Subscriber ticket submission.
+### Operations, Reports, Automation, Settings & Portal
+- `GET /api/v1/operations/installations` / `POST /api/v1/operations/installations` / `POST /api/v1/operations/installations/:id/complete` / `GET /api/v1/operations/technicians` / `GET /api/v1/operations/tickets` / `POST /api/v1/operations/tickets` / `PUT /api/v1/operations/tickets/:id/status` (also mounted at `/api/v1/installations`, `/api/v1/technicians`, `/api/v1/tickets`)
+- `GET /api/v1/reports/dashboard` / `/detailed` / `/export`
+- `GET /api/v1/automation/rules` / `POST /api/v1/automation/rules/:id/toggle` / `/jobs/billing` / `/jobs/overdue` / `/jobs/routers`
+- `GET /api/v1/settings/company` / `PUT /api/v1/settings/company` / `GET /api/v1/settings/audit-logs` / `GET /api/v1/settings/notifications` / `PUT /api/v1/settings/notifications/:id/read`
+- `POST /api/v1/portal/login` / `GET /api/v1/portal/dashboard/:customerId` / `POST /api/v1/portal/pay-khqr` / `POST /api/v1/portal/tickets`
 
 ---
 
-## 5. Deployment & Operations
+## 6. Setup, Deployment & Operations
 
-### 5.1 Docker Compose Deployment
-The repository includes a ready-to-run multi-container setup in `docker-compose.yml`:
+### 6.1 Local Development Setup
 
 ```bash
-# 1. Configure environment
+# 1. Install dependencies and prepare environment file
+npm install
 cp .env.example .env
 
-# 2. Build and launch all services in detached mode
-docker compose up -d --build
+# 2. Ensure PostgreSQL is running and DATABASE_URL in .env matches
+docker compose up -d postgres
 
-# 3. Check service health
+# 3. Generate Prisma client, run migrations, build server, and seed DB
+npx prisma generate
+npx prisma migrate deploy
+npm run build:server
+npm run db:seed
+
+# 4. Launch backend watcher (:5000) + Vite frontend (:5173)
+npm run dev
+```
+
+> **Note:** `npm run db:seed` executes `node --experimental-strip-types prisma/seed.ts` (requires Node.js v22.6+) and imports compiled JS from `dist-server/`, so `npm run build:server` must be run beforehand.
+
+### 6.2 Docker Compose Deployment
+
+```bash
+docker compose up -d --build
 docker compose ps
 ```
 
-The stack runs:
-- `netpulse-frontend`: Nginx reverse proxy serving the production React application on port `80`/`443`.
-- `netpulse-backend`: Node.js Express API service on port `5000`.
-- `netpulse-postgres`: PostgreSQL 16 database on internal port `5432`.
-- `netpulse-redis`: Redis 7 cache and job queue broker on internal port `6379`.
+Services defined in `docker-compose.yml`:
+- `netpulse-postgres`: PostgreSQL 16 (`5432`, user `netpulse`, password `netpulse123`, db `netpulse`)
+- `netpulse-redis`: Redis 7 (`6379`)
+- `netpulse-backend`: Express API (`5000`) built via `Dockerfile.backend`
+- `netpulse-frontend`: Nginx (`80`) serving `dist/` and proxying `/api/` to `backend:5000` via `Dockerfile.frontend` and `nginx.conf`
 
-### 5.2 Database Backup and Disaster Recovery
-Automated backup and restore scripts with compression and 30-day retention pruning are included in `scripts/`:
+> **Production Environment Variables:** `server/src/server.ts` enforces `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `COOKIE_SECURE` when `NODE_ENV=production`. Ensure all three are provided in production overrides/environment configuration.
+
+### 6.3 Database Backup & Restore
 
 ```bash
-# Execute automated compressed database backup
+# Create compressed SQL backup in ./backups (or custom directory as $1)
 ./scripts/db-backup.sh
 
-# Restore database from specified backup archive
-./scripts/db-restore.sh /var/backups/netpulse/netpulse_backup_20261123_000000.sql.gz
+# Restore from a backup archive
+./scripts/db-restore.sh ./backups/netpulse_backup_YYYYMMDD_HHMMSS.sql.gz
 ```
-
-### 5.3 Local Development Mode
-To run both backend and frontend concurrently with auto-reload and watch mode:
-
-```bash
-# Compile and start backend API (port 5000) and Vite dev server (port 5173):
-npm run dev:all
-```
-
-The script compiles the TypeScript backend, launches Node 24 in `--watch` mode targeting `dist-server/server.js`, and spins up Vite with proxy forwarding (`/api` $\to$ `http://localhost:5000`).
 
 ---
 
-## 6. Pre-Configured Staff Accounts
+## 7. Pre-Configured Staff Accounts (`prisma/seed.ts`)
 
-| Role | Username | Email | Default Password | Primary Access Scope |
+| Role | Username | Email | Seeded Password | Scope |
 |---|---|---|---|---|
-| **Super Admin** | `admin` | `admin@netpulse.net` | `admin123!` | Complete unrestricted access across all modules |
-| **Network Engineer** | `engineer` | `noc@netpulse.net` | `admin123!` | MikroTik, PPPoE, VLAN, IPAM, Installations, Technicians, Inventory |
-| **Billing & Cashier** | `cashier` | `cashier@netpulse.net` | `admin123!` | Invoices, Cashier Payments, KHQR, Customer accounts |
-| **Field Technician** | `tech` | `tech@netpulse.net` | `admin123!` | Scheduled installations, work orders, support tickets |
-| **Support Agent** | `support` | `support@netpulse.net` | `admin123!` | Subscriber directory, line diagnostics, tickets |
+| `SUPER_ADMIN` | `admin` | `admin@netpulse.net` | `ADMIN_PASSWORD` env var *(default `StrongSuperAdminPassword2026!`)* | Full unrestricted access |
+| `NETWORK_ENGINEER` | `engineer` | `noc@netpulse.net` | `Password123!` *(non-production only)* | Network, PPPoE, VLAN, IPAM, Operations, Inventory view, Reports |
+| `BILLING_CASHIER` | `cashier` | `cashier@netpulse.net` | `Password123!` *(non-production only)* | Customers view, Billing, Payments, KHQR, Accounting view |
+| `FIELD_TECHNICIAN` | `tech` | `tech@netpulse.net` | `Password123!` *(non-production only)* | Customers view, Installations, Technicians, Tickets, Inventory view |
+| `SUPPORT_AGENT` | `support` | `support@netpulse.net` | `Password123!` *(non-production only)* | Customers, Packages/Subscriptions view, Tickets, Portal, Messages |
+| `ACCOUNTANT` | `accountant` | `finance@netpulse.net` | `Password123!` *(non-production only)* | Billing, Payments, Accounting & Reports, Procurement view |
 
-> [!NOTE]
-> All demo accounts are seeded with password `admin123!`. In production, set `SUPER_ADMIN_PASSWORD` in your `.env` file before executing `npm run db:seed`.
+*(In `scripts/seed-admin.mjs`, `ADMIN_PASSWORD` falls back to `NetPulseAdmin2026!`.)*
 
 ---
 
-## 7. Automated Verification & Quality Assurance
-
-Both the front-end user experience and backend domain logic are covered by automated test suites:
+## 8. Verification, Builds & Test Suites
 
 ```bash
-# Run complete test verification (Regression + Backend + Frontend Auth)
-npm test
+# Build & Type Checking
+npm run build:server     # tsc -p server/tsconfig.json -> dist-server/
+npm run build            # tsc -b && vite build -> dist/
+npm run build:all        # Both backend and frontend builds
+npm run lint             # ESLint across repository
+
+# Core Test Suites
+npm run test:unit        # scripts/test-regression.mjs (22 DataTable & UI checks)
+npm run test:frontend-auth # scripts/test-auth-frontend.mjs (7 auth & RBAC schema tests)
+npm run test:backend     # server/test/netpulse.test.mjs
+npm test                 # Runs test:unit, test:backend, and test:frontend-auth
+
+# Additional Node Test Suites
+node --test test/unit/rbac-matrix.test.mjs         # 6 matrix tri-state, dependency & diff tests
+node --test server/test/features-frontend.test.mjs # 8 permission & feature ANY/ALL mode tests
+node --test server/test/rbac.test.mjs              # 17 RBAC & requireFeature API/DB tests (requires built dist-server & PostgreSQL)
+
+# Playwright E2E Suite
+npm run test:pw          # Executes tests/*.spec.ts against http://127.0.0.1:5173
 ```
-
-### Complete Test Results: **45 / 45 Tests Passed (100%)**
-
-1. **DataTable & UI Regression Suite**: **22 / 22 Tests Passed**
-   - Viewport boundary detection, popover anchoring, column alignment, sticky offsets, selection counters, status filters, card mode persistence, and accessibility compliance.
-2. **Backend Domain & Security Suite**: **16 / 16 Tests Passed**
-   - Super Admin JWT login & token generation.
-   - Rejection of invalid credentials.
-   - CRM customer creation, search, and indexing.
-   - MikroTik RouterOS API ping and PPPoE secret provisioning.
-   - VLAN interface duplicate detection and IPAM static pool allocation.
-   - Invoicing duplicate prevention and accrual revenue recognition.
-   - Cashier payment collection and automated overdue subscriber reconnection.
-   - Double-entry accounting balancing ($\text{Debits} \equiv \text{Credits}$).
-   - Multi-warehouse inventory stock tracking and negative inventory blocking.
-   - Full procurement lifecycle: PO $\to$ GRN $\to$ Stock In $\to$ Accounts Payable journal.
-   - End-to-end field installation workflow with RouterOS activation.
-   - **5 Failed Login Attempts triggering 15-minute Account Lockout & Audit Log**.
-   - **Refresh token issuance, single-flight rotation, and reuse invalidation**.
-   - **Logout session revocation and cookie clearing**.
-   - **Granular RBAC permissions matrix across all 5 roles**.
-3. **Frontend Auth & RBAC Suite**: **7 / 7 Tests Passed**
-   - Login schema validation & error states.
-   - Forgot password & reset password complexity rules.
-   - Protected route redirection & `?next=` parameter retention.
-   - Zustand store role hierarchy and wildcard permission checks (`installation:*`, `network:*`, etc.).
-
-### Build Verification:
-- `npm run build:server`: `tsc -p server/tsconfig.json` compiles cleanly to `dist-server/` with **0 errors**.
-- `npm run build`: `tsc -b && vite build` compiles cleanly to `dist/` with **0 errors**.

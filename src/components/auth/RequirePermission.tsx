@@ -1,8 +1,10 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useCan } from '../../lib/permissions';
 
 interface RequirePermissionProps {
+  feature?: string;
   permission?: string;
   role?: string;
   roles?: string[];
@@ -12,6 +14,7 @@ interface RequirePermissionProps {
 }
 
 export const RequirePermission: React.FC<RequirePermissionProps> = React.memo(({
+  feature,
   permission,
   role,
   roles,
@@ -19,11 +22,13 @@ export const RequirePermission: React.FC<RequirePermissionProps> = React.memo(({
   redirectTo = '/403',
   children,
 }) => {
-  const hasPermission = useAuthStore((s) => s.hasPermission);
   const hasRole = useAuthStore((s) => s.hasRole);
   const user = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
   const isInitialized = useAuthStore((s) => s.isInitialized);
+
+  const targetKey = feature || permission || '';
+  const isAllowed = useCan(targetKey);
 
   // Hold rendering if auth state has not yet finished initializing
   if (!isInitialized || status === 'loading' || status === 'idle') {
@@ -39,8 +44,8 @@ export const RequirePermission: React.FC<RequirePermissionProps> = React.memo(({
     return <>{children}</>;
   }
 
-  // Check specific permission if provided
-  if (permission && !hasPermission(permission)) {
+  // Check specific feature or permission if provided
+  if (targetKey && !isAllowed) {
     if (fallback) return <>{fallback}</>;
     return <Navigate to={redirectTo} replace />;
   }
@@ -59,4 +64,6 @@ export const RequirePermission: React.FC<RequirePermissionProps> = React.memo(({
 
   return <>{children}</>;
 });
+
+RequirePermission.displayName = 'RequirePermission';
 RequirePermission.displayName = 'RequirePermission';

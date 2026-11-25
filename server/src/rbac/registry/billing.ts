@@ -1,0 +1,71 @@
+import { RegistryPermission, RegistryFeature } from './types.js';
+
+export const permissions: RegistryPermission[] = [
+  { key: 'billing.view', group: 'Billing & Payments', label: 'View Invoices', description: 'View customer invoices, balances and payment histories', sortOrder: 40, dependsOnKey: null },
+  { key: 'billing.create', group: 'Billing & Payments', label: 'Generate Invoices', description: 'Run billing runs and generate invoices', sortOrder: 41, dependsOnKey: 'billing.view' },
+  { key: 'billing.edit', group: 'Billing & Payments', label: 'Edit Invoices', description: 'Adjust line items, apply credits and discounts', sortOrder: 42, dependsOnKey: 'billing.view' },
+  { key: 'billing.delete', group: 'Billing & Payments', label: 'Void Invoices', description: 'Cancel or delete draft and unpaid invoices', sortOrder: 43, dependsOnKey: 'billing.view' },
+  { key: 'payments.view', group: 'Billing & Payments', label: 'View Payments', description: 'View payment transactions and payment method records', sortOrder: 44, dependsOnKey: 'billing.view' },
+  { key: 'payments.record', group: 'Billing & Payments', label: 'Record Payment', description: 'Accept and process manual cash/bank payments', sortOrder: 45, dependsOnKey: 'payments.view' },
+  { key: 'payments.khqr', group: 'Billing & Payments', label: 'Generate KHQR', description: 'Generate Bakong dynamic KHQR payment codes', sortOrder: 46, dependsOnKey: 'payments.view' },
+  { key: 'payments.delete', group: 'Billing & Payments', label: 'Void Payment', description: 'Void, reverse or refund received payments', sortOrder: 47, dependsOnKey: 'payments.view' },
+];
+
+export const features: RegistryFeature[] = [
+  {
+    key: 'nav.billing',
+    type: 'MENU',
+    label: 'Billing',
+    path: '/billing',
+    icon: 'Receipt',
+    sortOrder: 60,
+    permissionMode: 'ANY',
+    defaultPermissions: ['billing.view', 'payments.view'],
+  },
+  {
+    key: 'page.billing',
+    type: 'PAGE',
+    label: 'Invoices',
+    path: '/billing',
+    parentKey: 'nav.billing',
+    icon: 'Receipt',
+    sortOrder: 61,
+    permissionMode: 'ANY',
+    defaultPermissions: ['billing.view'],
+  },
+  {
+    key: 'page.payments',
+    type: 'PAGE',
+    label: 'Payments & Cashier',
+    path: '/payments',
+    parentKey: 'nav.billing',
+    icon: 'CreditCard',
+    sortOrder: 62,
+    permissionMode: 'ANY',
+    defaultPermissions: ['payments.view'],
+  },
+  {
+    key: 'billing.btn.generate',
+    type: 'ACTION',
+    label: 'Generate Invoices Action',
+    sortOrder: 63,
+    permissionMode: 'ANY',
+    defaultPermissions: ['billing.create'],
+  },
+  {
+    key: 'payments.btn.record',
+    type: 'ACTION',
+    label: 'Record Payment Action',
+    sortOrder: 64,
+    permissionMode: 'ANY',
+    defaultPermissions: ['payments.record'],
+  },
+  {
+    key: 'payments.btn.khqr',
+    type: 'ACTION',
+    label: 'Generate KHQR Action',
+    sortOrder: 65,
+    permissionMode: 'ANY',
+    defaultPermissions: ['payments.khqr'],
+  },
+];

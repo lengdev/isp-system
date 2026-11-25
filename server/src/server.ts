@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { initDatabaseConnection, prisma } from './db/store.js';
 import { openApiSpec } from './docs/openapi.js';
 import { authenticate, requireRole } from './middleware/auth.middleware.js';
+import { RbacService } from './services/rbac.service.js';
 
 // Route imports
 import authRoutes from './routes/auth.routes.js';
@@ -294,6 +295,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 async function startServer() {
   try {
     await initDatabaseConnection();
+    await RbacService.syncRegistry();
   } catch (err: any) {
     console.error('[NetPulse FATAL]: Database connection failed. Aborting startup.');
     process.exit(1);

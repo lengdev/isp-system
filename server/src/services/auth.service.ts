@@ -19,6 +19,7 @@ export interface TokenPayload {
   email: string;
   role: string;
   roles: string[];
+  roleIds?: string[];
   fullName: string;
 }
 
@@ -353,13 +354,23 @@ export class AuthService {
       memUser.lockedUntil = null;
     }
 
+    // Fetch assigned roles from UserRole table
+    const userRoleLinks = await prisma.userRole.findMany({
+      where: { userId: user.id },
+      include: { role: true },
+    });
+    const roleNames = userRoleLinks.map((ur) => ur.role.name);
+    const roleIds = userRoleLinks.map((ur) => ur.role.id);
+    const effectiveRoles = roleNames.length > 0 ? roleNames : [user.role];
+
     // Issue JWT Access Token (15m)
     const payload: TokenPayload = {
       userId: user.id,
       username: user.username,
       email: user.email,
       role: user.role,
-      roles: [user.role],
+      roles: effectiveRoles,
+      roleIds: roleIds,
       fullName: user.fullName,
     };
     const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_ACCESS_EXPIRES_IN });
@@ -387,6 +398,12 @@ export class AuthService {
 
     await this.logAudit('LOGIN_SUCCESS', 'User', user.id, `User ${user.username} successfully authenticated`, user.username, ip, user.id);
 
+    const effectivePerms = await RbacService.getUserEffectivePermissions(
+      user.id,
+      roleIds.length > 0 ? roleIds : effectiveRoles
+    );
+    const features = await RbacService.getAllowedFeatureKeys(effectivePerms);
+
     return {
       token: accessToken, // Backward compatibility with existing tests
       accessToken,
@@ -399,8 +416,10 @@ export class AuthService {
         fullName: user.fullName,
         phone: user.phone,
         role: user.role,
-        roles: [user.role],
-        permissions: await AuthService.getUserPermissions(user.role),
+        roles: effectiveRoles,
+        roleIds: roleIds,
+        permissions: Array.from(effectivePerms),
+        features,
         mustChangePassword: Boolean(user.mustChangePassword),
       },
     };
@@ -560,6 +579,19 @@ export class AuthService {
 
     await this.logAudit('TOKEN_REFRESH', 'User', user.id, `Rotated refresh token for ${user.username}`, user.username, ip, user.id);
 
+    const userRoleLinks = await prisma.userRole.findMany({
+      where: { userId: user.id },
+      include: { role: true },
+    });
+    const roleNames = userRoleLinks.map((ur) => ur.role.name);
+    const roleIds = userRoleLinks.map((ur) => ur.role.id);
+    const effectiveRoles = roleNames.length > 0 ? roleNames : [user.role];
+    const effectivePerms = await RbacService.getUserEffectivePermissions(
+      user.id,
+      roleIds.length > 0 ? roleIds : effectiveRoles
+    );
+    const features = await RbacService.getAllowedFeatureKeys(effectivePerms);
+
     return {
       token: newAccessToken,
       accessToken: newAccessToken,
@@ -571,8 +603,10 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
-        roles: [user.role],
-        permissions: await AuthService.getUserPermissions(user.role),
+        roles: effectiveRoles,
+        roleIds: roleIds,
+        permissions: Array.from(effectivePerms),
+        features,
         mustChangePassword: Boolean(user.mustChangePassword),
       },
     };
@@ -769,7 +803,7 @@ export class AuthService {
   }
 
   /**
-   * Helper: Get permissions for a role, preferring dynamic DB/cache and falling back to memory
+   * Helper: Get permissions for a role from dynamic DB/cache
    */
   static async getUserPermissions(userRole: string): Promise<string[]> {
     if (userRole === 'SUPER_ADMIN') {
@@ -777,13 +811,10 @@ export class AuthService {
     }
     try {
       const perms = await RbacService.getRolePermissions(userRole);
-      if (perms && perms.size > 0) {
-        return Array.from(perms);
-      }
+      return Array.from(perms);
     } catch {
-      // Fallback if DB query fails
+      return [];
     }
-    return ROLE_PERMISSIONS[userRole] || [];
   }
 
   /**
@@ -791,11 +822,7 @@ export class AuthService {
    */
   static async hasPermissionAsync(userRole: string, requiredPermission: string): Promise<boolean> {
     if (userRole === 'SUPER_ADMIN') return true;
-    try {
-      return await RbacService.checkPermission(userRole, requiredPermission);
-    } catch {
-      return this.hasPermission(userRole, requiredPermission);
-    }
+    return await RbacService.checkPermission(userRole, requiredPermission);
   }
 
   /**

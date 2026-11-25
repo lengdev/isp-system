@@ -10,7 +10,14 @@ try {
 
 console.log('\x1b[36m%s\x1b[0m', '⚡ Starting NetPulse ISP System (Backend API + Frontend)...');
 
-const server = spawn('node', ['--watch', 'dist-server/server.js'], {
+// 1. Auto-recompile server/ files on change
+const tscWatcher = spawn('npx', ['tsc', '-p', 'server/tsconfig.json', '-w', '--preserveWatchOutput'], {
+  stdio: 'inherit',
+  env: { ...process.env },
+});
+
+// 2. Auto-restart server when compiled bundle updates
+const server = spawn('node', ['--watch-path=dist-server', 'dist-server/server.js'], {
   stdio: 'inherit',
   env: { ...process.env, PORT: '5000' },
 });
@@ -21,6 +28,7 @@ server.on('exit', (code) => {
   }
 });
 
+// 3. Vite frontend dev server
 const vite = spawn('npx', ['vite'], {
   stdio: 'inherit',
   env: { ...process.env },
@@ -28,8 +36,9 @@ const vite = spawn('npx', ['vite'], {
 
 function cleanup() {
   console.log('\n\x1b[33m%s\x1b[0m', '🛑 Shutting down NetPulse services...');
-  server.kill('SIGINT');
-  vite.kill('SIGINT');
+  try { tscWatcher.kill('SIGINT'); } catch {}
+  try { server.kill('SIGINT'); } catch {}
+  try { vite.kill('SIGINT'); } catch {}
   process.exit(0);
 }
 

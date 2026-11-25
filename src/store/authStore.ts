@@ -9,6 +9,7 @@ export interface AuthUser {
   role: string;
   roles: string[];
   permissions: string[];
+  features?: string[];
   mustChangePassword?: boolean;
 }
 
@@ -18,6 +19,7 @@ interface AuthState {
   accessToken: string | null;
   user: AuthUser | null;
   permissions: string[];
+  features: string[];
   status: AuthStatus;
   isInitialized: boolean;
 
@@ -27,6 +29,7 @@ interface AuthState {
   clearAuth: () => void;
   setStatus: (status: AuthStatus) => void;
   hasPermission: (permission: string) => boolean;
+  hasFeature: (feature: string) => boolean;
   hasRole: (...roles: string[]) => boolean;
 }
 
@@ -40,6 +43,7 @@ const defaultUser: AuthUser | null = isE2E
       role: 'SUPER_ADMIN',
       roles: ['SUPER_ADMIN'],
       permissions: ['*'],
+      features: ['*'],
     }
   : null;
 
@@ -47,6 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: isE2E ? 'mock-e2e-token' : null,
   user: defaultUser,
   permissions: isE2E ? ['*'] : [],
+  features: isE2E ? ['*'] : [],
   status: isE2E ? 'authenticated' : 'idle',
   isInitialized: isE2E ? true : false,
 
@@ -55,6 +60,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       accessToken,
       user,
       permissions: user.permissions || [],
+      features: user.features || [],
       status: 'authenticated',
       isInitialized: true,
     });
@@ -65,7 +71,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setUser: (user) => {
-    set({ user, permissions: user.permissions || [] });
+    set({
+      user,
+      permissions: user.permissions || [],
+      features: user.features || [],
+    });
   },
 
   clearAuth: () => {
@@ -73,6 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       accessToken: null,
       user: null,
       permissions: [],
+      features: [],
       status: 'unauthenticated',
       isInitialized: true,
     });
@@ -88,6 +99,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const [module] = permission.split(':');
     if (permissions.includes(`${module}:*`)) return true;
     return false;
+  },
+
+  hasFeature: (feature) => {
+    const { features, permissions, user } = get();
+    if (!user) return false;
+    if (user.role === 'SUPER_ADMIN' || permissions.includes('*') || features.includes('*')) return true;
+    return features.includes(feature);
   },
 
   hasRole: (...roles) => {

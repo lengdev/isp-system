@@ -47,7 +47,7 @@ export const MatrixCheckbox: React.FC<MatrixCheckboxProps> = React.memo(({
         onClick?.(e);
       }}
       className={cn(
-        'relative inline-flex items-center justify-center select-none w-5 h-5 rounded-md transition-all duration-100',
+        'relative isolate inline-flex items-center justify-center select-none w-5 h-5 rounded-md transition-all duration-100',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         isFocused && 'ring-2 ring-[var(--brand)] ring-offset-2 ring-offset-[var(--surface)]',
         className
@@ -74,7 +74,7 @@ export const MatrixCheckbox: React.FC<MatrixCheckboxProps> = React.memo(({
           active
             ? 'bg-[var(--brand)] border-[var(--brand)] text-white shadow-xs'
             : 'bg-[var(--surface)] border-[var(--border-strong)] hover:border-[var(--brand)] dark:border-[rgba(255,255,255,0.25)]',
-          disabled && active && 'bg-[var(--brand)]/70 border-[var(--brand)]/70',
+          disabled && active && 'bg-[#EA6A3C]/80 border-[#EA6A3C]/80',
           disabled && !active && 'bg-gray-100 dark:bg-zinc-800 border-gray-300 dark:border-zinc-700'
         )}
       >

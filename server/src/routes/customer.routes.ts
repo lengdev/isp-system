@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { CustomerService } from '../services/customer.service.js';
+import { authenticate, requireFeature } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
 // GET /api/v1/customers
-router.get('/', async (req, res) => {
+router.get('/', authenticate, requireFeature('page.customers'), async (req, res) => {
   try {
     const filters = req.query;
     const customers = await CustomerService.listCustomers(filters);
@@ -15,9 +16,9 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/v1/customers/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticate, requireFeature('page.customers'), async (req, res) => {
   try {
-    const profile = await CustomerService.getCustomerProfile(req.params.id);
+    const profile = await CustomerService.getCustomerProfile(String(req.params.id));
     res.json(profile);
   } catch (err: any) {
     res.status(404).json({ error: err.message });
@@ -25,7 +26,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/v1/customers
-router.post('/', async (req, res) => {
+router.post('/', authenticate, requireFeature('customers.btn.create'), async (req, res) => {
   try {
     const customer = await CustomerService.createCustomer(req.body);
     res.status(201).json(customer);
@@ -35,9 +36,9 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/v1/customers/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticate, requireFeature('customers.btn.edit'), async (req, res) => {
   try {
-    const updated = await CustomerService.updateCustomer(req.params.id, req.body);
+    const updated = await CustomerService.updateCustomer(String(req.params.id), req.body);
     res.json(updated);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -45,9 +46,9 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/v1/customers/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticate, requireFeature('customers.btn.delete'), async (req, res) => {
   try {
-    const deleted = await CustomerService.deleteCustomer(req.params.id);
+    const deleted = await CustomerService.deleteCustomer(String(req.params.id));
     res.json({ message: 'Customer archived/deleted successfully', customer: deleted });
   } catch (err: any) {
     res.status(400).json({ error: err.message });

@@ -702,7 +702,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
         }}
         className={cn(
           'flex items-center justify-between w-full px-3 py-2 rounded-[8px] text-left select-none transition-colors duration-150',
-          opt.description ? 'min-h-[40px]' : 'min-h-[34px]',
+          'min-h-[34px]',
           size === 'sm' ? 'text-[12px]' : 'text-[13px]',
           opt.disabled
             ? 'opacity-50 cursor-not-allowed pointer-events-none'
@@ -741,14 +741,6 @@ export const Combobox: React.FC<ComboboxProps> = ({
             <span className={cn('truncate font-normal', isSelected ? 'text-[#006FEE] font-medium' : 'text-[var(--text)]', size === 'sm' ? 'text-[12px]' : 'text-[13px]')}>
               {highlightMatch(opt.label, searchQuery)}
             </span>
-            {opt.description && (
-              <>
-                <span className="text-zinc-400 dark:text-zinc-500 text-[11px] select-none shrink-0">•</span>
-                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-normal truncate">
-                  {opt.description}
-                </span>
-              </>
-            )}
           </div>
 
           {opt.badge && (
