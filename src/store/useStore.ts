@@ -27,7 +27,6 @@ import {
 import {
   INITIAL_PLANS,
   INITIAL_COLUMNS,
-  generateSeedCustomers,
   INITIAL_INVOICES,
   INITIAL_TICKETS,
   INITIAL_DEVICES,
@@ -261,8 +260,8 @@ const DEFAULT_FILTERS: FilterState = {
 export const useStore = create<AppStore>()(
   persist(
     (set, get) => ({
-      // Seed data
-      customers: generateSeedCustomers(),
+      // Database-backed domains initialize empty until fetched from PostgreSQL API
+      customers: [],
       isCustomersLoading: false,
       plans: INITIAL_PLANS,
       invoices: INITIAL_INVOICES,
@@ -524,7 +523,7 @@ export const useStore = create<AppStore>()(
         set({ isCustomersLoading: true });
         try {
           const res = await api.customers.list();
-          if (Array.isArray(res) && res.length > 0) {
+          if (Array.isArray(res)) {
             const normalized = res.map(normalizeApiCustomer);
             set({ customers: normalized });
           }
@@ -1130,7 +1129,7 @@ export const useStore = create<AppStore>()(
       // Reset Demo Data
       resetDemoData: () => {
         set({
-          customers: generateSeedCustomers(),
+          customers: [],
           plans: INITIAL_PLANS,
           invoices: INITIAL_INVOICES,
           tickets: INITIAL_TICKETS,
@@ -1158,7 +1157,6 @@ export const useStore = create<AppStore>()(
     {
       name: STORE_PERSIST_KEY,
       partialize: (state) => ({
-        customers: state.customers,
         plans: state.plans,
         invoices: state.invoices,
         tickets: state.tickets,
