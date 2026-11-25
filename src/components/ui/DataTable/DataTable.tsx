@@ -1372,8 +1372,14 @@ export const DataTable = <T extends Record<string, any>>({
 
   useEffect(() => {
     return () => {
-      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (delayTimerRef.current) {
+        clearTimeout(delayTimerRef.current);
+        delayTimerRef.current = null;
+      }
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
     };
   }, []);
 
