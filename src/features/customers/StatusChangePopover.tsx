@@ -5,6 +5,7 @@ import { Chip } from '../../components/ui/Chip';
 import { Popover } from '../../components/ui/Popover';
 import { Check } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { useCan } from '../../lib/permissions';
 import { cn } from '../../lib/utils';
 
 interface StatusChangePopoverProps {
@@ -17,6 +18,11 @@ export const StatusChangePopover: React.FC<StatusChangePopoverProps> = ({
   customerId,
 }) => {
   const setCustomerStatus = useStore((s) => s.setCustomerStatus);
+  const canEditCustomer = useCan('customers.btn.edit');
+
+  if (!canEditCustomer) {
+    return <Chip status={currentStatus} variant="dot" size="sm" />;
+  }
 
   const statuses: { status: CustomerStatus; label: string }[] = [
     { status: 'Active', label: 'Active (Connected)' },

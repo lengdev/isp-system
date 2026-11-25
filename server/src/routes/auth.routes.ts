@@ -210,7 +210,7 @@ router.post('/change-password', authenticate, validateBody(changePasswordSchema)
 });
 
 // GET /api/v1/auth/users (for Users tab and admin user management)
-router.get('/users', authenticate, authorize('roles.manage'), async (_req, res) => {
+router.get('/users', authenticate, authorize('users.view', 'users.manage', 'roles.manage'), async (_req, res) => {
   try {
     const users = await RbacService.listUsersWithRoles();
     res.json(users);
@@ -220,7 +220,7 @@ router.get('/users', authenticate, authorize('roles.manage'), async (_req, res) 
 });
 
 // POST /api/v1/auth/users
-router.post('/users', authenticate, authorize('roles.manage'), async (req, res) => {
+router.post('/users', authenticate, authorize('users.manage', 'roles.manage'), async (req, res) => {
   try {
     const user = await AuthService.createUser(req.body);
     res.status(201).json(user);
@@ -252,8 +252,37 @@ router.patch('/users/:id/roles', authenticate, authorize('roles.manage'), async 
   }
 });
 
+// GET /api/v1/auth/users/:id/permissions -> User baseline role perms, per-user GRANT/DENY overrides, and effective perms
+router.get('/users/:id/permissions', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const detail = await RbacService.getUserPermissionsDetail(id);
+    res.json(detail);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// PUT /api/v1/auth/users/:id/permissions -> Replace per-user GRANT/DENY overrides
+router.put('/users/:id/permissions', authenticate, authorize('roles.manage'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const grants = Array.isArray(req.body?.grants) ? req.body.grants : [];
+    const denies = Array.isArray(req.body?.denies) ? req.body.denies : [];
+    const actor = {
+      id: req.user!.userId,
+      username: req.user!.username,
+      ip: getClientIp(req),
+    };
+    const updated = await RbacService.updateUserPermissions(id, { grants, denies }, actor);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
 // GET /api/v1/auth/roles -> { roles, permissions, matrix }
-router.get('/roles', authenticate, authorize('roles.manage'), async (_req, res) => {
+router.get('/roles', authenticate, authorize('users.view', 'users.manage', 'roles.manage'), async (_req, res) => {
   try {
     const data = await RbacService.getRolesMatrix();
     res.json(data);

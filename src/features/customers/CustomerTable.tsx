@@ -27,6 +27,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { StatusChangePopover } from './StatusChangePopover';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { formatCurrency, formatNumber, cn } from '../../lib/utils';
+import { useCan } from '../../lib/permissions';
 import { DataTable, DataTableColumnDef, RowAction, DataTableCheckbox } from '../../components/ui/DataTable';
 
 interface CustomerTableProps {
@@ -43,6 +44,10 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   const openDrawer = useStore((s) => s.openDrawer);
   const openModal = useStore((s) => s.openModal);
   const updateCustomer = useStore((s) => s.updateCustomer);
+  const canCreateCustomer = useCan('customers.btn.create');
+  const canEditCustomer = useCan('customers.btn.edit');
+  const canDeleteCustomer = useCan('customers.btn.delete');
+  const canRecordPayment = useCan('payments.record') || useCan('billing.create');
   const plans = useStore((s) => s.plans);
   const currency = useStore((s) => s.currency);
   const showStatistics = useStore((s) => s.showStatistics);
@@ -194,26 +199,28 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
           type: 'select',
           options: planOptions,
         },
-        editable: {
-          type: 'select',
-          options: planOptions,
-          onSave: async (newPlanName, row) => {
-            const chosen = plans.find((p) => p.name === newPlanName);
-            if (chosen) {
-              await updateCustomer(row.id, {
-                planId: chosen.id,
-                planName: chosen.name,
-                monthlyPrice: chosen.monthlyPrice,
-                dataCapGB: chosen.dataCapGB,
-              });
-              addToast({
-                type: 'success',
-                title: 'Plan Updated',
-                message: `Changed ${row.fullName}'s plan to ${chosen.name}`,
-              });
+        editable: canEditCustomer
+          ? {
+              type: 'select',
+              options: planOptions,
+              onSave: async (newPlanName, row) => {
+                const chosen = plans.find((p) => p.name === newPlanName);
+                if (chosen) {
+                  await updateCustomer(row.id, {
+                    planId: chosen.id,
+                    planName: chosen.name,
+                    monthlyPrice: chosen.monthlyPrice,
+                    dataCapGB: chosen.dataCapGB,
+                  });
+                  addToast({
+                    type: 'success',
+                    title: 'Plan Updated',
+                    message: `Changed ${row.fullName}'s plan to ${chosen.name}`,
+                  });
+                }
+              },
             }
-          },
-        },
+          : undefined,
         cell: ({ row }) => {
           const c = row.original;
           return (
@@ -337,18 +344,20 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
           type: 'multi',
           options: statusOptions,
         },
-        editable: {
-          type: 'select',
-          options: statusOptions,
-          onSave: async (newStatus, row) => {
-            await updateCustomer(row.id, { status: newStatus as CustomerStatus });
-            addToast({
-              type: 'success',
-              title: 'Status Updated',
-              message: `Subscriber ${row.fullName} is now ${newStatus}.`,
-            });
-          },
-        },
+        editable: canEditCustomer
+          ? {
+              type: 'select',
+              options: statusOptions,
+              onSave: async (newStatus, row) => {
+                await updateCustomer(row.id, { status: newStatus as CustomerStatus });
+                addToast({
+                  type: 'success',
+                  title: 'Status Updated',
+                  message: `Subscriber ${row.fullName} is now ${newStatus}.`,
+                });
+              },
+            }
+          : undefined,
         cell: ({ row }) => {
           const c = row.original;
           return (
@@ -443,57 +452,73 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   );
 
   // Row actions for dropdown menu and right-click context menu
-  const getRowActions = (c: Customer): RowAction<Customer>[] => [
-    {
-      label: 'View Full Details',
-      icon: <Eye className="w-3.5 h-3.5" />,
-      onClick: () => openDrawer(c.id),
-    },
-    {
-      label: 'Edit Profile',
-      icon: <Edit2 className="w-3.5 h-3.5" />,
-      onClick: () => openModal('addEditCustomer', { customerId: c.id }),
-    },
-    {
-      label:
-        c.status === 'Suspended'
-          ? 'Activate Connection'
-          : 'Suspend Connection',
-      icon: <Power className="w-3.5 h-3.5" />,
-      onClick: () =>
-        openModal('statusConfirmation', {
-          customerIds: [c.id],
-          targetStatus: c.status === 'Suspended' ? 'Active' : 'Suspended',
-        }),
-    },
-    {
-      label: 'Record Payment',
-      icon: <CreditCard className="w-3.5 h-3.5" />,
-      onClick: () => openModal('recordPayment', { customerId: c.id }),
-    },
-    {
-      label: 'Send SMS / Email',
-      icon: <Mail className="w-3.5 h-3.5" />,
-      onClick: () =>
-        openModal('sendMessage', { customerId: c.id, isBulk: false }),
-    },
-    {
-      label: 'Run Speed Test',
-      icon: <Zap className="w-3.5 h-3.5" />,
-      onClick: () => openModal('speedTest', { customerId: c.id }),
-    },
-    { divider: true, label: '', onClick: () => {} },
-    {
-      label: 'Delete Subscriber',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      danger: true,
-      onClick: () =>
-        openModal('deleteConfirmation', {
-          customerIds: [c.id],
-          isBulk: false,
-        }),
-    },
-  ];
+  const getRowActions = (c: Customer): RowAction<Customer>[] => {
+    const actions: RowAction<Customer>[] = [
+      {
+        label: 'View Full Details',
+        icon: <Eye className="w-3.5 h-3.5" />,
+        onClick: () => openDrawer(c.id),
+      },
+    ];
+
+    if (canEditCustomer) {
+      actions.push(
+        {
+          label: 'Edit Profile',
+          icon: <Edit2 className="w-3.5 h-3.5" />,
+          onClick: () => openModal('addEditCustomer', { customerId: c.id }),
+        },
+        {
+          label: c.status === 'Suspended' ? 'Activate Connection' : 'Suspend Connection',
+          icon: <Power className="w-3.5 h-3.5" />,
+          onClick: () =>
+            openModal('statusConfirmation', {
+              customerIds: [c.id],
+              targetStatus: c.status === 'Suspended' ? 'Active' : 'Suspended',
+            }),
+        }
+      );
+    }
+
+    if (canRecordPayment) {
+      actions.push({
+        label: 'Record Payment',
+        icon: <CreditCard className="w-3.5 h-3.5" />,
+        onClick: () => openModal('recordPayment', { customerId: c.id }),
+      });
+    }
+
+    actions.push(
+      {
+        label: 'Send SMS / Email',
+        icon: <Mail className="w-3.5 h-3.5" />,
+        onClick: () => openModal('sendMessage', { customerId: c.id, isBulk: false }),
+      },
+      {
+        label: 'Run Speed Test',
+        icon: <Zap className="w-3.5 h-3.5" />,
+        onClick: () => openModal('speedTest', { customerId: c.id }),
+      }
+    );
+
+    if (canDeleteCustomer) {
+      actions.push(
+        { divider: true, label: '', onClick: () => {} },
+        {
+          label: 'Delete Subscriber',
+          icon: <Trash2 className="w-3.5 h-3.5" />,
+          danger: true,
+          onClick: () =>
+            openModal('deleteConfirmation', {
+              customerIds: [c.id],
+              isBulk: false,
+            }),
+        }
+      );
+    }
+
+    return actions;
+  };
 
   // Detail panel rendered when row chevron is expanded
   const renderExpanded = (c: Customer) => (
@@ -746,7 +771,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
       showStatisticsToggle={false}
       showStatistics={showStatistics}
       onToggleStatistics={toggleStatistics}
-      enableImport={true}
+      enableImport={canCreateCustomer}
       onImport={async (importedRows) => {
         addToast({
           type: 'success',
@@ -764,7 +789,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
       }}
       emptyTitle="No subscribers found"
       emptySubtitle="Try adjusting your filters, clearing your search query, or adding a new subscriber."
-      onAddNew={() => openModal('addEditCustomer')}
+      onAddNew={canCreateCustomer ? () => openModal('addEditCustomer') : undefined}
       addNewLabel="Add New Customer"
     />
   );

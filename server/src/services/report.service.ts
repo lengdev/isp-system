@@ -1,28 +1,42 @@
-import { dbStore } from '../db/store.js';
+import { prisma } from '../db/store.js';
 import { AccountingService } from './accounting.service.js';
 
 export class ReportService {
   // 1. Dashboard Executive Overview
-  static getDashboardMetrics() {
-    const totalSubscribers = dbStore.customers.length;
-    const activeSubscribers = dbStore.customers.filter((c) => c.status === 'ACTIVE').length;
-    const suspendedSubscribers = dbStore.customers.filter((c) => c.status === 'SUSPENDED').length;
-    const overdueSubscribers = dbStore.customers.filter((c) => c.status === 'OVERDUE').length;
+  static async getDashboardMetrics() {
+    const [customers, overdueInvoices, routers, auditLogs] = await Promise.all([
+      prisma.customer.findMany({
+        include: { subscriptions: { include: { package: true } } },
+      }),
+      prisma.invoice.findMany({ where: { status: 'OVERDUE' } }),
+      prisma.router.findMany({ orderBy: { name: 'asc' } }),
+      prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 10 }),
+    ]);
 
-    // Monthly Recurring Revenue (MRR)
-    const mrr = dbStore.customers
+    const totalSubscribers = customers.length;
+    const activeSubscribers = customers.filter((c) => c.status === 'ACTIVE').length;
+    const suspendedSubscribers = customers.filter((c) => c.status === 'SUSPENDED').length;
+    const overdueSubscribers = customers.filter((c) => c.status === 'OVERDUE').length;
+
+    const mrr = customers
       .filter((c) => c.status === 'ACTIVE')
-      .reduce((sum, c) => sum + (Number(c.monthlyPrice) || 0), 0);
+      .reduce((sum, c) => {
+        const sub = c.subscriptions[0];
+        return sum + Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 0);
+      }, 0);
 
-    // Overdue balance
-    const totalOverdueBalance = dbStore.invoices
-      .filter((i) => i.status === 'OVERDUE')
-      .reduce((sum, i) => sum + (Number(i.balanceDue) || 0), 0);
+    const totalOverdueBalance = overdueInvoices.reduce(
+      (sum, i) => sum + (Number(i.balanceDue) || 0),
+      0
+    );
 
-    const fiberCount = dbStore.customers.filter((c) => c.connectionType === 'FIBER').length;
-    const wirelessCount = dbStore.customers.filter((c) => c.connectionType === 'WIRELESS').length;
+    const fiberCount = customers.filter(
+      (c) => (c.subscriptions[0]?.technology || 'FIBER') === 'FIBER'
+    ).length;
+    const wirelessCount = customers.filter(
+      (c) => c.subscriptions[0]?.technology === 'WIRELESS'
+    ).length;
 
-    // Traffic simulation
     const trafficHourly = [
       { time: '00:00', download: 180, upload: 90 },
       { time: '04:00', download: 120, upload: 60 },
@@ -33,7 +47,6 @@ export class ReportService {
       { time: '22:00', download: 1100, upload: 540 },
     ];
 
-    // Revenue Monthly Trend
     const revenueMonthly = [
       { month: 'Jun', mrr: 12400, collected: 12100 },
       { month: 'Jul', mrr: 14200, collected: 13900 },
@@ -57,7 +70,7 @@ export class ReportService {
       },
       traffic: trafficHourly,
       revenueTrends: revenueMonthly,
-      devicesHealth: dbStore.routers.map((r) => ({
+      devicesHealth: routers.map((r) => ({
         id: r.id,
         name: r.name,
         ip: r.managementIp,
@@ -67,28 +80,36 @@ export class ReportService {
         memory: r.memoryUsage,
         uptimeHours: Math.floor(r.uptimeSeconds / 3600),
       })),
-      recentActivities: dbStore.auditLogs.slice(0, 10),
+      recentActivities: auditLogs.map((log) => ({
+        ...log,
+        actor: log.userEmail || 'system',
+        performedBy: log.userEmail || 'system',
+        timestamp: log.createdAt.toISOString(),
+        createdAt: log.createdAt.toISOString(),
+      })),
     };
   }
 
   // 2. Comprehensive Reports
-  static getDetailedReports() {
-    const pnl = AccountingService.getProfitAndLoss();
-    const balanceSheet = AccountingService.getBalanceSheet();
-    const arAging = AccountingService.getArAging();
+  static async getDetailedReports() {
+    const [pnl, balanceSheet, arAging, packages, products, tickets] = await Promise.all([
+      AccountingService.getProfitAndLoss(),
+      AccountingService.getBalanceSheet(),
+      AccountingService.getArAging(),
+      prisma.package.findMany({ include: { subscriptions: true } }),
+      prisma.product.findMany(),
+      prisma.supportTicket.findMany(),
+    ]);
 
-    const planBreakdown = dbStore.packages.map((pkg) => {
-      const subs = dbStore.customers.filter((c) => c.planName === pkg.name);
-      return {
-        packageName: pkg.name,
-        technology: pkg.technology,
-        monthlyPrice: pkg.monthlyPrice,
-        subscribersCount: subs.length,
-        totalMonthlyRevenue: subs.length * Number(pkg.monthlyPrice),
-      };
-    });
+    const planBreakdown = packages.map((pkg) => ({
+      packageName: pkg.name,
+      technology: pkg.technology,
+      monthlyPrice: Number(pkg.monthlyPrice),
+      subscribersCount: pkg.subscriptions.length,
+      totalMonthlyRevenue: pkg.subscriptions.length * Number(pkg.monthlyPrice),
+    }));
 
-    const inventoryValuation = dbStore.products.reduce(
+    const inventoryValuation = products.reduce(
       (sum, p) => sum + (p.quantity * Number(p.costPrice) || 0),
       0
     );
@@ -101,67 +122,82 @@ export class ReportService {
       },
       plans: planBreakdown,
       inventory: {
-        totalProducts: dbStore.products.length,
-        totalUnits: dbStore.products.reduce((sum, p) => sum + p.quantity, 0),
+        totalProducts: products.length,
+        totalUnits: products.reduce((sum, p) => sum + p.quantity, 0),
         totalValuation: Math.round(inventoryValuation * 100) / 100,
-        lowStockItems: dbStore.products.filter((p) => p.status === 'LOW_STOCK' || p.status === 'OUT_OF_STOCK'),
+        lowStockItems: products
+          .filter((p) => p.status === 'LOW_STOCK' || p.status === 'OUT_OF_STOCK')
+          .map((p) => ({
+            ...p,
+            costPrice: Number(p.costPrice),
+            unitPrice: Number(p.unitPrice),
+          })),
       },
       support: {
-        openTickets: dbStore.tickets.filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length,
-        resolvedTickets: dbStore.tickets.filter((t) => t.status === 'RESOLVED' || t.status === 'CLOSED').length,
+        openTickets: tickets.filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length,
+        resolvedTickets: tickets.filter((t) => t.status === 'RESOLVED' || t.status === 'CLOSED').length,
       },
     };
   }
 
   // 3. Export to CSV string
-  static exportCsv(type: 'customers' | 'invoices' | 'inventory' | 'journals') {
+  static async exportCsv(type: 'customers' | 'invoices' | 'inventory' | 'journals') {
     if (type === 'customers') {
+      const customers = await prisma.customer.findMany({
+        include: { subscriptions: { include: { package: true } } },
+        orderBy: { code: 'asc' },
+      });
       const headers = ['Code', 'Name', 'Email', 'Phone', 'Plan', 'Type', 'Status', 'Balance Due'];
-      const rows = dbStore.customers.map((c) => [
-        c.code,
-        `"${c.fullName}"`,
-        c.email,
-        c.phone,
-        `"${c.planName}"`,
-        c.connectionType,
-        c.status,
-        c.balanceDue,
-      ]);
+      const rows = customers.map((c) => {
+        const sub = c.subscriptions[0];
+        return [
+          c.code,
+          `"${c.fullName}"`,
+          c.email,
+          c.phone,
+          `"${sub?.package?.name || 'N/A'}"`,
+          sub?.technology || 'FIBER',
+          c.status,
+          Number(c.balanceDue),
+        ];
+      });
       return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     }
 
     if (type === 'invoices') {
+      const invoices = await prisma.invoice.findMany({ orderBy: { issueDate: 'desc' } });
       const headers = ['Invoice Number', 'Customer ID', 'Amount', 'Status', 'Period', 'Due Date'];
-      const rows = dbStore.invoices.map((i) => [
+      const rows = invoices.map((i) => [
         i.invoiceNumber,
         i.customerId,
-        i.amount,
+        Number(i.amount),
         i.status,
         i.billingPeriod || '',
-        i.dueDate,
+        i.dueDate.toISOString(),
       ]);
       return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     }
 
     if (type === 'inventory') {
+      const products = await prisma.product.findMany({ orderBy: { sku: 'asc' } });
       const headers = ['SKU', 'Name', 'Category', 'Quantity', 'Cost Price', 'Unit Price', 'Status'];
-      const rows = dbStore.products.map((p) => [
+      const rows = products.map((p) => [
         p.sku,
         `"${p.name}"`,
-        `"${p.categoryName}"`,
+        `"${p.categoryName || ''}"`,
         p.quantity,
-        p.costPrice,
-        p.unitPrice,
+        Number(p.costPrice),
+        Number(p.unitPrice),
         p.status,
       ]);
       return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     }
 
-    // Default journals
+    const entries = await prisma.journalEntry.findMany({ orderBy: { entryDate: 'desc' } });
     const headers = ['Entry Number', 'Date', 'Description', 'Reference', 'Is Posted'];
-    const rows = dbStore.journalEntries.map((j) => [
+    const rows = entries.map((j) => [
       j.entryNumber,
-      j.entryDate,
+      j.entryDate.toISOString(),
       `"${j.description}"`,
       j.reference || '',
       j.isPosted,

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma, dbStore } from '../db/store.js';
+import { prisma } from '../db/store.js';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -112,9 +112,6 @@ router.post('/', async (req, res) => {
       updatedAt: newPkg.updatedAt.toISOString(),
     };
 
-    dbStore.packages.push(formatted as any);
-    dbStore.logAudit('CREATE_PACKAGE', 'Package', formatted.id, `Created package ${formatted.name}`);
-
     res.status(201).json(formatted);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -151,7 +148,7 @@ router.put('/:id', async (req, res) => {
 
     const updated = await prisma.$transaction(async (tx) => {
       const resPkg = await tx.package.update({
-        where: { id: req.params.id },
+        where: { id: String(req.params.id) },
         data: updateData,
       });
 
@@ -176,12 +173,6 @@ router.put('/:id', async (req, res) => {
       updatedAt: updated.updatedAt.toISOString(),
     };
 
-    const memPkg = dbStore.packages.find((p) => p.id === req.params.id);
-    if (memPkg) {
-      Object.assign(memPkg, formatted);
-    }
-    dbStore.logAudit('UPDATE_PACKAGE', 'Package', updated.id, `Updated package ${updated.name}`);
-
     res.json(formatted);
   } catch (err: any) {
     res.status(404).json({ error: 'Package not found or update error: ' + err.message });
@@ -193,7 +184,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const deleted = await prisma.$transaction(async (tx) => {
       const resPkg = await tx.package.delete({
-        where: { id: req.params.id },
+        where: { id: String(req.params.id) },
       });
 
       await tx.auditLog.create({
@@ -208,12 +199,6 @@ router.delete('/:id', async (req, res) => {
 
       return resPkg;
     });
-
-    const memIdx = dbStore.packages.findIndex((p) => p.id === req.params.id);
-    if (memIdx !== -1) {
-      dbStore.packages.splice(memIdx, 1);
-    }
-    dbStore.logAudit('DELETE_PACKAGE', 'Package', deleted.id, `Archived package ${deleted.name}`);
 
     res.json({ message: 'Package archived successfully', package: deleted });
   } catch (err: any) {

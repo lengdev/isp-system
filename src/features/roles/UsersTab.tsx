@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Search, UserCheck, ShieldAlert, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Search, UserCheck, ShieldAlert, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react';
 import { Combobox } from '../../components/ui/Combobox';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { UserPermissionsModal } from './UserPermissionsModal';
 import type { UserWithRoles, RoleItem } from '../../types/roles';
 import { cn } from '../../lib/utils';
 
@@ -35,6 +36,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   } | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [editingPermissionsUser, setEditingPermissionsUser] = useState<UserWithRoles | null>(null);
 
   // Role options for comboboxes
   const roleOptions = useMemo(
@@ -166,26 +168,30 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
       {/* Users DataTable Card */}
       <div className="overflow-x-auto rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)]">
-        <table className="w-full border-collapse text-left min-w-[720px]">
+        <table className="w-full border-collapse text-left min-w-[860px]">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--surface-subtle)] h-10 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
               <th className="px-4 py-2">User</th>
               <th className="px-4 py-2">Username</th>
               <th className="px-4 py-2">Role</th>
+              <th className="px-4 py-2">Custom Permissions</th>
               <th className="px-4 py-2 text-center">Status</th>
               <th className="px-4 py-2">Last Login</th>
+              <th className="px-4 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)] text-xs">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-xs text-[var(--text-muted)]">
+                <td colSpan={7} className="py-12 text-center text-xs text-[var(--text-muted)]">
                   No staff users found matching your criteria.
                 </td>
               </tr>
             ) : (
               filteredUsers.map((user) => {
                 const currentRoleObj = roles.find((r) => r.name === user.role);
+                const grantCount = user.grantCount ?? user.grants?.length ?? 0;
+                const denyCount = user.denyCount ?? user.denies?.length ?? 0;
 
                 return (
                   <tr
@@ -231,6 +237,28 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                       )}
                     </td>
 
+                    {/* Custom User Permission Overrides */}
+                    <td className="px-4 py-2.5">
+                      {grantCount === 0 && denyCount === 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-[var(--surface-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
+                          Role default
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {grantCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                              +{grantCount} Granted
+                            </span>
+                          )}
+                          {denyCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                              -{denyCount} Denied
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
                     {/* Status Badge */}
                     <td className="px-4 py-2.5 text-center">
                       <span
@@ -255,6 +283,19 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                     <td className="px-4 py-2.5 text-[11px] text-[var(--text-muted)]">
                       {formatLastLogin(user.lastLoginAt)}
                     </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingPermissionsUser(user)}
+                        className="gap-1.5 text-xs"
+                      >
+                        <KeyRound className="w-3.5 h-3.5 text-[var(--brand)]" />
+                        <span>{canManage ? 'Permissions' : 'View Access'}</span>
+                      </Button>
+                    </td>
                   </tr>
                 );
               })
@@ -262,6 +303,13 @@ export const UsersTab: React.FC<UsersTabProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Per-User Permission Overrides Modal */}
+      <UserPermissionsModal
+        user={editingPermissionsUser}
+        canManage={canManage}
+        onClose={() => setEditingPermissionsUser(null)}
+      />
 
       {/* Confirmation Modal for Role Reassignment */}
       <Modal

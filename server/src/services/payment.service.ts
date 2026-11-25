@@ -1,4 +1,5 @@
-import { dbStore } from '../db/store.js';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../db/store.js';
 import { AccountingService } from './accounting.service.js';
 import { MikroTikService } from './mikrotik.service.js';
 
@@ -11,163 +12,247 @@ export interface RecordPaymentInput {
   recordedBy?: string;
 }
 
+async function nextPaymentNumber(tx: Prisma.TransactionClient): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `PAY-${year}-`;
+  const existing = await tx.payment.findMany({
+    where: { paymentNumber: { startsWith: prefix } },
+    select: { paymentNumber: true },
+  });
+  let maxSeq = 0;
+  for (const row of existing) {
+    const seq = parseInt(row.paymentNumber.slice(prefix.length), 10);
+    if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+  }
+  let candidate = `${prefix}${(maxSeq + 1).toString().padStart(4, '0')}`;
+  while (await tx.payment.findUnique({ where: { paymentNumber: candidate } })) {
+    maxSeq++;
+    candidate = `${prefix}${(maxSeq + 1).toString().padStart(4, '0')}`;
+  }
+  return candidate;
+}
+
 export class PaymentService {
   // 1. List Payments
-  static listPayments(customerId?: string) {
-    let list = [...dbStore.payments];
-    if (customerId) {
-      list = list.filter((p) => p.customerId === customerId);
-    }
-    return list.map((p) => {
-      const cust = dbStore.customers.find((c) => c.id === p.customerId);
-      return {
-        ...p,
-        customerName: cust?.fullName || 'Customer',
-        customerCode: cust?.code || '',
-      };
+  static async listPayments(customerId?: string) {
+    const payments = await prisma.payment.findMany({
+      where: customerId ? { customerId } : undefined,
+      include: {
+        customer: true,
+        allocations: { include: { invoice: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
+
+    return payments.map((p) => ({
+      ...p,
+      amount: Number(p.amount),
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+      customerName: p.customer?.fullName || 'Customer',
+      customerCode: p.customer?.code || '',
+      allocations: p.allocations.map((al) => ({
+        invoiceId: al.invoiceId,
+        invoiceNumber: al.invoice.invoiceNumber,
+        allocatedAmount: Number(al.amount),
+      })),
+    }));
   }
 
   // 2. Record Customer Payment with Balanced Double-Entry Journal & Auto-Reconnection
   static async recordPayment(input: RecordPaymentInput) {
-    const customer = dbStore.customers.find((c) => c.id === input.customerId);
-    if (!customer) throw new Error(`Customer ${input.customerId} not found.`);
-
     const paymentAmount = Number(input.amount);
     if (isNaN(paymentAmount) || paymentAmount <= 0) {
       throw new Error('Payment amount must be greater than zero.');
     }
 
-    // Idempotency check: prevent duplicate payments using transactionRef
     if (input.transactionRef) {
-      const duplicate = dbStore.payments.find(
-        (p) => p.transactionRef === input.transactionRef && p.status === 'SUCCESSFUL'
-      );
+      const duplicate = await prisma.payment.findFirst({
+        where: { transactionRef: input.transactionRef, status: 'SUCCESSFUL' },
+      });
       if (duplicate) {
         return {
-          payment: duplicate,
+          payment: {
+            ...duplicate,
+            amount: Number(duplicate.amount),
+            createdAt: duplicate.createdAt.toISOString(),
+          },
           message: 'Payment already recorded previously (idempotent duplicate request).',
           isDuplicate: true,
         };
       }
     }
 
-    const paymentNumber = `PAY-2026-${(dbStore.payments.length + 1).toString().padStart(4, '0')}`;
-    const receiptNumber = `RCPT-2026-${(dbStore.payments.length + 1001).toString()}`;
-    const transactionRef = input.transactionRef || `REF-${Date.now()}`;
+    const txResult = await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findFirst({
+        where: { OR: [{ id: input.customerId }, { code: input.customerId }] },
+        include: {
+          subscriptions: { include: { pppoeAccount: true } },
+        },
+      });
+      if (!customer) throw new Error(`Customer ${input.customerId} not found.`);
 
-    // Allocate payment against pending / overdue invoices (oldest first)
-    let unallocated = paymentAmount;
-    const unpaidInvoices = dbStore.invoices
-      .filter((i) => i.customerId === customer.id && i.status !== 'PAID')
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      const paymentNumber = await nextPaymentNumber(tx);
+      const count = await tx.payment.count();
+      const receiptNumber = `RCPT-${new Date().getFullYear()}-${(count + 1001).toString()}`;
+      const transactionRef = input.transactionRef || `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const allocations = [];
-    for (const inv of unpaidInvoices) {
-      if (unallocated <= 0) break;
-
-      const toPay = Math.min(inv.balanceDue, unallocated);
-      inv.paidAmount = Math.round((Number(inv.paidAmount) + toPay) * 100) / 100;
-      inv.balanceDue = Math.round((Number(inv.balanceDue) - toPay) * 100) / 100;
-
-      if (inv.balanceDue <= 0.001) {
-        inv.status = 'PAID';
-        inv.paidAt = new Date().toISOString();
-        inv.paymentMethod = input.method;
-      }
-
-      allocations.push({
-        invoiceId: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        allocatedAmount: toPay,
+      let unallocated = paymentAmount;
+      const unpaidInvoices = await tx.invoice.findMany({
+        where: { customerId: customer.id, status: { notIn: ['PAID', 'CANCELLED'] } },
+        orderBy: { dueDate: 'asc' },
       });
 
-      unallocated -= toPay;
-    }
+      const allocations: { invoiceId: string; invoiceNumber: string; allocatedAmount: number }[] = [];
+      for (const inv of unpaidInvoices) {
+        if (unallocated <= 0) break;
+        const currentDue = Number(inv.balanceDue);
+        const toPay = Math.min(currentDue, unallocated);
+        const nextPaid = Math.round((Number(inv.paidAmount) + toPay) * 100) / 100;
+        const nextDue = Math.round((currentDue - toPay) * 100) / 100;
+        const settled = nextDue <= 0.001;
 
-    // Update customer balanceDue
-    customer.balanceDue = Math.max(0, Math.round((Number(customer.balanceDue) - paymentAmount) * 100) / 100);
+        await tx.invoice.update({
+          where: { id: inv.id },
+          data: {
+            paidAmount: new Prisma.Decimal(nextPaid),
+            balanceDue: new Prisma.Decimal(settled ? 0 : nextDue),
+            ...(settled ? { status: 'PAID', paidAt: new Date(), paymentMethod: input.method } : {}),
+          },
+        });
 
-    const paymentRecord = {
-      id: `pay-${Date.now()}`,
-      paymentNumber,
-      customerId: customer.id,
-      amount: paymentAmount,
-      method: input.method,
-      status: 'SUCCESSFUL',
-      transactionRef,
-      receiptNumber,
-      notes: input.notes || null,
-      recordedBy: input.recordedBy || 'Staff',
-      allocations,
-      createdAt: new Date().toISOString(),
-    };
+        allocations.push({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          allocatedAmount: toPay,
+        });
 
-    dbStore.payments.unshift(paymentRecord);
+        unallocated = Math.round((unallocated - toPay) * 100) / 100;
+      }
 
-    // AUTOMATIC DOUBLE-ENTRY ACCOUNTING INTEGRATION:
-    // Debit Cash (1010) or Bank (1020) or Bakong Wallet (1030)
-    // Credit Accounts Receivable (1100): payment amount
-    let debitAccountCode = '1010'; // Petty Cash
-    if (input.method === 'BANK_TRANSFER') debitAccountCode = '1020'; // ABA Bank
-    if (input.method === 'KHQR_BAKONG') debitAccountCode = '1030'; // Bakong Wallet
+      const nextCustomerBalance = Math.max(
+        0,
+        Math.round((Number(customer.balanceDue) - paymentAmount) * 100) / 100
+      );
 
-    AccountingService.postJournalEntry({
-      description: `Customer Payment Received: ${paymentNumber} (${customer.fullName}) via ${input.method}`,
-      reference: paymentNumber,
-      lines: [
-        {
-          accountCode: debitAccountCode,
-          debit: paymentAmount,
-          credit: 0.0,
-          description: `Funds collected via ${input.method} (${receiptNumber})`,
+      const shouldReconnect =
+        nextCustomerBalance === 0 && (customer.status === 'SUSPENDED' || customer.status === 'OVERDUE');
+
+      const nextStatus = shouldReconnect ? 'ACTIVE' : customer.status;
+
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: {
+          balanceDue: new Prisma.Decimal(nextCustomerBalance),
+          status: nextStatus as any,
         },
-        {
-          accountCode: '1100', // Accounts Receivable
-          debit: 0.0,
-          credit: paymentAmount,
-          description: `Credit subscriber account ${customer.code} balance`,
+      });
+
+      const paymentRecord = await tx.payment.create({
+        data: {
+          paymentNumber,
+          customerId: customer.id,
+          amount: new Prisma.Decimal(paymentAmount),
+          method: input.method as any,
+          status: 'SUCCESSFUL',
+          transactionRef,
+          receiptNumber,
+          notes: input.notes || null,
+          recordedBy: input.recordedBy || 'Staff',
+          allocations: {
+            create: allocations.map((a) => ({
+              invoiceId: a.invoiceId,
+              amount: new Prisma.Decimal(a.allocatedAmount),
+            })),
+          },
         },
-      ],
-      createdBy: input.recordedBy || 'Cashier',
+      });
+
+      let debitAccountCode = '1010';
+      if (input.method === 'BANK_TRANSFER') debitAccountCode = '1020';
+      if (input.method === 'KHQR_BAKONG') debitAccountCode = '1030';
+
+      await AccountingService.postJournalEntry(
+        {
+          description: `Customer Payment Received: ${paymentNumber} (${customer.fullName}) via ${input.method}`,
+          reference: paymentNumber,
+          lines: [
+            {
+              accountCode: debitAccountCode,
+              debit: paymentAmount,
+              credit: 0.0,
+              description: `Funds collected via ${input.method} (${receiptNumber})`,
+            },
+            {
+              accountCode: '1100',
+              debit: 0.0,
+              credit: paymentAmount,
+              description: `Credit subscriber account ${customer.code} balance`,
+            },
+          ],
+          createdBy: input.recordedBy || 'Cashier',
+        },
+        tx
+      );
+
+      const sub = customer.subscriptions[0];
+      const pppoeUsername =
+        sub?.pppoeAccount?.username || `${customer.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`;
+
+      await tx.auditLog.create({
+        data: {
+          action: 'RECORD_PAYMENT',
+          resource: 'Payment',
+          resourceId: paymentNumber,
+          details: `Recorded payment of $${paymentAmount.toFixed(2)} from ${customer.fullName} (${input.method}). Reconnected: ${shouldReconnect}`,
+          userEmail: input.recordedBy || 'Staff',
+          ipAddress: '127.0.0.1',
+          ip: '127.0.0.1',
+        },
+      });
+
+      return {
+        paymentRecord,
+        allocations,
+        nextCustomerBalance,
+        nextStatus,
+        shouldReconnect,
+        routerId: sub?.routerId || 'rtr-core-1',
+        pppoeUsername,
+      };
     });
 
-    // END-TO-END WORKFLOW D: RECONNECTION ON CONFIRMED PAYMENT
-    // If the customer was SUSPENDED or OVERDUE and now has zero balance due, restore service
     let reconnected = false;
-    if (customer.balanceDue === 0 && (customer.status === 'SUSPENDED' || customer.status === 'OVERDUE')) {
-      customer.status = 'ACTIVE';
-      if (customer.pppoeUsername) {
-        // Execute RouterOS reconnection
-        await MikroTikService.reconnectSubscriber('rtr-core-1', customer.pppoeUsername);
-        reconnected = true;
-      }
+    if (txResult.shouldReconnect && txResult.pppoeUsername) {
+      await MikroTikService.reconnectSubscriber(txResult.routerId, txResult.pppoeUsername);
+      reconnected = true;
     }
 
-    dbStore.logAudit(
-      'RECORD_PAYMENT',
-      'Payment',
-      paymentNumber,
-      `Recorded payment of $${paymentAmount.toFixed(2)} from ${customer.fullName} (${input.method}). Reconnected: ${reconnected}`
-    );
-
     return {
-      payment: paymentRecord,
-      newCustomerBalance: customer.balanceDue,
-      customerStatus: customer.status,
+      payment: {
+        ...txResult.paymentRecord,
+        amount: Number(txResult.paymentRecord.amount),
+        allocations: txResult.allocations,
+        createdAt: txResult.paymentRecord.createdAt.toISOString(),
+      },
+      newCustomerBalance: txResult.nextCustomerBalance,
+      customerStatus: txResult.nextStatus,
       reconnected,
     };
   }
 
   // 3. Generate KHQR (Cambodia Bakong standard QR) Payload
-  static generateKHQRPayload(customerId: string, amount: number) {
-    const customer = dbStore.customers.find((c) => c.id === customerId);
+  static async generateKHQRPayload(customerId: string, amount: number) {
+    const [customer, companySetting] = await Promise.all([
+      prisma.customer.findFirst({ where: { OR: [{ id: customerId }, { code: customerId }] } }),
+      prisma.companySetting.findFirst(),
+    ]);
     if (!customer) throw new Error('Customer not found');
 
-    const bakongId = dbStore.companySettings.companyName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@wing';
+    const companyName = companySetting?.companyName || 'NSMISP High-Speed Broadband LLC';
+    const bakongId = companyName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@wing';
     const txnId = `NP-${Date.now()}`;
 
-    // Standard EMVCo / KHQR string payload representation
     const khqrString = `00020101021229370016bakong@nbc.org.kh0113${bakongId}5204581253038405406${amount.toFixed(2)}5802KH5910NSMISP ISP6010PHNOM PENH62180114${txnId}6304ABCD`;
 
     return {
@@ -179,7 +264,7 @@ export class PaymentService {
       currency: 'USD',
       customerCode: customer.code,
       customerName: customer.fullName,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 mins
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     };
   }
 }

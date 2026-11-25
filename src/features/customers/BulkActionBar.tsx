@@ -13,6 +13,7 @@ import { useStore } from '../../store/useStore';
 import { Combobox } from '../../components/ui/Combobox';
 import { downloadCSV, cn } from '../../lib/utils';
 import { SPRING_SOFT } from '../../lib/motion';
+import { Can, useCan } from '../../lib/permissions';
 
 export const BulkActionBar: React.FC = () => {
   const selectedIds = useStore((s) => s.selectedCustomerIds);
@@ -26,6 +27,7 @@ export const BulkActionBar: React.FC = () => {
   const openModal = useStore((s) => s.openModal);
   const addToast = useStore((s) => s.addToast);
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
+  const canEditCustomer = useCan('customers.btn.edit');
 
   const [activeAction, setActiveAction] = useState<'plan' | null>(null);
 
@@ -172,7 +174,7 @@ export const BulkActionBar: React.FC = () => {
           </button>
 
           {/* Assign Plan Combobox or Button */}
-          {activeAction === 'plan' ? (
+          {canEditCustomer && (activeAction === 'plan' ? (
             <div className="w-44 text-black">
               <Combobox
                 options={planOptions}
@@ -193,7 +195,7 @@ export const BulkActionBar: React.FC = () => {
               <Wifi className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden md:inline">Assign plan</span>
             </button>
-          )}
+          ))}
 
           {/* Export */}
           <button
@@ -207,50 +209,54 @@ export const BulkActionBar: React.FC = () => {
           </button>
 
           {/* Segmented Activate / Suspend group */}
-          <div className="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5">
-            <button
-              type="button"
-              title="Activate selected"
-              onClick={() => bulkSetCustomerStatus(selectedIds, 'Active')}
-              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer"
-            >
-              <CheckCircle className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Activate</span>
-            </button>
-            <button
-              type="button"
-              title="Suspend selected"
-              onClick={() =>
-                openModal('statusConfirmation', {
-                  customerIds: selectedIds,
-                  targetStatus: 'Suspended',
-                })
-              }
-              className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
-            >
-              <Power className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Suspend</span>
-            </button>
-          </div>
+          {canEditCustomer && (
+            <div className="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5">
+              <button
+                type="button"
+                title="Activate selected"
+                onClick={() => bulkSetCustomerStatus(selectedIds, 'Active')}
+                className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Activate</span>
+              </button>
+              <button
+                type="button"
+                title="Suspend selected"
+                onClick={() =>
+                  openModal('statusConfirmation', {
+                    customerIds: selectedIds,
+                    targetStatus: 'Suspended',
+                  })
+                }
+                className="flex items-center gap-1 h-7 px-2 rounded text-[12px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Suspend</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right End: Delete + Divider + Close X */}
         <div className="flex items-center gap-1 shrink-0">
           {/* Delete Action (red ghost) */}
-          <button
-            type="button"
-            onClick={() =>
-              openModal('deleteConfirmation', {
-                customerIds: selectedIds,
-                isBulk: true,
-              })
-            }
-            title="Delete selected subscribers"
-            className="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 text-[12px] font-medium transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Delete</span>
-          </button>
+          <Can feature="customers.btn.delete">
+            <button
+              type="button"
+              onClick={() =>
+                openModal('deleteConfirmation', {
+                  customerIds: selectedIds,
+                  isBulk: true,
+                })
+              }
+              title="Delete selected subscribers"
+              className="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 text-[12px] font-medium transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Delete</span>
+            </button>
+          </Can>
 
           <div className="h-5 w-px bg-white/15 shrink-0 mx-0.5 sm:mx-1" />
 

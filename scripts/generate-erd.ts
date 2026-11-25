@@ -91,6 +91,7 @@ const DOMAIN_DEFINITIONS: Array<{ style: DomainStyle; models: string[] }> = [
       'Permission',
       'RolePermission',
       'UserRole',
+      'UserPermission',
       'Feature',
       'FeaturePermission',
       'Session',

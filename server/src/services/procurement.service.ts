@@ -1,159 +1,321 @@
-import { dbStore } from '../db/store.js';
+import { Prisma } from '@prisma/client';
+import { prisma, logAudit } from '../db/store.js';
 import { AccountingService } from './accounting.service.js';
+
+async function nextPoNumber(tx: Prisma.TransactionClient): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `PO-${year}-`;
+  const existing = await tx.purchaseOrder.findMany({
+    where: { poNumber: { startsWith: prefix } },
+    select: { poNumber: true },
+  });
+  let maxSeq = 0;
+  for (const row of existing) {
+    const seq = parseInt(row.poNumber.slice(prefix.length), 10);
+    if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+  }
+  let candidate = `${prefix}${(maxSeq + 1).toString().padStart(3, '0')}`;
+  while (await tx.purchaseOrder.findUnique({ where: { poNumber: candidate } })) {
+    maxSeq++;
+    candidate = `${prefix}${(maxSeq + 1).toString().padStart(3, '0')}`;
+  }
+  return candidate;
+}
 
 export class ProcurementService {
   // 1. Suppliers
-  static listSuppliers() {
-    return dbStore.suppliers;
+  static async listSuppliers() {
+    const suppliers = await prisma.supplier.findMany({ orderBy: { code: 'asc' } });
+    return suppliers.map((s) => ({
+      ...s,
+      balancePayable: Number(s.balancePayable),
+      createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    }));
   }
 
-  static createSupplier(data: any) {
-    const nextCode = `SUP-${(dbStore.suppliers.length + 1).toString().padStart(3, '0')}`;
-    const newSupplier = {
-      id: `sup-${Date.now()}`,
-      code: nextCode,
-      name: data.name,
-      contactPerson: data.contactPerson || '',
-      email: data.email || '',
-      phone: data.phone || '',
-      address: data.address || '',
-      balancePayable: 0.0,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+  static async createSupplier(data: any) {
+    const count = await prisma.supplier.count();
+    let seq = count + 1;
+    let code = `SUP-${seq.toString().padStart(3, '0')}`;
+    while (await prisma.supplier.findUnique({ where: { code } })) {
+      seq++;
+      code = `SUP-${seq.toString().padStart(3, '0')}`;
+    }
+
+    const newSupplier = await prisma.supplier.create({
+      data: {
+        code,
+        name: data.name,
+        contactPerson: data.contactPerson || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        address: data.address || '',
+        balancePayable: new Prisma.Decimal(0.0),
+        isActive: true,
+      },
+    });
+
+    await logAudit('CREATE_SUPPLIER', 'Supplier', newSupplier.code, `Added supplier ${newSupplier.name}`);
+    return {
+      ...newSupplier,
+      balancePayable: Number(newSupplier.balancePayable),
+      createdAt: newSupplier.createdAt.toISOString(),
+      updatedAt: newSupplier.updatedAt.toISOString(),
     };
-    dbStore.suppliers.push(newSupplier);
-    dbStore.logAudit('CREATE_SUPPLIER', 'Supplier', newSupplier.code, `Added supplier ${newSupplier.name}`);
-    return newSupplier;
   }
 
   // 2. Purchase Orders
-  static listPurchaseOrders() {
-    return dbStore.purchaseOrders.map((po) => {
-      const sup = dbStore.suppliers.find((s) => s.id === po.supplierId);
-      return {
-        ...po,
-        supplierName: sup?.name || 'Supplier',
-      };
+  static async listPurchaseOrders() {
+    const orders = await prisma.purchaseOrder.findMany({
+      include: { supplier: true, items: true },
+      orderBy: { issuedDate: 'desc' },
     });
+
+    return orders.map((po) => ({
+      ...po,
+      totalAmount: Number(po.totalAmount),
+      issuedDate: po.issuedDate.toISOString(),
+      createdAt: po.createdAt.toISOString(),
+      updatedAt: po.updatedAt.toISOString(),
+      supplierName: po.supplier?.name || 'Supplier',
+      items: po.items.map((it) => ({
+        ...it,
+        unitPrice: Number(it.unitPrice),
+        totalPrice: Number(it.totalPrice),
+      })),
+    }));
   }
 
-  static createPurchaseOrder(data: {
+  static async createPurchaseOrder(data: {
     supplierId: string;
     items: { productId: string; quantity: number; unitPrice: number }[];
     requestedBy?: string;
     notes?: string;
   }) {
-    const supplier = dbStore.suppliers.find((s) => s.id === data.supplierId);
-    if (!supplier) throw new Error('Supplier not found');
+    const created = await prisma.$transaction(async (tx) => {
+      const supplier = await tx.supplier.findFirst({
+        where: { OR: [{ id: data.supplierId }, { code: data.supplierId }] },
+      });
+      if (!supplier) throw new Error('Supplier not found');
 
-    const totalAmount = data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-    const poNumber = `PO-2026-${(dbStore.purchaseOrders.length + 1).toString().padStart(3, '0')}`;
+      const totalAmount =
+        Math.round(data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) * 100) / 100;
+      const poNumber = await nextPoNumber(tx);
 
-    const newPO = {
-      id: `po-${Date.now()}`,
-      poNumber,
-      supplierId: supplier.id,
-      status: 'APPROVED',
-      totalAmount: Math.round(totalAmount * 100) / 100,
-      requestedBy: data.requestedBy || 'Procurement Officer',
-      issuedDate: new Date().toISOString(),
-      items: data.items,
-      notes: data.notes || null,
+      const po = await tx.purchaseOrder.create({
+        data: {
+          poNumber,
+          supplierId: supplier.id,
+          status: 'APPROVED',
+          totalAmount: new Prisma.Decimal(totalAmount),
+          requestedBy: data.requestedBy || 'Procurement Officer',
+          notes: data.notes || null,
+          items: {
+            create: data.items.map((item) => ({
+              productId: item.productId,
+              quantity: Number(item.quantity),
+              unitPrice: new Prisma.Decimal(Number(item.unitPrice)),
+              totalPrice: new Prisma.Decimal(Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100),
+            })),
+          },
+        },
+        include: { items: true },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          action: 'CREATE_PO',
+          resource: 'PurchaseOrder',
+          resourceId: poNumber,
+          details: `Created PO ${poNumber} for $${totalAmount.toFixed(2)} to ${supplier.name}`,
+          userEmail: data.requestedBy || 'Procurement Officer',
+          ipAddress: '127.0.0.1',
+          ip: '127.0.0.1',
+        },
+      });
+
+      return po;
+    });
+
+    return {
+      ...created,
+      totalAmount: Number(created.totalAmount),
+      issuedDate: created.issuedDate.toISOString(),
+      items: created.items.map((it) => ({
+        ...it,
+        unitPrice: Number(it.unitPrice),
+        totalPrice: Number(it.totalPrice),
+      })),
     };
-
-    dbStore.purchaseOrders.unshift(newPO);
-    dbStore.logAudit('CREATE_PO', 'PurchaseOrder', poNumber, `Created PO ${poNumber} for $${totalAmount.toFixed(2)} to ${supplier.name}`);
-    return newPO;
   }
 
   // 3. Receive Goods (GRN) & Auto Accounts Payable Journal
-  static receiveGoods(poId: string, receivedBy: string = 'Warehouse Staff') {
-    const po = dbStore.purchaseOrders.find((p) => p.id === poId);
-    if (!po) throw new Error('Purchase order not found');
-    if (po.status === 'COMPLETED') throw new Error('PO is already fully received');
+  static async receiveGoods(poId: string, receivedBy: string = 'Warehouse Staff') {
+    const updatedPo = await prisma.$transaction(async (tx) => {
+      const po = await tx.purchaseOrder.findFirst({
+        where: { OR: [{ id: poId }, { poNumber: poId }] },
+        include: { supplier: true, items: true },
+      });
+      if (!po) throw new Error('Purchase order not found');
+      if (po.status === 'COMPLETED') throw new Error('PO is already fully received');
 
-    const supplier = dbStore.suppliers.find((s) => s.id === po.supplierId);
-
-    // Increase product inventory stock
-    for (const item of po.items) {
-      const prod = dbStore.products.find((p) => p.id === item.productId);
-      if (prod) {
-        prod.quantity += Number(item.quantity);
-        if (prod.quantity > prod.minStockAlert) prod.status = 'IN_STOCK';
+      for (const item of po.items) {
+        const prod = await tx.product.findUnique({ where: { id: item.productId } });
+        if (prod) {
+          const nextQty = prod.quantity + Number(item.quantity);
+          const nextStatus = nextQty <= 0 ? 'OUT_OF_STOCK' : nextQty <= prod.minStockAlert ? 'LOW_STOCK' : 'IN_STOCK';
+          await tx.product.update({
+            where: { id: prod.id },
+            data: { quantity: nextQty, status: nextStatus },
+          });
+        }
+        await tx.purchaseOrderItem.update({
+          where: { id: item.id },
+          data: { receivedQuantity: item.quantity },
+        });
       }
-    }
 
-    po.status = 'COMPLETED';
-
-    // Update Supplier Balance Payable
-    if (supplier) {
-      supplier.balancePayable = Math.round((supplier.balancePayable + po.totalAmount) * 100) / 100;
-    }
-
-    // AUTOMATIC DOUBLE-ENTRY ACCOUNTING INTEGRATION:
-    // Debit Inventory Asset (1200): Goods received
-    // Credit Accounts Payable - Suppliers (2010): Amount owed
-    AccountingService.postJournalEntry({
-      description: `Goods Received on PO ${po.poNumber} from ${supplier?.name || 'Supplier'}`,
-      reference: po.poNumber,
-      lines: [
-        {
-          accountCode: '1200', // Inventory Asset
-          debit: po.totalAmount,
-          credit: 0.0,
-          description: `Inventory stock addition from ${po.poNumber}`,
+      const grnCount = await tx.goodsReceivedNote.count();
+      const grnNumber = `GRN-${new Date().getFullYear()}-${(grnCount + 1).toString().padStart(3, '0')}`;
+      await tx.goodsReceivedNote.create({
+        data: {
+          grnNumber,
+          purchaseOrderId: po.id,
+          receivedBy,
+          items: {
+            create: po.items.map((it) => ({
+              productId: it.productId,
+              quantity: it.quantity,
+              unitCost: it.unitPrice,
+            })),
+          },
         },
+      });
+
+      const finishedPo = await tx.purchaseOrder.update({
+        where: { id: po.id },
+        data: { status: 'COMPLETED' },
+      });
+
+      const poAmount = Number(po.totalAmount);
+      if (po.supplier) {
+        await tx.supplier.update({
+          where: { id: po.supplier.id },
+          data: {
+            balancePayable: { increment: new Prisma.Decimal(poAmount) },
+          },
+        });
+      }
+
+      await AccountingService.postJournalEntry(
         {
-          accountCode: '2010', // Accounts Payable - Suppliers
-          debit: 0.0,
-          credit: po.totalAmount,
-          description: `Accounts payable recorded for ${supplier?.name}`,
+          description: `Goods Received on PO ${po.poNumber} from ${po.supplier?.name || 'Supplier'}`,
+          reference: po.poNumber,
+          lines: [
+            {
+              accountCode: '1200',
+              debit: poAmount,
+              credit: 0.0,
+              description: `Inventory stock addition from ${po.poNumber}`,
+            },
+            {
+              accountCode: '2010',
+              debit: 0.0,
+              credit: poAmount,
+              description: `Accounts payable recorded for ${po.supplier?.name || 'Supplier'}`,
+            },
+          ],
+          createdBy: receivedBy,
         },
-      ],
-      createdBy: receivedBy,
+        tx
+      );
+
+      await tx.auditLog.create({
+        data: {
+          action: 'RECEIVE_GOODS',
+          resource: 'PurchaseOrder',
+          resourceId: po.poNumber,
+          details: `Goods received for PO ${po.poNumber}. Stock increased.`,
+          userEmail: receivedBy,
+          ipAddress: '127.0.0.1',
+          ip: '127.0.0.1',
+        },
+      });
+
+      return finishedPo;
     });
 
-    dbStore.logAudit('RECEIVE_GOODS', 'PurchaseOrder', po.poNumber, `Goods received for PO ${po.poNumber}. Stock increased.`);
-    return { po, message: 'Goods received successfully and Accounts Payable recorded.' };
+    return {
+      po: { ...updatedPo, totalAmount: Number(updatedPo.totalAmount) },
+      message: 'Goods received successfully and Accounts Payable recorded.',
+    };
   }
 
   // 4. Pay Supplier Bill
-  static paySupplier(supplierId: string, amount: number, paymentMethod: string = 'ABA Bank', actor: string = 'Accountant') {
-    const supplier = dbStore.suppliers.find((s) => s.id === supplierId);
-    if (!supplier) throw new Error('Supplier not found');
-
+  static async paySupplier(
+    supplierId: string,
+    amount: number,
+    paymentMethod: string = 'ABA Bank',
+    actor: string = 'Accountant'
+  ) {
     const payAmount = Number(amount);
-    if (payAmount <= 0) throw new Error('Payment amount must be greater than zero');
+    if (isNaN(payAmount) || payAmount <= 0) throw new Error('Payment amount must be greater than zero');
 
-    supplier.balancePayable = Math.max(0, Math.round((supplier.balancePayable - payAmount) * 100) / 100);
+    const updatedSupplier = await prisma.$transaction(async (tx) => {
+      const supplier = await tx.supplier.findFirst({
+        where: { OR: [{ id: supplierId }, { code: supplierId }] },
+      });
+      if (!supplier) throw new Error('Supplier not found');
 
-    const ref = `SUP-PAY-${Date.now().toString().slice(-6)}`;
+      const nextBalance = Math.max(0, Math.round((Number(supplier.balancePayable) - payAmount) * 100) / 100);
+      const updated = await tx.supplier.update({
+        where: { id: supplier.id },
+        data: { balancePayable: new Prisma.Decimal(nextBalance) },
+      });
 
-    // AUTOMATIC DOUBLE-ENTRY ACCOUNTING INTEGRATION:
-    // Debit Accounts Payable - Suppliers (2010): Clear debt
-    // Credit Operating Bank (1020): Disburse cash
-    AccountingService.postJournalEntry({
-      description: `Supplier Payment: ${supplier.name} ($${payAmount.toFixed(2)}) via ${paymentMethod}`,
-      reference: ref,
-      lines: [
+      const ref = `SUP-PAY-${Date.now().toString().slice(-6)}`;
+      await AccountingService.postJournalEntry(
         {
-          accountCode: '2010', // Accounts Payable
-          debit: payAmount,
-          credit: 0.0,
-          description: `Settlement of vendor balance for ${supplier.name}`,
+          description: `Supplier Payment: ${supplier.name} ($${payAmount.toFixed(2)}) via ${paymentMethod}`,
+          reference: ref,
+          lines: [
+            {
+              accountCode: '2010',
+              debit: payAmount,
+              credit: 0.0,
+              description: `Settlement of vendor balance for ${supplier.name}`,
+            },
+            {
+              accountCode: '1020',
+              debit: 0.0,
+              credit: payAmount,
+              description: `Bank wire disbursement to ${supplier.name}`,
+            },
+          ],
+          createdBy: actor,
         },
-        {
-          accountCode: '1020', // Operating Bank Account (ABA Bank)
-          debit: 0.0,
-          credit: payAmount,
-          description: `Bank wire disbursement to ${supplier.name}`,
+        tx
+      );
+
+      await tx.auditLog.create({
+        data: {
+          action: 'PAY_SUPPLIER',
+          resource: 'Supplier',
+          resourceId: supplier.code,
+          details: `Disbursed $${payAmount.toFixed(2)} to ${supplier.name}`,
+          userEmail: actor,
+          ipAddress: '127.0.0.1',
+          ip: '127.0.0.1',
         },
-      ],
-      createdBy: actor,
+      });
+
+      return updated;
     });
 
-    dbStore.logAudit('PAY_SUPPLIER', 'Supplier', supplier.code, `Disbursed $${payAmount.toFixed(2)} to ${supplier.name}`);
-    return { supplier, message: 'Supplier payment posted and bank account deducted.' };
+    return {
+      supplier: { ...updatedSupplier, balancePayable: Number(updatedSupplier.balancePayable) },
+      message: 'Supplier payment posted and bank account deducted.',
+    };
   }
 }

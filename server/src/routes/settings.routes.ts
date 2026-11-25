@@ -1,35 +1,110 @@
 import { Router } from 'express';
-import { dbStore } from '../db/store.js';
+import { Prisma } from '@prisma/client';
+import { prisma, logAudit } from '../db/store.js';
 
 const router = Router();
 
+function formatCompanySetting(s: any) {
+  return {
+    ...s,
+    taxRatePercent: Number(s.taxRatePercent),
+    updatedAt: s.updatedAt.toISOString(),
+  };
+}
+
 // GET /api/v1/settings/company
-router.get('/company', (_req, res) => {
-  res.json(dbStore.companySettings);
+router.get('/company', async (_req, res) => {
+  try {
+    let settings = await prisma.companySetting.findFirst();
+    if (!settings) {
+      settings = await prisma.companySetting.create({ data: {} });
+    }
+    res.json(formatCompanySetting(settings));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT /api/v1/settings/company
-router.put('/company', (req, res) => {
-  Object.assign(dbStore.companySettings, req.body);
-  dbStore.logAudit('UPDATE_SETTINGS', 'CompanySetting', 'default', 'Updated company profile and settings');
-  res.json(dbStore.companySettings);
+router.put('/company', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const existing = await prisma.companySetting.findFirst();
+
+    const updateData: any = {};
+    if (body.companyName !== undefined) updateData.companyName = body.companyName;
+    if (body.companyAddress !== undefined) updateData.companyAddress = body.companyAddress;
+    if (body.supportPhone !== undefined) updateData.supportPhone = body.supportPhone;
+    if (body.supportEmail !== undefined) updateData.supportEmail = body.supportEmail;
+    if (body.currency !== undefined) updateData.currency = body.currency;
+    if (body.timezone !== undefined) updateData.timezone = body.timezone;
+    if (body.invoicePrefix !== undefined) updateData.invoicePrefix = body.invoicePrefix;
+    if (body.customerPrefix !== undefined) updateData.customerPrefix = body.customerPrefix;
+    if (body.taxRatePercent !== undefined) updateData.taxRatePercent = new Prisma.Decimal(body.taxRatePercent);
+    if (body.gracePeriodDays !== undefined) updateData.gracePeriodDays = Number(body.gracePeriodDays);
+    if (body.language !== undefined) updateData.language = body.language;
+
+    const updated = existing
+      ? await prisma.companySetting.update({ where: { id: existing.id }, data: updateData })
+      : await prisma.companySetting.create({ data: updateData });
+
+    await logAudit('UPDATE_SETTINGS', 'CompanySetting', updated.id, 'Updated company profile and settings');
+    res.json(formatCompanySetting(updated));
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // GET /api/v1/settings/audit-logs
-router.get('/audit-logs', (_req, res) => {
-  res.json(dbStore.auditLogs);
+router.get('/audit-logs', async (_req, res) => {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 250,
+    });
+    res.json(
+      logs.map((log) => ({
+        ...log,
+        actor: log.userEmail || 'system',
+        performedBy: log.userEmail || 'system',
+        clientIp: log.ipAddress || log.ip || '127.0.0.1',
+        timestamp: log.createdAt.toISOString(),
+        createdAt: log.createdAt.toISOString(),
+      }))
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/v1/settings/notifications
-router.get('/notifications', (_req, res) => {
-  res.json(dbStore.notifications);
+router.get('/notifications', async (_req, res) => {
+  try {
+    const notifications = await prisma.notification.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(
+      notifications.map((n) => ({
+        ...n,
+        createdAt: n.createdAt.toISOString(),
+      }))
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT /api/v1/settings/notifications/:id/read
-router.put('/notifications/:id/read', (req, res) => {
-  const notif = dbStore.notifications.find((n) => n.id === req.params.id);
-  if (notif) notif.read = true;
-  res.json({ success: true });
+router.put('/notifications/:id/read', async (req, res) => {
+  try {
+    await prisma.notification.update({
+      where: { id: String(req.params.id) },
+      data: { read: true },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(404).json({ error: 'Notification not found' });
+  }
 });
 
 export default router;

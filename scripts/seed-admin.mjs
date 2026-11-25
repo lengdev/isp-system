@@ -114,7 +114,8 @@ async function main() {
 
     console.log('\x1b[32m%s\x1b[0m', '✓ Seeding completed successfully.');
   } catch (err) {
-    console.warn('ℹ Database offline or restricted. Seed configuration validated for in-memory store.');
+    console.error('✗ Failed to seed database:', err?.message || err);
+    process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }

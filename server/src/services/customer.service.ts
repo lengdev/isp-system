@@ -1,107 +1,75 @@
-import { dbStore, prisma } from '../db/store.js';
 import { Prisma } from '@prisma/client';
+import { prisma, logAudit } from '../db/store.js';
 import { MikroTikService } from './mikrotik.service.js';
+
+function formatCustomerRecord(c: any) {
+  const primaryAddr = c.addresses?.find((a: any) => a.isPrimary) || c.addresses?.[0];
+  const sub = c.subscriptions?.[0];
+  return {
+    id: c.id,
+    code: c.code,
+    type: c.type,
+    status: c.status,
+    fullName: c.fullName,
+    email: c.email,
+    phone: c.phone,
+    address: primaryAddr?.addressLine || 'N/A',
+    city: primaryAddr?.city || 'Phnom Penh',
+    balanceDue: Number(c.balanceDue),
+    rating: Number(c.rating),
+    planId: sub?.packageId || '',
+    planName: sub?.package?.name || 'Fiber Ultra 300M',
+    monthlyPrice: Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 55.0),
+    dataCapGB: sub?.package?.dataAllowanceGB ?? null,
+    connectionType: sub?.technology || 'FIBER',
+    ipAddress: sub?.pppoeAccount?.ipAddress || '10.20.1.42',
+    macAddress: sub?.pppoeAccount?.macAddress || '48:8F:5A:12:44:01',
+    pppoeUsername: sub?.pppoeAccount?.username || '',
+    registrationDate: c.registrationDate?.toISOString() || c.createdAt.toISOString(),
+  };
+}
 
 export class CustomerService {
   // 1. List Customers with filters & pagination
-  static listCustomers(filters: any = {}) {
-    const queryPromise = (async () => {
-      const customers = await prisma.customer.findMany({
-        include: {
-          addresses: true,
-          subscriptions: {
-            include: {
-              package: true,
-              pppoeAccount: true,
-            },
+  static async listCustomers(filters: any = {}) {
+    const customers = await prisma.customer.findMany({
+      include: {
+        addresses: true,
+        subscriptions: {
+          include: {
+            package: true,
+            pppoeAccount: true,
           },
         },
-        orderBy: { createdAt: 'desc' },
-      });
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-      let result = customers.map((c) => {
-        const primaryAddr = c.addresses.find((a) => a.isPrimary) || c.addresses[0];
-        const sub = c.subscriptions[0];
-        return {
-          id: c.id,
-          code: c.code,
-          type: c.type,
-          status: c.status,
-          fullName: c.fullName,
-          email: c.email,
-          phone: c.phone,
-          address: primaryAddr?.addressLine || 'N/A',
-          city: primaryAddr?.city || 'Phnom Penh',
-          balanceDue: Number(c.balanceDue),
-          rating: Number(c.rating),
-          planId: sub?.packageId || 'pkg-2',
-          planName: sub?.package?.name || 'Fiber Ultra 300M',
-          monthlyPrice: Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 55.0),
-          connectionType: sub?.technology || 'FIBER',
-          ipAddress: sub?.pppoeAccount?.ipAddress || '10.20.1.42',
-          macAddress: sub?.pppoeAccount?.macAddress || '48:8F:5A:12:44:01',
-          pppoeUsername: sub?.pppoeAccount?.username || '',
-          registrationDate: c.registrationDate?.toISOString() || c.createdAt.toISOString(),
-        };
-      });
+    let result = customers.map(formatCustomerRecord);
 
-      if (filters.status && filters.status.length > 0) {
-        const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
-        result = result.filter((c) => statuses.map((s: string) => s.toUpperCase()).includes(c.status.toUpperCase()));
-      }
-
-      if (filters.plan && filters.plan.length > 0) {
-        const plans = Array.isArray(filters.plan) ? filters.plan : [filters.plan];
-        result = result.filter((c) => plans.includes(c.planName));
-      }
-
-      if (filters.city && filters.city.length > 0) {
-        const cities = Array.isArray(filters.city) ? filters.city : [filters.city];
-        result = result.filter((c) => cities.includes(c.city));
-      }
-
-      if (filters.connectionType && filters.connectionType.length > 0) {
-        const types = Array.isArray(filters.connectionType) ? filters.connectionType : [filters.connectionType];
-        result = result.filter((c) => types.map((t: string) => t.toUpperCase()).includes(c.connectionType.toUpperCase()));
-      }
-
-      if (filters.searchQuery) {
-        const q = filters.searchQuery.toLowerCase();
-        result = result.filter(
-          (c) =>
-            c.fullName.toLowerCase().includes(q) ||
-            c.code.toLowerCase().includes(q) ||
-            c.email.toLowerCase().includes(q) ||
-            c.phone.toLowerCase().includes(q) ||
-            (c.ipAddress && c.ipAddress.includes(q)) ||
-            (c.macAddress && c.macAddress.toLowerCase().includes(q))
-        );
-      }
-
-      return result;
-    })();
-
-    // Synchronous snapshot for non-awaited callers in test suites
-    let syncResult = [...dbStore.customers];
     if (filters.status && filters.status.length > 0) {
       const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
-      syncResult = syncResult.filter((c) => statuses.map((s: string) => s.toUpperCase()).includes(c.status.toUpperCase()));
+      result = result.filter((c) => statuses.map((s: string) => s.toUpperCase()).includes(c.status.toUpperCase()));
     }
+
     if (filters.plan && filters.plan.length > 0) {
       const plans = Array.isArray(filters.plan) ? filters.plan : [filters.plan];
-      syncResult = syncResult.filter((c) => plans.includes(c.planName));
+      result = result.filter((c) => plans.includes(c.planName));
     }
+
     if (filters.city && filters.city.length > 0) {
       const cities = Array.isArray(filters.city) ? filters.city : [filters.city];
-      syncResult = syncResult.filter((c) => cities.includes(c.city));
+      result = result.filter((c) => cities.includes(c.city));
     }
+
     if (filters.connectionType && filters.connectionType.length > 0) {
       const types = Array.isArray(filters.connectionType) ? filters.connectionType : [filters.connectionType];
-      syncResult = syncResult.filter((c) => types.map((t: string) => t.toUpperCase()).includes(c.connectionType.toUpperCase()));
+      result = result.filter((c) => types.map((t: string) => t.toUpperCase()).includes(c.connectionType.toUpperCase()));
     }
+
     if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase();
-      syncResult = syncResult.filter(
+      const q = String(filters.searchQuery).toLowerCase();
+      result = result.filter(
         (c) =>
           c.fullName.toLowerCase().includes(q) ||
           c.code.toLowerCase().includes(q) ||
@@ -112,15 +80,7 @@ export class CustomerService {
       );
     }
 
-    for (let i = 0; i < syncResult.length; i++) {
-      (queryPromise as any)[i] = syncResult[i];
-    }
-    (queryPromise as any).length = syncResult.length;
-    (queryPromise as any).filter = (fn: any, thisArg?: any) => syncResult.filter(fn, thisArg);
-    (queryPromise as any).map = (fn: any, thisArg?: any) => syncResult.map(fn, thisArg);
-    (queryPromise as any).forEach = (fn: any, thisArg?: any) => syncResult.forEach(fn, thisArg);
-
-    return queryPromise as any;
+    return result;
   }
 
   // 2. Get Full Customer 360 Profile
@@ -135,87 +95,36 @@ export class CustomerService {
           include: {
             package: true,
             pppoeAccount: true,
+            router: true,
           },
         },
-        invoices: true,
-        payments: true,
-        tickets: true,
-        installations: true,
+        invoices: { orderBy: { issueDate: 'desc' } },
+        payments: { orderBy: { createdAt: 'desc' } },
+        tickets: { orderBy: { createdAt: 'desc' } },
+        installations: { orderBy: { scheduledDate: 'desc' } },
         assignedEquipments: true,
       },
     });
 
     if (!customer) {
-      const memCust = dbStore.customers.find((c) => c.id === id || c.code === id);
-      if (!memCust) throw new Error('Customer not found');
-      const invoices = dbStore.invoices.filter((i) => i.customerId === memCust.id);
-      const payments = dbStore.payments.filter((p) => p.customerId === memCust.id);
-      const tickets = dbStore.tickets.filter((t) => t.customerId === memCust.id);
-      const installations = dbStore.installations.filter((i) => i.customerId === memCust.id);
-      const equipments = dbStore.serialNumbers.filter((s) => s.customerId === memCust.id);
-      const networkInfo = {
-        connectionType: memCust.connectionType,
-        pppoeUsername: memCust.pppoeUsername || `${memCust.fullName.toLowerCase().replace(/\s+/g, '_')}_pppoe`,
-        assignedRouter: 'Core-CCR2004-East (Phnom Penh POP)',
-        routerId: 'rtr-core-1',
-        vlanId: memCust.connectionType === 'WIRELESS' ? 30 : 20,
-        vlanName: memCust.connectionType === 'WIRELESS' ? 'VLAN30_WISP_Subscribers' : 'VLAN20_Fiber_PP_Residential',
-        ipAddress: memCust.ipAddress || '10.20.1.42',
-        ipPool: memCust.connectionType === 'WIRELESS' ? 'pool-wireless-subscribers' : 'pool-fiber-residential',
-        macAddress: memCust.macAddress || '48:8F:5A:12:44:01',
-        connectionStatus: memCust.status === 'ACTIVE' ? 'Online' : 'Offline',
-        lastLogin: '2026-11-22T08:14:00Z',
-        assignedSpeed: memCust.planName,
-        opticalPowerDbm: -19.4,
-      };
-      return {
-        customer: memCust,
-        networkInfo,
-        invoices,
-        payments,
-        tickets,
-        installations,
-        equipments,
-      };
+      throw new Error('Customer not found');
     }
 
-    const primaryAddr = customer.addresses.find((a) => a.isPrimary) || customer.addresses[0];
+    const formattedCust = formatCustomerRecord(customer);
     const sub = customer.subscriptions[0];
-
-    const formattedCust = {
-      id: customer.id,
-      code: customer.code,
-      type: customer.type,
-      status: customer.status,
-      fullName: customer.fullName,
-      email: customer.email,
-      phone: customer.phone,
-      address: primaryAddr?.addressLine || 'N/A',
-      city: primaryAddr?.city || 'Phnom Penh',
-      balanceDue: Number(customer.balanceDue),
-      rating: Number(customer.rating),
-      planId: sub?.packageId || 'pkg-2',
-      planName: sub?.package?.name || 'Fiber Ultra 300M',
-      monthlyPrice: Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 55.0),
-      connectionType: sub?.technology || 'FIBER',
-      ipAddress: sub?.pppoeAccount?.ipAddress || '10.20.1.42',
-      macAddress: sub?.pppoeAccount?.macAddress || '48:8F:5A:12:44:01',
-      pppoeUsername: sub?.pppoeAccount?.username || '',
-      registrationDate: customer.registrationDate?.toISOString() || customer.createdAt.toISOString(),
-    };
-
     const networkInfo = {
       connectionType: formattedCust.connectionType,
-      pppoeUsername: formattedCust.pppoeUsername || `${formattedCust.fullName.toLowerCase().replace(/\s+/g, '_')}_pppoe`,
-      assignedRouter: 'Core-CCR2004-East (Phnom Penh POP)',
-      routerId: 'rtr-core-1',
+      pppoeUsername:
+        formattedCust.pppoeUsername || `${formattedCust.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`,
+      assignedRouter: sub?.router?.name || 'Core-CCR2004-East (Phnom Penh POP)',
+      routerId: sub?.routerId || 'rtr-core-1',
       vlanId: formattedCust.connectionType === 'WIRELESS' ? 30 : 20,
       vlanName: formattedCust.connectionType === 'WIRELESS' ? 'VLAN30_WISP_Subscribers' : 'VLAN20_Fiber_PP_Residential',
       ipAddress: formattedCust.ipAddress || '10.20.1.42',
       ipPool: formattedCust.connectionType === 'WIRELESS' ? 'pool-wireless-subscribers' : 'pool-fiber-residential',
       macAddress: formattedCust.macAddress || '48:8F:5A:12:44:01',
       connectionStatus: formattedCust.status === 'ACTIVE' ? 'Online' : 'Offline',
-      lastLogin: '2026-11-22T08:14:00Z',
+      lastLogin: sub?.pppoeAccount?.lastLoginAt?.toISOString() || customer.updatedAt.toISOString(),
       assignedSpeed: formattedCust.planName,
       opticalPowerDbm: -19.4,
     };
@@ -240,186 +149,130 @@ export class CustomerService {
     };
   }
 
-  static getNextCustomerSequenceSync(): number {
-    let max = 1000;
-    if (dbStore && dbStore.customers) {
-      for (const c of dbStore.customers) {
+  // 3. Create Customer in PostgreSQL
+  static async createCustomer(data: any) {
+    let pkg = await prisma.package.findFirst({
+      where: {
+        OR: [
+          ...(data.planId ? [{ id: data.planId }] : []),
+          ...(data.planName ? [{ name: data.planName }] : []),
+        ],
+      },
+    });
+    if (!pkg) {
+      pkg = await prisma.package.findFirst();
+    }
+    if (!pkg) {
+      throw new Error('No internet service package configured in database.');
+    }
+
+    const monthlyPrice = data.monthlyPrice !== undefined ? Number(data.monthlyPrice) : Number(pkg.monthlyPrice);
+    const connectionType = (data.connectionType || pkg.technology || 'FIBER').toUpperCase();
+    const initialStatus = (data.status || 'PENDING').toUpperCase();
+    const ipAddress = data.ipAddress || `10.20.1.${Math.floor(Math.random() * 200) + 10}`;
+    const macAddress = data.macAddress || `48:8F:5A:12:44:${Math.floor(Math.random() * 90 + 10)}`;
+    const basePppoe = `${data.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`;
+
+    const created = await prisma.$transaction(async (tx) => {
+      const router = await tx.router.findFirst();
+      if (!router) {
+        throw new Error('No MikroTik router configured in database.');
+      }
+
+      const dbCustomers = await tx.customer.findMany({
+        select: { id: true, code: true },
+      });
+      let maxDbNum = 1000;
+      for (const c of dbCustomers) {
         const idMatch = c.id?.match(/^cust-(\d+)$/i);
         if (idMatch) {
           const num = parseInt(idMatch[1], 10);
-          if (num < 1000000 && num > max) max = num;
+          if (num < 1000000 && num > maxDbNum) maxDbNum = num;
         }
         const codeMatch = c.code?.match(/^CUST-(\d+)$/i);
         if (codeMatch) {
           const num = parseInt(codeMatch[1], 10);
-          if (num < 1000000 && num > max) max = num;
+          if (num < 1000000 && num > maxDbNum) maxDbNum = num;
         }
       }
-    }
-    return max + 1;
-  }
 
-  // 3. Create Customer
-  static createCustomer(data: any) {
-    const nextNum = CustomerService.getNextCustomerSequenceSync();
-    const nextId = `cust-${nextNum}`;
-    const nextCode = `CUST-${nextNum}`;
+      let counter = maxDbNum + 1;
+      let targetId = `cust-${counter}`;
+      let targetCode = `CUST-${counter}`;
+      while (
+        (await tx.customer.findUnique({ where: { id: targetId } })) ||
+        (await tx.customer.findUnique({ where: { code: targetCode } }))
+      ) {
+        counter++;
+        targetId = `cust-${counter}`;
+        targetCode = `CUST-${counter}`;
+      }
 
-    const newCustomer: any = {
-      id: nextId,
-      code: nextCode,
-      fullName: data.fullName,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      city: data.city || 'Phnom Penh',
-      type: data.type || 'RESIDENTIAL',
-      status: (data.status || 'PENDING').toUpperCase(),
-      rating: 5.0,
-      balanceDue: 0.0,
-      planId: data.planId || 'pkg-2',
-      planName: data.planName || 'Fiber Ultra 300M',
-      monthlyPrice: Number(data.monthlyPrice) || 55.0,
-      connectionType: (data.connectionType || 'FIBER').toUpperCase(),
-      ipAddress: data.ipAddress || `10.20.1.${Math.floor(Math.random() * 200) + 10}`,
-      macAddress: data.macAddress || '48:8F:5A:12:44:' + Math.floor(Math.random() * 90 + 10),
-      pppoeUsername: `${data.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`,
-      routerModel: data.routerModel || 'Huawei HG8245H5 ONT',
-      registrationDate: new Date().toISOString(),
-    };
+      const existingPppoe = await tx.pPPoEAccount.findUnique({ where: { username: basePppoe } });
+      const pppoeUsername = existingPppoe ? `${basePppoe}_${counter}` : basePppoe;
 
-    dbStore.customers.unshift(newCustomer);
-    dbStore.logAudit('CREATE_CUSTOMER', 'Customer', newCustomer.code, `Registered customer ${newCustomer.fullName}`);
-
-    const creationPromise = (async () => {
-      try {
-        let pkg = await prisma.package.findFirst({
-          where: {
-            OR: [{ id: newCustomer.planId }, { name: newCustomer.planName }],
-          },
-        });
-
-        if (!pkg) {
-          pkg = await prisma.package.findFirst();
-        }
-
-        const pkgId = pkg?.id || 'pkg-2';
-        const pkgMonthlyPrice = pkg ? Number(pkg.monthlyPrice) : newCustomer.monthlyPrice;
-
-        await prisma.$transaction(async (tx) => {
-          const router = await tx.router.findFirst();
-          const routerId = router?.id || 'rtr-core-1';
-
-          // Determine next auto-increment sequence from database
-          const dbCustomers = await tx.customer.findMany({
-            select: { id: true, code: true },
-          });
-          let maxDbNum = 1000;
-          for (const c of dbCustomers) {
-            const idMatch = c.id?.match(/^cust-(\d+)$/i);
-            if (idMatch) {
-              const num = parseInt(idMatch[1], 10);
-              if (num < 1000000 && num > maxDbNum) maxDbNum = num;
-            }
-            const codeMatch = c.code?.match(/^CUST-(\d+)$/i);
-            if (codeMatch) {
-              const num = parseInt(codeMatch[1], 10);
-              if (num < 1000000 && num > maxDbNum) maxDbNum = num;
-            }
-          }
-
-          let counter = Math.max(nextNum, maxDbNum + 1);
-          let targetId = `cust-${counter}`;
-          let targetCode = `CUST-${counter}`;
-          while (
-            (await tx.customer.findUnique({ where: { id: targetId } })) ||
-            (await tx.customer.findUnique({ where: { code: targetCode } }))
-          ) {
-            counter++;
-            targetId = `cust-${counter}`;
-            targetCode = `CUST-${counter}`;
-          }
-
-          newCustomer.id = targetId;
-          newCustomer.code = targetCode;
-
-          const existingByEmail = await tx.customer.findUnique({
-            where: { email: newCustomer.email },
-          });
-
-          if (existingByEmail) {
-            newCustomer.id = existingByEmail.id;
-            newCustomer.code = existingByEmail.code;
-            await tx.customer.update({
-              where: { id: existingByEmail.id },
-              data: {
-                fullName: newCustomer.fullName,
-                phone: newCustomer.phone,
-                type: newCustomer.type as any,
-                status: newCustomer.status as any,
-              },
-            });
-          } else {
-            await tx.customer.create({
-              data: {
-                id: newCustomer.id,
-                code: newCustomer.code,
-                fullName: newCustomer.fullName,
-                email: newCustomer.email,
-                phone: newCustomer.phone,
-                type: newCustomer.type as any,
-                status: newCustomer.status as any,
-                rating: new Prisma.Decimal(newCustomer.rating),
-                balanceDue: new Prisma.Decimal(newCustomer.balanceDue),
-                addresses: {
-                  create: {
-                    addressLine: newCustomer.address,
-                    city: newCustomer.city,
-                    isPrimary: true,
-                  },
-                },
-                subscriptions: {
-                  create: {
-                    subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                    packageId: pkgId,
-                    routerId: routerId,
-                    technology: newCustomer.connectionType as any,
-                    status: newCustomer.status as any,
-                    monthlyFee: new Prisma.Decimal(pkgMonthlyPrice),
-                    pppoeAccount: {
-                      create: {
-                        username: newCustomer.pppoeUsername,
-                        passwordHash: 'dummy_hash',
-                        routerId: routerId,
-                        ipAddress: newCustomer.ipAddress,
-                        macAddress: newCustomer.macAddress,
-                      },
-                    },
-                  },
-                },
-              },
-            });
-          }
-
-          await tx.auditLog.create({
-            data: {
-              action: 'CREATE_CUSTOMER',
-              resource: 'Customer',
-              resourceId: newCustomer.code,
-              details: `Registered customer ${newCustomer.fullName}`,
-              ipAddress: '127.0.0.1',
+      const customer = await tx.customer.create({
+        data: {
+          id: targetId,
+          code: targetCode,
+          fullName: data.fullName,
+          email: data.email,
+          phone: data.phone || '',
+          type: (data.type || 'RESIDENTIAL') as any,
+          status: initialStatus as any,
+          rating: new Prisma.Decimal(5.0),
+          balanceDue: new Prisma.Decimal(0.0),
+          addresses: {
+            create: {
+              addressLine: data.address || 'N/A',
+              city: data.city || 'Phnom Penh',
+              isPrimary: true,
             },
-          });
-        });
-      } catch (e) {
-        console.error('Prisma customer creation error:', e);
-      }
+          },
+          subscriptions: {
+            create: {
+              subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              packageId: pkg!.id,
+              routerId: router.id,
+              technology: connectionType as any,
+              status: (initialStatus === 'ACTIVE' ? 'ACTIVE' : initialStatus === 'SUSPENDED' ? 'SUSPENDED' : 'PENDING') as any,
+              monthlyFee: new Prisma.Decimal(monthlyPrice),
+              pppoeAccount: {
+                create: {
+                  username: pppoeUsername,
+                  passwordHash: 'pppoe_default_hash',
+                  routerId: router.id,
+                  ipAddress,
+                  macAddress,
+                  isActive: initialStatus !== 'SUSPENDED' && initialStatus !== 'DISCONNECTED',
+                  isOnline: initialStatus === 'ACTIVE',
+                },
+              },
+            },
+          },
+        },
+        include: {
+          addresses: true,
+          subscriptions: {
+            include: { package: true, pppoeAccount: true },
+          },
+        },
+      });
 
-      return newCustomer;
-    })();
+      await tx.auditLog.create({
+        data: {
+          action: 'CREATE_CUSTOMER',
+          resource: 'Customer',
+          resourceId: customer.code,
+          details: `Registered customer ${customer.fullName}`,
+          ipAddress: '127.0.0.1',
+        },
+      });
 
-    Object.assign(creationPromise, newCustomer);
-    return creationPromise as any;
+      return customer;
+    });
+
+    return formatCustomerRecord(created);
   }
 
   // 4. Update Customer
@@ -429,152 +282,138 @@ export class CustomerService {
       include: { addresses: true, subscriptions: true },
     });
 
-    if (existing) {
-      await prisma.$transaction(async (tx) => {
-        const customerData: any = {};
-        if (updates.fullName !== undefined) customerData.fullName = updates.fullName;
-        if (updates.email !== undefined) customerData.email = updates.email;
-        if (updates.phone !== undefined) customerData.phone = updates.phone;
-        if (updates.type !== undefined) customerData.type = updates.type;
-        if (updates.status !== undefined) customerData.status = updates.status.toUpperCase();
-        if (updates.rating !== undefined) customerData.rating = new Prisma.Decimal(updates.rating);
-        if (updates.balanceDue !== undefined) customerData.balanceDue = new Prisma.Decimal(updates.balanceDue);
-        if (updates.notes !== undefined) customerData.notes = updates.notes;
+    if (!existing) {
+      throw new Error('Customer not found');
+    }
 
-        if (Object.keys(customerData).length > 0) {
-          await tx.customer.update({
-            where: { id: existing.id },
-            data: customerData,
+    await prisma.$transaction(async (tx) => {
+      const customerData: any = {};
+      if (updates.fullName !== undefined) customerData.fullName = updates.fullName;
+      if (updates.email !== undefined) customerData.email = updates.email;
+      if (updates.phone !== undefined) customerData.phone = updates.phone;
+      if (updates.type !== undefined) customerData.type = updates.type;
+      if (updates.status !== undefined) customerData.status = updates.status.toUpperCase();
+      if (updates.rating !== undefined) customerData.rating = new Prisma.Decimal(updates.rating);
+      if (updates.balanceDue !== undefined) customerData.balanceDue = new Prisma.Decimal(updates.balanceDue);
+      if (updates.notes !== undefined) customerData.notes = updates.notes;
+
+      if (Object.keys(customerData).length > 0) {
+        await tx.customer.update({
+          where: { id: existing.id },
+          data: customerData,
+        });
+      }
+
+      if (updates.address || updates.city) {
+        const primaryAddr = existing.addresses.find((a) => a.isPrimary) || existing.addresses[0];
+        if (primaryAddr) {
+          await tx.customerAddress.update({
+            where: { id: primaryAddr.id },
+            data: {
+              ...(updates.address ? { addressLine: updates.address } : {}),
+              ...(updates.city ? { city: updates.city } : {}),
+            },
+          });
+        } else {
+          await tx.customerAddress.create({
+            data: {
+              customerId: existing.id,
+              addressLine: updates.address || 'N/A',
+              city: updates.city || 'Phnom Penh',
+              isPrimary: true,
+            },
           });
         }
+      }
 
-        if (updates.address || updates.city) {
-          const primaryAddr = existing.addresses.find((a) => a.isPrimary) || existing.addresses[0];
-          if (primaryAddr) {
-            await tx.customerAddress.update({
-              where: { id: primaryAddr.id },
-              data: {
-                ...(updates.address ? { addressLine: updates.address } : {}),
-                ...(updates.city ? { city: updates.city } : {}),
-              },
+      if (updates.planId || updates.planName || updates.monthlyPrice !== undefined || updates.connectionType) {
+        let resolvedPackage: { id: string; monthlyPrice: any } | null = null;
+        if (updates.planId || updates.planName) {
+          if (updates.planId) {
+            resolvedPackage = await tx.package.findUnique({
+              where: { id: updates.planId },
+              select: { id: true, monthlyPrice: true },
             });
-          } else {
-            await tx.customerAddress.create({
-              data: {
-                customerId: existing.id,
-                addressLine: updates.address || 'N/A',
-                city: updates.city || 'Phnom Penh',
-                isPrimary: true,
-              },
-            });
-          }
-        }
-
-        if (updates.planId || updates.planName || updates.monthlyPrice !== undefined || updates.connectionType) {
-          let resolvedPackage: { id: string; monthlyPrice: any } | null = null;
-          if (updates.planId || updates.planName) {
-            // 1. Direct match by id
-            if (updates.planId) {
+            if (!resolvedPackage) {
+              const mappedId = updates.planId.replace(/^plan-/, 'pkg-');
               resolvedPackage = await tx.package.findUnique({
-                where: { id: updates.planId },
-                select: { id: true, monthlyPrice: true },
-              });
-              // 2. Mapped id (e.g. plan-2 -> pkg-2)
-              if (!resolvedPackage) {
-                const mappedId = updates.planId.replace(/^plan-/, 'pkg-');
-                resolvedPackage = await tx.package.findUnique({
-                  where: { id: mappedId },
-                  select: { id: true, monthlyPrice: true },
-                });
-              }
-            }
-
-            // 3. Match by name
-            if (!resolvedPackage && (updates.planName || updates.planId)) {
-              const nameToSearch = updates.planName || updates.planId;
-              resolvedPackage = await tx.package.findFirst({
-                where: {
-                  OR: [
-                    { name: { equals: nameToSearch, mode: 'insensitive' } },
-                    { name: { contains: nameToSearch, mode: 'insensitive' } },
-                  ],
-                },
-                select: { id: true, monthlyPrice: true },
-              });
-            }
-
-            // 4. Fallback to existing first package if planId was specified but not found
-            if (!resolvedPackage && updates.planId) {
-              resolvedPackage = await tx.package.findFirst({
+                where: { id: mappedId },
                 select: { id: true, monthlyPrice: true },
               });
             }
           }
 
-          const sub = existing.subscriptions[0];
-          if (sub) {
-            const subData: any = {};
-            if (resolvedPackage) {
-              subData.packageId = resolvedPackage.id;
-              if (updates.monthlyPrice === undefined) {
-                subData.monthlyFee = resolvedPackage.monthlyPrice;
-              }
-            }
-            if (updates.monthlyPrice !== undefined) {
-              subData.monthlyFee = new Prisma.Decimal(updates.monthlyPrice);
-            }
-            if (updates.connectionType) {
-              subData.technology = updates.connectionType.toUpperCase() as any;
-            }
-
-            if (Object.keys(subData).length > 0) {
-              await tx.subscription.update({
-                where: { id: sub.id },
-                data: subData,
-              });
-            }
-          } else if (resolvedPackage) {
-            const router = await tx.router.findFirst();
-            await tx.subscription.create({
-              data: {
-                subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                customerId: existing.id,
-                packageId: resolvedPackage.id,
-                routerId: router?.id || null,
-                technology: (updates.connectionType ? updates.connectionType.toUpperCase() : 'FIBER') as any,
-                status: (existing.status === 'ACTIVE' ? 'ACTIVE' : existing.status === 'SUSPENDED' ? 'SUSPENDED' : 'PENDING') as any,
-                monthlyFee: updates.monthlyPrice !== undefined ? new Prisma.Decimal(updates.monthlyPrice) : resolvedPackage.monthlyPrice,
+          if (!resolvedPackage && (updates.planName || updates.planId)) {
+            const nameToSearch = updates.planName || updates.planId;
+            resolvedPackage = await tx.package.findFirst({
+              where: {
+                OR: [
+                  { name: { equals: nameToSearch, mode: 'insensitive' } },
+                  { name: { contains: nameToSearch, mode: 'insensitive' } },
+                ],
               },
+              select: { id: true, monthlyPrice: true },
+            });
+          }
+
+          if (!resolvedPackage && updates.planId) {
+            resolvedPackage = await tx.package.findFirst({
+              select: { id: true, monthlyPrice: true },
             });
           }
         }
 
-        await tx.auditLog.create({
-          data: {
-            action: 'UPDATE_CUSTOMER',
-            resource: 'Customer',
-            resourceId: existing.code,
-            details: `Updated customer ${updates.fullName || existing.fullName}`,
-            ipAddress: '127.0.0.1',
-          },
-        });
+        const sub = existing.subscriptions[0];
+        if (sub) {
+          const subData: any = {};
+          if (resolvedPackage) {
+            subData.packageId = resolvedPackage.id;
+            if (updates.monthlyPrice === undefined) {
+              subData.monthlyFee = resolvedPackage.monthlyPrice;
+            }
+          }
+          if (updates.monthlyPrice !== undefined) {
+            subData.monthlyFee = new Prisma.Decimal(updates.monthlyPrice);
+          }
+          if (updates.connectionType) {
+            subData.technology = updates.connectionType.toUpperCase() as any;
+          }
+
+          if (Object.keys(subData).length > 0) {
+            await tx.subscription.update({
+              where: { id: sub.id },
+              data: subData,
+            });
+          }
+        } else if (resolvedPackage) {
+          const router = await tx.router.findFirst();
+          await tx.subscription.create({
+            data: {
+              subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              customerId: existing.id,
+              packageId: resolvedPackage.id,
+              routerId: router?.id || null,
+              technology: (updates.connectionType ? updates.connectionType.toUpperCase() : 'FIBER') as any,
+              status: (existing.status === 'ACTIVE' ? 'ACTIVE' : existing.status === 'SUSPENDED' ? 'SUSPENDED' : 'PENDING') as any,
+              monthlyFee: updates.monthlyPrice !== undefined ? new Prisma.Decimal(updates.monthlyPrice) : resolvedPackage.monthlyPrice,
+            },
+          });
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          action: 'UPDATE_CUSTOMER',
+          resource: 'Customer',
+          resourceId: existing.code,
+          details: `Updated customer ${updates.fullName || existing.fullName}`,
+          ipAddress: '127.0.0.1',
+        },
       });
-    }
+    });
 
-    const memCust = dbStore.customers.find((c) => c.id === id || (existing && (c.id === existing.id || c.code === existing.code)));
-    if (memCust) {
-      Object.assign(memCust, updates);
-      dbStore.logAudit('UPDATE_CUSTOMER', 'Customer', memCust.code, `Updated customer ${updates.fullName || memCust.fullName}`);
-    }
-
-    if (!existing && !memCust) throw new Error('Customer not found');
-
-    if (existing) {
-      const profile = await this.getCustomerProfile(existing.id);
-      return profile.customer;
-    }
-
-    return memCust;
+    const profile = await this.getCustomerProfile(existing.id);
+    return profile.customer;
   }
 
   // 5. Delete Customer
@@ -583,33 +422,26 @@ export class CustomerService {
       where: { OR: [{ id }, { code: id }] },
     });
 
-    if (existing) {
-      await prisma.$transaction(async (tx) => {
-        await tx.customer.delete({
-          where: { id: existing.id },
-        });
-        await tx.auditLog.create({
-          data: {
-            action: 'DELETE_CUSTOMER',
-            resource: 'Customer',
-            resourceId: existing.code,
-            details: `Deleted customer ${existing.fullName}`,
-            ipAddress: '127.0.0.1',
-          },
-        });
+    if (!existing) {
+      throw new Error('Customer not found');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.customer.delete({
+        where: { id: existing.id },
       });
-    }
+      await tx.auditLog.create({
+        data: {
+          action: 'DELETE_CUSTOMER',
+          resource: 'Customer',
+          resourceId: existing.code,
+          details: `Deleted customer ${existing.fullName}`,
+          ipAddress: '127.0.0.1',
+        },
+      });
+    });
 
-    const memIdx = dbStore.customers.findIndex((c) => c.id === id || (existing && (c.id === existing.id || c.code === existing.code)));
-    let deletedMem = null;
-    if (memIdx !== -1) {
-      [deletedMem] = dbStore.customers.splice(memIdx, 1);
-      dbStore.logAudit('DELETE_CUSTOMER', 'Customer', deletedMem.code, `Deleted customer ${deletedMem.fullName}`);
-    }
-
-    if (!existing && !deletedMem) throw new Error('Customer not found');
-
-    return deletedMem || { id: existing?.id, code: existing?.code, fullName: existing?.fullName };
+    return { id: existing.id, code: existing.code, fullName: existing.fullName };
   }
 
   // 6. Set Customer Status (Triggers Network Suspension / Reconnection)
@@ -620,91 +452,77 @@ export class CustomerService {
       include: { subscriptions: { include: { pppoeAccount: true } } },
     });
 
-    let prevStatus = 'UNKNOWN';
-    let pppoeUsername = '';
+    if (!existing) {
+      throw new Error('Customer not found');
+    }
 
-    if (existing) {
-      prevStatus = existing.status;
-      pppoeUsername = existing.subscriptions[0]?.pppoeAccount?.username || `${existing.fullName.toLowerCase().replace(/\s+/g, '_')}_pppoe`;
+    const prevStatus = existing.status;
+    const sub = existing.subscriptions[0];
+    const routerId = sub?.routerId || 'rtr-core-1';
+    const pppoeUsername =
+      sub?.pppoeAccount?.username || `${existing.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`;
 
-      await prisma.$transaction(async (tx) => {
-        await tx.customer.update({
-          where: { id: existing.id },
-          data: { status: upperStatus as any },
-        });
-        await tx.auditLog.create({
-          data: {
-            action: 'STATUS_CHANGE',
-            resource: 'Customer',
-            resourceId: existing.code,
-            details: `Changed status from ${prevStatus} to ${status}. Reason: ${reason || 'N/A'}`,
-            ipAddress: '127.0.0.1',
-          },
-        });
+    await prisma.$transaction(async (tx) => {
+      await tx.customer.update({
+        where: { id: existing.id },
+        data: { status: upperStatus as any },
       });
-    }
-
-    const memCust = dbStore.customers.find((c) => c.id === id || (existing && (c.id === existing.id || c.code === existing.code)));
-    if (memCust) {
-      prevStatus = memCust.status;
-      memCust.status = upperStatus as any;
-      if (!pppoeUsername) pppoeUsername = memCust.pppoeUsername;
-    }
+      await tx.auditLog.create({
+        data: {
+          action: 'STATUS_CHANGE',
+          resource: 'Customer',
+          resourceId: existing.code,
+          details: `Changed status from ${prevStatus} to ${status}. Reason: ${reason || 'N/A'}`,
+          ipAddress: '127.0.0.1',
+        },
+      });
+    });
 
     if (pppoeUsername) {
       if (upperStatus === 'SUSPENDED' || upperStatus === 'DISCONNECTED') {
-        await MikroTikService.suspendSubscriber('rtr-core-1', pppoeUsername, reason || 'Administrative suspension');
+        await MikroTikService.suspendSubscriber(routerId, pppoeUsername, reason || 'Administrative suspension');
       } else if (upperStatus === 'ACTIVE' && (prevStatus === 'SUSPENDED' || prevStatus === 'DISCONNECTED')) {
-        await MikroTikService.reconnectSubscriber('rtr-core-1', pppoeUsername);
+        await MikroTikService.reconnectSubscriber(routerId, pppoeUsername);
       }
     }
 
-    dbStore.logAudit(
-      'STATUS_CHANGE',
-      'Customer',
-      existing?.code || memCust?.code || id,
-      `Changed status from ${prevStatus} to ${status}. Reason: ${reason || 'N/A'}`
-    );
-
-    return memCust || { id: existing?.id || id, status: upperStatus };
+    return { id: existing.id, code: existing.code, status: upperStatus };
   }
 
   // 7. Diagnostic Speed Test
   static async runSpeedTest(customerId: string) {
-    let cust = await prisma.customer.findFirst({
+    const cust = await prisma.customer.findFirst({
       where: { OR: [{ id: customerId }, { code: customerId }] },
       include: { subscriptions: { include: { package: true } } },
     });
 
-    let planName = cust?.subscriptions[0]?.package?.name || '';
-    let fullName = cust?.fullName || '';
-    let id = cust?.id || customerId;
-
     if (!cust) {
-      const memCust = dbStore.customers.find((c) => c.id === customerId);
-      if (!memCust) throw new Error('Customer not found');
-      planName = memCust.planName;
-      fullName = memCust.fullName;
-      id = memCust.id;
+      throw new Error('Customer not found');
     }
 
-    let targetDown = 100;
-    let targetUp = 50;
+    const pkg = cust.subscriptions[0]?.package;
+    let targetDown = pkg?.downloadSpeed || 100;
+    let targetUp = pkg?.uploadSpeed || 50;
+    const planName = pkg?.name || '';
 
-    if (planName.includes('300M')) {
-      targetDown = 300;
-      targetUp = 150;
-    } else if (planName.includes('1G')) {
-      targetDown = 980;
-      targetUp = 490;
-    } else if (planName.includes('50M')) {
-      targetDown = 50;
-      targetUp = 25;
+    if (!pkg) {
+      if (planName.includes('300M')) {
+        targetDown = 300;
+        targetUp = 150;
+      } else if (planName.includes('1G')) {
+        targetDown = 980;
+        targetUp = 490;
+      } else if (planName.includes('50M')) {
+        targetDown = 50;
+        targetUp = 25;
+      }
     }
+
+    await logAudit('SPEED_TEST', 'Customer', cust.code, `Ran diagnostic speed test for ${cust.fullName}`);
 
     return {
-      customerId: id,
-      customerName: fullName,
+      customerId: cust.id,
+      customerName: cust.fullName,
       latencyMs: Math.floor(Math.random() * 5) + 2,
       jitterMs: Math.floor(Math.random() * 2) + 1,
       downloadMbps: Math.round(targetDown * (0.95 + Math.random() * 0.05)),

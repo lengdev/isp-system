@@ -92,6 +92,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
     req.user = {
       ...payload,
+      role: effectiveRoles[0] || payload.role,
       roles: effectiveRoles,
       roleIds: roleIds,
     };

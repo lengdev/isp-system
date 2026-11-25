@@ -136,3 +136,96 @@ export function countChangedCells(
 
   return count;
 }
+
+export type UserOverrideState = 'INHERIT' | 'GRANT' | 'DENY';
+
+/**
+ * Resolves effective permissions for a single user from role baseline + per-user GRANT/DENY overrides.
+ */
+export function computeUserEffectivePermissions(
+  rolePermissions: Set<string>,
+  grants: Set<string>,
+  denies: Set<string>
+): Set<string> {
+  const effective = new Set<string>(rolePermissions);
+  for (const key of grants) {
+    effective.add(key);
+  }
+  for (const key of denies) {
+    effective.delete(key);
+  }
+  return effective;
+}
+
+/**
+ * Applies a 3-state per-user permission override (INHERIT | GRANT | DENY) with dependency awareness:
+ * - Granting an action auto-grants required parent view dependencies not already effective from roles.
+ * - Denying a view cascades removal/denial to any dependent actions currently held by the user.
+ */
+export function applyUserOverrideMode(
+  rolePermissions: Set<string>,
+  currentGrants: Set<string>,
+  currentDenies: Set<string>,
+  toggledKey: string,
+  nextState: UserOverrideState
+): {
+  grants: Set<string>;
+  denies: Set<string>;
+  addedDependencies: string[];
+  affectedDependents: string[];
+} {
+  const grants = new Set<string>(currentGrants);
+  const denies = new Set<string>(currentDenies);
+  const addedDependencies: string[] = [];
+  const affectedDependents: string[] = [];
+
+  if (nextState === 'INHERIT') {
+    grants.delete(toggledKey);
+    denies.delete(toggledKey);
+    return { grants, denies, addedDependencies, affectedDependents };
+  }
+
+  if (nextState === 'GRANT') {
+    denies.delete(toggledKey);
+    grants.add(toggledKey);
+
+    let depKey = PERMISSION_DEPENDENCIES[toggledKey];
+    while (depKey) {
+      const effectiveNow = (rolePermissions.has(depKey) && !denies.has(depKey)) || grants.has(depKey);
+      if (!effectiveNow) {
+        denies.delete(depKey);
+        if (!rolePermissions.has(depKey)) {
+          grants.add(depKey);
+        }
+        addedDependencies.push(depKey);
+      }
+      depKey = PERMISSION_DEPENDENCIES[depKey];
+    }
+
+    return { grants, denies, addedDependencies, affectedDependents };
+  }
+
+  // DENY
+  grants.delete(toggledKey);
+  denies.add(toggledKey);
+
+  const toCheck = [toggledKey];
+  while (toCheck.length > 0) {
+    const parentKey = toCheck.pop()!;
+    for (const [dependent, requiredParent] of Object.entries(PERMISSION_DEPENDENCIES)) {
+      if (requiredParent !== parentKey) continue;
+      const wasGranted = grants.has(dependent);
+      const fromRole = rolePermissions.has(dependent) && !denies.has(dependent);
+      if (wasGranted || fromRole) {
+        grants.delete(dependent);
+        if (rolePermissions.has(dependent)) {
+          denies.add(dependent);
+        }
+        affectedDependents.push(dependent);
+        toCheck.push(dependent);
+      }
+    }
+  }
+
+  return { grants, denies, addedDependencies, affectedDependents };
+}

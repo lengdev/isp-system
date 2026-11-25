@@ -466,6 +466,7 @@ test('--- RBAC BACKEND & PERMISSIONS MATRIX TEST SUITE ---', async (t) => {
     assert.match(techData.error, /insufficient permissions for feature/i);
 
     // 2. Admin user has full access
+    const uniqueAuthEmail = `auth_${Date.now()}@test.com`;
     const adminCreateRes = await fetch(custBaseUrl, {
       method: 'POST',
       headers: {
@@ -474,7 +475,7 @@ test('--- RBAC BACKEND & PERMISSIONS MATRIX TEST SUITE ---', async (t) => {
       },
       body: JSON.stringify({
         fullName: 'Authorized Customer',
-        email: 'auth@test.com',
+        email: uniqueAuthEmail,
         phone: '+855 12 333 444',
         address: 'St 123',
         city: 'Phnom Penh',
@@ -484,6 +485,265 @@ test('--- RBAC BACKEND & PERMISSIONS MATRIX TEST SUITE ---', async (t) => {
       }),
     });
     assert.strictEqual(adminCreateRes.status, 201, 'Admin user can create customer');
+    const createdAdminCust = await adminCreateRes.json();
+    if (createdAdminCust?.id) {
+      await prisma.customer.delete({ where: { id: createdAdminCust.id } }).catch(() => {});
+    }
+  });
+
+  await t.test('18. Per-user GRANT & DENY overrides isolate two users sharing the same role', async () => {
+    const suffix = Date.now();
+    const roleName = `OVERRIDE_ROLE_${suffix}`;
+    const userAName = `override_a_${suffix}`;
+    const userBName = `override_b_${suffix}`;
+    const custBaseUrl = baseUrl.replace('/auth', '/customers');
+
+    const customersViewPerm = await prisma.permission.findUnique({ where: { key: 'customers.view' } });
+    assert.ok(customersViewPerm, 'customers.view permission exists');
+
+    const sharedRole = await prisma.role.create({
+      data: {
+        name: roleName,
+        description: 'Shared test role for per-user override isolation',
+        isSystem: false,
+        permissions: {
+          create: [{ permissionId: customersViewPerm.id }],
+        },
+      },
+    });
+
+    const passwordHash = '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma';
+    const userA = await prisma.user.create({
+      data: {
+        username: userAName,
+        email: `${userAName}@nsmisp.net`,
+        passwordHash,
+        fullName: 'Override User A',
+        role: 'TECHNICIAN',
+        isActive: true,
+        userRoles: { create: [{ roleId: sharedRole.id }] },
+      },
+    });
+    const userB = await prisma.user.create({
+      data: {
+        username: userBName,
+        email: `${userBName}@nsmisp.net`,
+        passwordHash,
+        fullName: 'Override User B',
+        role: 'TECHNICIAN',
+        isActive: true,
+        userRoles: { create: [{ roleId: sharedRole.id }] },
+      },
+    });
+
+    let createdCustId = null;
+    try {
+      const tokenA = (await AuthService.login(userAName, 'Password123!')).accessToken;
+      const tokenB = (await AuthService.login(userBName, 'Password123!')).accessToken;
+
+      // Baseline: both users can read customers (via shared role), neither can create
+      const baseGetA = await fetch(custBaseUrl, { headers: { Authorization: `Bearer ${tokenA}`, 'x-enforce-auth': 'true' } });
+      const baseGetB = await fetch(custBaseUrl, { headers: { Authorization: `Bearer ${tokenB}`, 'x-enforce-auth': 'true' } });
+      assert.strictEqual(baseGetA.status, 200);
+      assert.strictEqual(baseGetB.status, 200);
+
+      // 1. Grant customers.create ONLY to userA
+      const grantRes = await fetch(`${baseUrl}/users/${userA.id}/permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ grants: ['customers.create'], denies: [] }),
+      });
+      assert.strictEqual(grantRes.status, 200);
+      const grantData = await grantRes.json();
+      assert.deepStrictEqual(grantData.grants, ['customers.create']);
+      assert.ok(grantData.effectivePermissions.includes('customers.create'));
+
+      // userA can create; userB with identical role remains blocked (403)
+      const createA = await fetch(custBaseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenA}`, 'x-enforce-auth': 'true' },
+        body: JSON.stringify({
+          fullName: 'Override Granted Customer',
+          email: `override_${suffix}@test.com`,
+          phone: '+855 12 444 555',
+          address: 'St 200',
+          city: 'Phnom Penh',
+          planName: 'Fiber 50M',
+          monthlyPrice: 30,
+          connectionType: 'FIBER',
+        }),
+      });
+      assert.strictEqual(createA.status, 201, 'User with GRANT override can create customer');
+      const createdJson = await createA.json().catch(() => null);
+      createdCustId = createdJson?.id || null;
+
+      const createB = await fetch(custBaseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenB}`, 'x-enforce-auth': 'true' },
+        body: JSON.stringify({ fullName: 'Peer Blocked Customer', email: `peer_${suffix}@test.com` }),
+      });
+      assert.strictEqual(createB.status, 403, 'Peer sharing same role remains blocked without GRANT');
+
+      const meA = await (await fetch(`${baseUrl}/me`, { headers: { Authorization: `Bearer ${tokenA}` } })).json();
+      const meB = await (await fetch(`${baseUrl}/me`, { headers: { Authorization: `Bearer ${tokenB}` } })).json();
+      assert.ok(meA.user.features.includes('customers.btn.create'));
+      assert.strictEqual(meB.user.features.includes('customers.btn.create'), false);
+
+      // 2. Deny customers.view ONLY on userA; userB retains access
+      const denyRes = await fetch(`${baseUrl}/users/${userA.id}/permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ grants: [], denies: ['customers.view'] }),
+      });
+      assert.strictEqual(denyRes.status, 200);
+
+      const getABlocked = await fetch(custBaseUrl, { headers: { Authorization: `Bearer ${tokenA}`, 'x-enforce-auth': 'true' } });
+      const getBAllowed = await fetch(custBaseUrl, { headers: { Authorization: `Bearer ${tokenB}`, 'x-enforce-auth': 'true' } });
+      assert.strictEqual(getABlocked.status, 403, 'Denied user loses customers.view');
+      assert.strictEqual(getBAllowed.status, 200, 'Peer with same role keeps customers.view');
+
+      const navA = await (await fetch(`${baseUrl}/navigation`, { headers: { Authorization: `Bearer ${tokenA}` } })).json();
+      const navB = await (await fetch(`${baseUrl}/navigation`, { headers: { Authorization: `Bearer ${tokenB}` } })).json();
+      assert.strictEqual(navA.navigation.some((n) => n.key === 'nav.customers'), false);
+      assert.strictEqual(navB.navigation.some((n) => n.key === 'nav.customers'), true);
+
+      // 3. Safeguard & conflict validation checks
+      const conflictRes = await fetch(`${baseUrl}/users/${userA.id}/permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ grants: ['customers.view'], denies: ['customers.view'] }),
+      });
+      assert.strictEqual(conflictRes.status, 400);
+
+      const adminUserRow = await prisma.user.findUnique({ where: { username: 'admin' } });
+      const superAdminRes = await fetch(`${baseUrl}/users/${adminUserRow.id}/permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ grants: [], denies: ['customers.view'] }),
+      });
+      assert.strictEqual(superAdminRes.status, 400);
+    } finally {
+      if (createdCustId) {
+        await prisma.customer.delete({ where: { id: createdCustId } }).catch(() => {});
+      }
+      await prisma.user.deleteMany({ where: { id: { in: [userA.id, userB.id] } } }).catch(() => {});
+      await prisma.role.delete({ where: { id: sharedRole.id } }).catch(() => {});
+    }
+  });
+
+  await t.test('19. ACCOUNTANT role reads /api/v1/customers (200) and per-user DENY customers.create hides feature & blocks POST (403)', async () => {
+    const suffix = Date.now();
+    const custBaseUrl = baseUrl.replace('/auth', '/customers');
+    const accountantRole = await prisma.role.findUnique({ where: { name: 'ACCOUNTANT' } });
+    assert.ok(accountantRole, 'ACCOUNTANT role exists in DB');
+
+    const acctUser = await prisma.user.create({
+      data: {
+        username: `acct_deny_${suffix}`,
+        email: `acct_deny_${suffix}@nsmisp.net`,
+        passwordHash: '$2a$10$7EqJtq98hPqEX7fNZaFWoO.8/9nS85w93Q1oF/Keq7GZzB/6Xq2ma',
+        fullName: 'Accountant Deny Test',
+        role: 'ACCOUNTANT',
+        isActive: true,
+        userRoles: { create: [{ roleId: accountantRole.id }] },
+      },
+    });
+
+    try {
+      const denyRes = await fetch(`${baseUrl}/users/${acctUser.id}/permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ grants: [], denies: ['customers.create'] }),
+      });
+      assert.strictEqual(denyRes.status, 200);
+
+      const loginData = await AuthService.login(acctUser.username, 'Password123!');
+      const acctToken = loginData.accessToken;
+      assert.strictEqual(loginData.user.features.includes('page.customers'), true);
+      assert.strictEqual(loginData.user.features.includes('customers.btn.create'), false);
+
+      const getRes = await fetch(custBaseUrl, {
+        headers: { Authorization: `Bearer ${acctToken}`, 'x-enforce-auth': 'true' },
+      });
+      assert.strictEqual(getRes.status, 200, 'ACCOUNTANT should not receive 403 role not authorized on GET /customers');
+
+      const postRes = await fetch(custBaseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${acctToken}`,
+          'x-enforce-auth': 'true',
+        },
+        body: JSON.stringify({ fullName: 'Blocked Create', email: `blocked_${suffix}@nsmisp.net` }),
+      });
+      assert.strictEqual(postRes.status, 403, 'Denied customers.create blocks POST /customers');
+    } finally {
+      await prisma.user.delete({ where: { id: acctUser.id } }).catch(() => {});
+    }
+  });
+
+  await t.test('20. POST /users supports custom DB roles via UserRole link and SHA-256 client password pre-hash', async () => {
+    const suffix = Date.now();
+    const customRoleName = `CUSTOM_NOC_${suffix}`;
+    const cryptoMod = await import('crypto');
+
+    const roleRes = await fetch(`${baseUrl}/roles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ name: customRoleName, description: 'Custom NOC staff test role' }),
+    });
+    assert.strictEqual(roleRes.status, 201);
+    const createdRole = await roleRes.json();
+
+    const custView = await prisma.permission.findUnique({ where: { key: 'customers.view' } });
+    assert.ok(custView, 'customers.view permission exists');
+    await prisma.rolePermission.create({
+      data: { roleId: createdRole.id, permissionId: custView.id },
+    });
+
+    const plainPassword = 'CustomStaffPass!2026';
+    const sha256Password = cryptoMod.createHash('sha256').update(plainPassword).digest('hex');
+
+    let createdUserId = null;
+    try {
+      const createRes = await fetch(`${baseUrl}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          username: `custom_staff_${suffix}`,
+          email: `custom_staff_${suffix}@nsmisp.net`,
+          fullName: 'Custom Role Staff',
+          role: customRoleName,
+          password: sha256Password,
+        }),
+      });
+      assert.strictEqual(createRes.status, 201, 'Custom DB role user created cleanly');
+      const createdUser = await createRes.json();
+      createdUserId = createdUser.id;
+      assert.strictEqual(createdUser.role, customRoleName);
+      assert.deepStrictEqual(createdUser.roles, [customRoleName]);
+
+      // Login using client-style SHA-256 hash succeeds and exposes custom role + permissions
+      const loginData = await AuthService.login(`custom_staff_${suffix}`, sha256Password);
+      assert.strictEqual(loginData.user.role, customRoleName);
+      assert.deepStrictEqual(loginData.user.roles, [customRoleName]);
+      assert.ok(loginData.user.features.includes('page.customers'));
+
+      // Plaintext login also works seamlessly
+      const plainLogin = await AuthService.login(`custom_staff_${suffix}`, plainPassword);
+      assert.strictEqual(plainLogin.user.role, customRoleName);
+
+      const custUrl = baseUrl.replace('/auth', '/customers');
+      const custRes = await fetch(custUrl, {
+        headers: { Authorization: `Bearer ${loginData.accessToken}`, 'x-enforce-auth': 'true' },
+      });
+      assert.strictEqual(custRes.status, 200, 'Custom role with customers.view passes dynamic permission check');
+    } finally {
+      if (createdUserId) {
+        await prisma.user.delete({ where: { id: createdUserId } }).catch(() => {});
+      }
+      await prisma.role.delete({ where: { id: createdRole.id } }).catch(() => {});
+    }
   });
 
   await stopServer();

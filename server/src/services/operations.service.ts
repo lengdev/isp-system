@@ -1,216 +1,374 @@
-import { dbStore } from '../db/store.js';
+import { Prisma } from '@prisma/client';
+import { prisma, logAudit } from '../db/store.js';
 import { MikroTikService } from './mikrotik.service.js';
 import { BillingService } from './billing.service.js';
 import { InventoryService } from './inventory.service.js';
 
 export class OperationsService {
   // 1. Installations
-  static listInstallations(status?: string) {
-    let list = [...dbStore.installations];
-    if (status) list = list.filter((i) => i.status === status);
+  static async listInstallations(status?: string) {
+    const list = await prisma.installation.findMany({
+      where: status ? { status: status.toUpperCase() as any } : undefined,
+      include: {
+        customer: {
+          include: {
+            addresses: true,
+            subscriptions: { include: { package: true } },
+          },
+        },
+        technician: true,
+      },
+      orderBy: { scheduledDate: 'desc' },
+    });
 
     return list.map((inst) => {
-      const cust = dbStore.customers.find((c) => c.id === inst.customerId);
-      const tech = dbStore.technicians.find((t) => t.id === inst.technicianId);
+      const addr = inst.customer?.addresses.find((a) => a.isPrimary) || inst.customer?.addresses[0];
+      const pkg = inst.customer?.subscriptions[0]?.package;
       return {
         ...inst,
-        customerName: cust?.fullName || 'Customer',
-        customerPhone: cust?.phone || '',
-        customerAddress: cust?.address || '',
-        technicianName: tech?.name || 'Unassigned',
-        planName: cust?.planName || 'Fiber Broadband',
+        opticalPowerDbm: inst.opticalPowerDbm !== null ? Number(inst.opticalPowerDbm) : null,
+        scheduledDate: inst.scheduledDate.toISOString(),
+        completedAt: inst.completedAt?.toISOString() || null,
+        createdAt: inst.createdAt.toISOString(),
+        updatedAt: inst.updatedAt.toISOString(),
+        customerName: inst.customer?.fullName || 'Customer',
+        customerPhone: inst.customer?.phone || '',
+        customerAddress: addr?.addressLine || '',
+        technicianName: inst.technician?.name || 'Unassigned',
+        planName: pkg?.name || 'Fiber Broadband',
       };
     });
   }
 
-  static createInstallation(data: {
+  static async createInstallation(data: {
     customerId: string;
     technicianId?: string;
     scheduledDate: string;
     timeSlot: string;
     notes?: string;
   }) {
-    const cust = dbStore.customers.find((c) => c.id === data.customerId);
+    const cust = await prisma.customer.findFirst({
+      where: { OR: [{ id: data.customerId }, { code: data.customerId }] },
+    });
     if (!cust) throw new Error('Customer not found');
 
-    const orderNumber = `INST-2026-${(dbStore.installations.length + 1).toString().padStart(3, '0')}`;
-    const newInst = {
-      id: `inst-${Date.now()}`,
-      orderNumber,
-      customerId: cust.id,
-      technicianId: data.technicianId || null,
-      scheduledDate: data.scheduledDate,
-      timeSlot: data.timeSlot,
-      status: 'SCHEDULED',
-      assignedOntSn: null,
-      opticalPowerDbm: null,
-      notes: data.notes || null,
+    const year = new Date().getFullYear();
+    const prefix = `INST-${year}-`;
+    const existing = await prisma.installation.findMany({
+      where: { orderNumber: { startsWith: prefix } },
+      select: { orderNumber: true },
+    });
+    let maxSeq = 0;
+    for (const row of existing) {
+      const seq = parseInt(row.orderNumber.slice(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+    const orderNumber = `${prefix}${(maxSeq + 1).toString().padStart(3, '0')}`;
+
+    const newInst = await prisma.$transaction(async (tx) => {
+      const inst = await tx.installation.create({
+        data: {
+          orderNumber,
+          customerId: cust.id,
+          technicianId: data.technicianId || null,
+          scheduledDate: new Date(data.scheduledDate),
+          timeSlot: data.timeSlot,
+          status: 'SCHEDULED',
+          notes: data.notes || null,
+        },
+      });
+
+      await tx.customer.update({
+        where: { id: cust.id },
+        data: { status: 'PENDING' },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          action: 'CREATE_INSTALLATION',
+          resource: 'Installation',
+          resourceId: orderNumber,
+          details: `Created installation order for ${cust.fullName}`,
+          ipAddress: '127.0.0.1',
+          ip: '127.0.0.1',
+        },
+      });
+
+      return inst;
+    });
+
+    return {
+      ...newInst,
+      scheduledDate: newInst.scheduledDate.toISOString(),
       completedAt: null,
-      createdAt: new Date().toISOString(),
+      createdAt: newInst.createdAt.toISOString(),
     };
-
-    dbStore.installations.unshift(newInst);
-    cust.status = 'PENDING';
-
-    dbStore.logAudit('CREATE_INSTALLATION', 'Installation', orderNumber, `Created installation order for ${cust.fullName}`);
-    return newInst;
   }
 
   // END-TO-END WORKFLOW A: COMPLETE INSTALLATION & ACTIVATE SUBSCRIBER
-  static async completeInstallation(installationId: string, data: {
-    assignedOntSn: string;
-    opticalPowerDbm: number;
-    notes?: string;
-    actor?: string;
-  }) {
-    const inst = dbStore.installations.find((i) => i.id === installationId);
+  static async completeInstallation(
+    installationId: string,
+    data: {
+      assignedOntSn: string;
+      opticalPowerDbm: number;
+      notes?: string;
+      actor?: string;
+    }
+  ) {
+    const inst = await prisma.installation.findFirst({
+      where: { OR: [{ id: installationId }, { orderNumber: installationId }] },
+      include: {
+        customer: {
+          include: {
+            subscriptions: {
+              include: { package: true, pppoeAccount: true },
+            },
+          },
+        },
+      },
+    });
     if (!inst) throw new Error('Installation order not found');
-
-    const cust = dbStore.customers.find((c) => c.id === inst.customerId);
+    const cust = inst.customer;
     if (!cust) throw new Error('Customer not found');
 
-    inst.status = 'COMPLETED';
-    inst.assignedOntSn = data.assignedOntSn;
-    inst.opticalPowerDbm = data.opticalPowerDbm;
-    (inst as any).completedAt = new Date().toISOString();
-    if (data.notes) inst.notes = (inst.notes ? inst.notes + ' | ' : '') + data.notes;
+    const sub = cust.subscriptions[0];
+    const planName = sub?.package?.name || 'Fiber Starter 100M';
+    const monthlyPrice = Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 35.0);
+    const pppoeUser =
+      sub?.pppoeAccount?.username || `${cust.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`;
+    const routerId = sub?.routerId || 'rtr-core-1';
 
-    // 1. Assign ONT Serial Number to Customer
-    InventoryService.assignSerialToCustomer(data.assignedOntSn, cust.id);
+    const updatedInst = await prisma.$transaction(async (tx) => {
+      const nextNotes = data.notes
+        ? (inst.notes ? `${inst.notes} | ` : '') + data.notes
+        : inst.notes;
 
-    // 2. Consume 1 ONT hardware unit from stock (COGS accounting entry)
-    const ontProduct = dbStore.products.find((p) => p.sku === 'ONT-HG8245H5') || dbStore.products[0];
-    if (ontProduct) {
-      InventoryService.recordMovement({
-        productId: ontProduct.id,
-        type: 'INSTALLATION_CONSUME',
-        quantity: 1,
-        reference: inst.orderNumber,
-        note: `Consumed ONT for customer ${cust.code} installation`,
-        actor: data.actor || 'Technician',
+      const updated = await tx.installation.update({
+        where: { id: inst.id },
+        data: {
+          status: 'COMPLETED',
+          assignedOntSn: data.assignedOntSn,
+          opticalPowerDbm: new Prisma.Decimal(data.opticalPowerDbm),
+          completedAt: new Date(),
+          notes: nextNotes,
+        },
       });
-    }
 
-    // 3. Provision PPPoE Account on MikroTik Core Router
-    const pppoeUser = cust.pppoeUsername || `${cust.fullName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pppoe`;
-    cust.pppoeUsername = pppoeUser;
-    cust.status = 'ACTIVE';
+      // 1. Assign ONT serial number to customer
+      await InventoryService.assignSerialToCustomer(data.assignedOntSn, cust.id, tx);
 
-    await MikroTikService.provisionPPPoEAccount('rtr-core-1', {
+      // 2. Consume 1 ONT hardware unit from stock (COGS accounting journal)
+      const ontProduct =
+        (await tx.product.findUnique({ where: { sku: 'ONT-HG8245H5' } })) ||
+        (await tx.product.findFirst());
+      if (ontProduct) {
+        await InventoryService.recordMovement(
+          {
+            productId: ontProduct.id,
+            type: 'INSTALLATION_CONSUME',
+            quantity: 1,
+            reference: inst.orderNumber,
+            note: `Consumed ONT for customer ${cust.code} installation`,
+            actor: data.actor || 'Technician',
+          },
+          tx
+        );
+      }
+
+      // 3. Activate customer and subscription in PostgreSQL
+      await tx.customer.update({
+        where: { id: cust.id },
+        data: { status: 'ACTIVE' },
+      });
+
+      if (sub) {
+        await tx.subscription.update({
+          where: { id: sub.id },
+          data: { status: 'ACTIVE', activationDate: new Date() },
+        });
+      }
+
+      return updated;
+    });
+
+    // 4. Provision PPPoE account on router
+    await MikroTikService.provisionPPPoEAccount(routerId, {
       name: pppoeUser,
       password: 'pppoe_secure_password',
       service: 'pppoe',
-      profile: cust.planName.toLowerCase().replace(/\s+/g, '-'),
-      remoteAddress: cust.ipAddress,
-      callerId: cust.macAddress,
+      profile: planName.toLowerCase().replace(/\s+/g, '-'),
+      remoteAddress: sub?.pppoeAccount?.ipAddress || '10.20.1.42',
+      callerId: sub?.pppoeAccount?.macAddress || '48:8F:5A:12:44:01',
       disabled: false,
       comment: `Subscriber: ${cust.code} (${cust.fullName})`,
     });
 
-    // 4. Generate First Recurring Customer Invoice
+    // 5. Generate first recurring invoice if none exists for current period
     const currentPeriod = new Date().toISOString().slice(0, 7);
-    const existingInvoice = dbStore.invoices.find(
-      (i) => i.customerId === cust.id && i.billingPeriod === currentPeriod
-    );
+    const existingInvoice = await prisma.invoice.findFirst({
+      where: { customerId: cust.id, billingPeriod: currentPeriod, status: { not: 'CANCELLED' } },
+    });
 
     let firstInvoice = null;
     if (!existingInvoice) {
-      firstInvoice = BillingService.generateInvoice({
+      firstInvoice = await BillingService.generateInvoice({
         customerId: cust.id,
+        subscriptionId: sub?.id,
         billingPeriod: currentPeriod,
         items: [
-          { description: `${cust.planName} (First Month Subscription)`, amount: cust.monthlyPrice },
+          { description: `${planName} (First Month Subscription)`, amount: monthlyPrice },
           { description: 'Fiber Drop Cable & Optical Activation Fee', amount: 25.0 },
         ],
       });
     }
 
-    dbStore.logAudit(
+    await logAudit(
       'COMPLETE_INSTALLATION',
       'Installation',
       inst.orderNumber,
-      `Completed installation for ${cust.fullName}. ONT SN: ${data.assignedOntSn}. PPPoE: ${pppoeUser}. Activated!`
+      `Completed installation for ${cust.fullName}. ONT SN: ${data.assignedOntSn}. PPPoE: ${pppoeUser}. Activated!`,
+      data.actor || 'Technician'
     );
 
+    const refreshedCust = await prisma.customer.findUnique({ where: { id: cust.id } });
+
     return {
-      installation: inst,
-      customer: cust,
+      installation: {
+        ...updatedInst,
+        opticalPowerDbm: updatedInst.opticalPowerDbm !== null ? Number(updatedInst.opticalPowerDbm) : null,
+        scheduledDate: updatedInst.scheduledDate.toISOString(),
+        completedAt: updatedInst.completedAt?.toISOString() || null,
+      },
+      customer: {
+        ...refreshedCust,
+        balanceDue: Number(refreshedCust?.balanceDue || 0),
+        rating: Number(refreshedCust?.rating || 5),
+      },
       invoice: firstInvoice,
       message: 'Installation completed, subscriber activated, ONT assigned, and first invoice generated.',
     };
   }
 
   // 2. Technicians
-  static listTechnicians() {
-    return dbStore.technicians.map((t) => {
-      const activeJobs = dbStore.installations.filter((i) => i.technicianId === t.id && i.status !== 'COMPLETED').length;
-      return {
-        ...t,
-        activeJobs,
-      };
+  static async listTechnicians() {
+    const techs = await prisma.technician.findMany({
+      include: {
+        installations: { where: { status: { not: 'COMPLETED' } } },
+      },
+      orderBy: { name: 'asc' },
     });
+
+    return techs.map((t) => ({
+      ...t,
+      rating: Number(t.rating),
+      activeJobs: t.installations.length,
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
+    }));
   }
 
   // 3. Support Tickets
-  static listTickets(status?: string, priority?: string) {
-    let list = [...dbStore.tickets];
-    if (status) list = list.filter((t) => t.status === status);
-    if (priority) list = list.filter((t) => t.priority === priority);
+  static async listTickets(status?: string, priority?: string) {
+    const where: any = {};
+    if (status) where.status = status.toUpperCase();
+    if (priority) where.priority = priority.toUpperCase();
 
-    return list.map((t) => {
-      const cust = dbStore.customers.find((c) => c.id === t.customerId);
-      return {
-        ...t,
-        customerName: cust?.fullName || 'Customer',
-        customerPhone: cust?.phone || '',
-      };
+    const tickets = await prisma.supportTicket.findMany({
+      where,
+      include: { customer: true, assignedTechnician: true },
+      orderBy: { createdAt: 'desc' },
     });
+
+    return tickets.map((t) => ({
+      ...t,
+      customerName: t.customer?.fullName || 'Customer',
+      customerPhone: t.customer?.phone || '',
+      assignedTechnician: t.assignedTechnician?.name || 'Unassigned',
+      resolvedAt: t.resolvedAt?.toISOString() || null,
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
+    }));
   }
 
-  static createTicket(data: {
+  static async createTicket(data: {
     customerId: string;
     title: string;
     description: string;
     priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     category?: string;
     assignedTechnician?: string;
+    technicianId?: string;
   }) {
-    const cust = dbStore.customers.find((c) => c.id === data.customerId);
+    const cust = await prisma.customer.findFirst({
+      where: { OR: [{ id: data.customerId }, { code: data.customerId }] },
+    });
     if (!cust) throw new Error('Customer not found');
 
-    const ticketNumber = `TCK-${(dbStore.tickets.length + 1044).toString()}`;
-    const newTicket = {
-      id: `tck-${Date.now()}`,
-      ticketNumber,
-      customerId: cust.id,
-      customerName: cust.fullName,
-      title: data.title,
-      description: data.description,
-      priority: data.priority || 'MEDIUM',
-      status: 'OPEN',
-      category: data.category || 'Slow Internet',
-      assignedTechnician: data.assignedTechnician || 'Marcus Vance',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    dbStore.tickets.unshift(newTicket);
-    dbStore.logAudit('CREATE_TICKET', 'SupportTicket', ticketNumber, `Created support ticket for ${cust.fullName}`);
-    return newTicket;
-  }
-
-  static updateTicketStatus(ticketId: string, status: string, resolutionNotes?: string) {
-    const ticket = dbStore.tickets.find((t) => t.id === ticketId);
-    if (!ticket) throw new Error('Ticket not found');
-
-    ticket.status = status as any;
-    ticket.updatedAt = new Date().toISOString();
-    if (status === 'RESOLVED' || status === 'CLOSED') {
-      (ticket as any).resolvedAt = new Date().toISOString();
-      if (resolutionNotes) (ticket as any).resolutionNotes = resolutionNotes;
+    let technicianId = data.technicianId || null;
+    if (!technicianId && data.assignedTechnician) {
+      const tech = await prisma.technician.findFirst({
+        where: { name: { contains: data.assignedTechnician, mode: 'insensitive' } },
+      });
+      technicianId = tech?.id || null;
     }
 
-    dbStore.logAudit('UPDATE_TICKET', 'SupportTicket', ticket.ticketNumber, `Ticket status changed to ${status}`);
-    return ticket;
+    const count = await prisma.supportTicket.count();
+    let seq = count + 1044;
+    let ticketNumber = `TCK-${seq}`;
+    while (await prisma.supportTicket.findUnique({ where: { ticketNumber } })) {
+      seq++;
+      ticketNumber = `TCK-${seq}`;
+    }
+
+    const newTicket = await prisma.supportTicket.create({
+      data: {
+        ticketNumber,
+        customerId: cust.id,
+        technicianId,
+        title: data.title,
+        description: data.description,
+        priority: (data.priority || 'MEDIUM') as any,
+        status: 'OPEN',
+        category: data.category || 'Slow Internet',
+      },
+      include: { assignedTechnician: true },
+    });
+
+    await logAudit('CREATE_TICKET', 'SupportTicket', ticketNumber, `Created support ticket for ${cust.fullName}`);
+
+    return {
+      ...newTicket,
+      customerName: cust.fullName,
+      assignedTechnician: newTicket.assignedTechnician?.name || data.assignedTechnician || 'Unassigned',
+      createdAt: newTicket.createdAt.toISOString(),
+      updatedAt: newTicket.updatedAt.toISOString(),
+    };
+  }
+
+  static async updateTicketStatus(ticketId: string, status: string, resolutionNotes?: string) {
+    const ticket = await prisma.supportTicket.findFirst({
+      where: { OR: [{ id: ticketId }, { ticketNumber: ticketId }] },
+    });
+    if (!ticket) throw new Error('Ticket not found');
+
+    const upper = status.toUpperCase();
+    const isFinal = upper === 'RESOLVED' || upper === 'CLOSED';
+    const updated = await prisma.supportTicket.update({
+      where: { id: ticket.id },
+      data: {
+        status: upper as any,
+        ...(isFinal ? { resolvedAt: new Date() } : {}),
+        ...(isFinal && resolutionNotes ? { resolutionNotes } : {}),
+      },
+    });
+
+    await logAudit('UPDATE_TICKET', 'SupportTicket', ticket.ticketNumber, `Ticket status changed to ${upper}`);
+
+    return {
+      ...updated,
+      resolvedAt: updated.resolvedAt?.toISOString() || null,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
   }
 }

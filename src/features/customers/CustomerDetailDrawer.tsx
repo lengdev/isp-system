@@ -48,6 +48,7 @@ import { Chip } from '../../components/ui/Chip';
 import { Tooltip as UiTooltip } from '../../components/ui/Tooltip';
 import { StatusChangePopover } from './StatusChangePopover';
 import { formatCurrency, formatDate, cn } from '../../lib/utils';
+import { Can, useCan } from '../../lib/permissions';
 import { Customer } from '../../types';
 
 // Helper component for copyable definition item
@@ -115,6 +116,7 @@ export const CustomerDetailDrawer: React.FC = () => {
   const openModal = useStore((s) => s.openModal);
   const currency = useStore((s) => s.currency);
   const addToast = useStore((s) => s.addToast);
+  const canViewBillingTab = useCan('customers.tab.billing');
 
   // Sync from URL params on load / change
   useEffect(() => {
@@ -278,7 +280,7 @@ export const CustomerDetailDrawer: React.FC = () => {
 
   const tabs: { id: typeof activeDrawerTab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'billing', label: 'Billing', count: customerInvoices.length },
+    ...(canViewBillingTab ? [{ id: 'billing' as const, label: 'Billing', count: customerInvoices.length }] : []),
     { id: 'usage', label: 'Usage' },
     { id: 'tickets', label: 'Tickets', count: customerTickets.length },
     { id: 'activity', label: 'Activity' },
@@ -371,25 +373,29 @@ export const CustomerDetailDrawer: React.FC = () => {
 
       {/* Row 3: Single non-wrapping action row */}
       <div className="flex items-center gap-2 flex-nowrap overflow-x-auto pt-0.5 scrollbar-none">
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={() => openModal('addEditCustomer', { customerId: customer.id })}
-          className="h-8 text-[12px] px-3 gap-1.5 shrink-0"
-        >
-          <Edit2 className="w-3.5 h-3.5" />
-          <span>Edit profile</span>
-        </Button>
+        <Can feature="customers.btn.edit">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => openModal('addEditCustomer', { customerId: customer.id })}
+            className="h-8 text-[12px] px-3 gap-1.5 shrink-0"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            <span>Edit profile</span>
+          </Button>
+        </Can>
 
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => openModal('recordPayment', { customerId: customer.id })}
-          className="h-8 text-[12px] px-2.5 gap-1.5 shrink-0"
-        >
-          <CreditCard className="w-3.5 h-3.5" />
-          <span>Record payment</span>
-        </Button>
+        <Can permission="payments.record">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => openModal('recordPayment', { customerId: customer.id })}
+            className="h-8 text-[12px] px-2.5 gap-1.5 shrink-0"
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            <span>Record payment</span>
+          </Button>
+        </Can>
 
         <Button
           size="sm"
@@ -401,31 +407,35 @@ export const CustomerDetailDrawer: React.FC = () => {
           <span>Send message</span>
         </Button>
 
-        <UiTooltip content={customer.status === 'Suspended' ? 'Activate subscriber' : 'Suspend subscriber'}>
+        <Can feature="customers.btn.edit">
+          <UiTooltip content={customer.status === 'Suspended' ? 'Activate subscriber' : 'Suspend subscriber'}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                openModal('statusConfirmation', {
+                  customerIds: [customer.id],
+                  targetStatus: customer.status === 'Suspended' ? 'Active' : 'Suspended',
+                })
+              }
+              className="h-8 w-8 p-0 flex items-center justify-center shrink-0"
+            >
+              <Power className="w-3.5 h-3.5" />
+            </Button>
+          </UiTooltip>
+        </Can>
+
+        <Can feature="customers.btn.delete">
           <Button
             size="sm"
-            variant="outline"
-            onClick={() =>
-              openModal('statusConfirmation', {
-                customerIds: [customer.id],
-                targetStatus: customer.status === 'Suspended' ? 'Active' : 'Suspended',
-              })
-            }
-            className="h-8 w-8 p-0 flex items-center justify-center shrink-0"
+            variant="ghost"
+            onClick={() => openModal('deleteConfirmation', { customerIds: [customer.id] })}
+            className="h-8 w-8 p-0 flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0 ml-auto"
+            title="Delete subscriber"
           >
-            <Power className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" />
           </Button>
-        </UiTooltip>
-
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => openModal('deleteConfirmation', { customerIds: [customer.id] })}
-          className="h-8 w-8 p-0 flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0 ml-auto"
-          title="Delete subscriber"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </Button>
+        </Can>
       </div>
     </div>
   );

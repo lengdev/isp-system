@@ -1,189 +1,315 @@
-import { dbStore } from '../db/store.js';
+import { Prisma } from '@prisma/client';
+import { prisma, logAudit } from '../db/store.js';
 import { AccountingService } from './accounting.service.js';
+
+function computeStockStatus(quantity: number, minStockAlert: number): 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK' {
+  if (quantity <= 0) return 'OUT_OF_STOCK';
+  if (quantity <= minStockAlert) return 'LOW_STOCK';
+  return 'IN_STOCK';
+}
 
 export class InventoryService {
   // 1. Products
-  static listProducts(category?: string) {
-    let list = [...dbStore.products];
-    if (category) {
-      list = list.filter((p) => p.categoryName === category);
-    }
+  static async listProducts(category?: string) {
+    const list = await prisma.product.findMany({
+      where: category ? { categoryName: category } : undefined,
+      include: {
+        _count: { select: { serialNumbers: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
     return list.map((p) => {
-      const serialCount = dbStore.serialNumbers.filter((s) => s.productId === p.id).length;
+      const costPrice = Number(p.costPrice);
       return {
         ...p,
-        totalValuation: Math.round(p.quantity * p.costPrice * 100) / 100,
-        serializedUnitsCount: serialCount,
+        costPrice,
+        unitPrice: Number(p.unitPrice),
+        totalValuation: Math.round(p.quantity * costPrice * 100) / 100,
+        serializedUnitsCount: p._count.serialNumbers,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
       };
     });
   }
 
-  static createProduct(data: any) {
+  static async createProduct(data: any) {
+    const qty = Number(data.quantity) || 0;
+    const minAlert = Number(data.minStockAlert) || 10;
     const nextSku = data.sku || `SKU-${Date.now().toString().slice(-6)}`;
-    const newProduct = {
-      id: `prod-${Date.now()}`,
-      sku: nextSku,
-      name: data.name,
-      categoryName: data.categoryName || 'Accessories',
-      quantity: Number(data.quantity) || 0,
-      minStockAlert: Number(data.minStockAlert) || 10,
-      costPrice: Number(data.costPrice) || 0.0,
-      unitPrice: Number(data.unitPrice) || 0.0,
-      status: (Number(data.quantity) || 0) <= 0 ? 'OUT_OF_STOCK' : (Number(data.quantity) || 0) <= (Number(data.minStockAlert) || 10) ? 'LOW_STOCK' : 'IN_STOCK',
-      supplier: data.supplier || 'General Supplier',
-      location: data.location || 'Main Warehouse',
-      description: data.description || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
 
-    dbStore.products.push(newProduct as any);
-    dbStore.logAudit('CREATE_PRODUCT', 'Product', newProduct.sku, `Created product ${newProduct.name} (${newProduct.sku})`);
-    return newProduct;
+    const created = await prisma.product.create({
+      data: {
+        sku: nextSku,
+        name: data.name,
+        categoryName: data.categoryName || 'Accessories',
+        quantity: qty,
+        minStockAlert: minAlert,
+        costPrice: new Prisma.Decimal(Number(data.costPrice) || 0.0),
+        unitPrice: new Prisma.Decimal(Number(data.unitPrice) || 0.0),
+        status: computeStockStatus(qty, minAlert),
+        supplier: data.supplier || 'General Supplier',
+        location: data.location || 'Main Warehouse',
+        description: data.description || '',
+      },
+    });
+
+    await logAudit('CREATE_PRODUCT', 'Product', created.sku, `Created product ${created.name} (${created.sku})`);
+    return {
+      ...created,
+      costPrice: Number(created.costPrice),
+      unitPrice: Number(created.unitPrice),
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString(),
+    };
   }
 
-  static updateProduct(id: string, updates: any) {
-    const prod = dbStore.products.find((p) => p.id === id);
-    if (!prod) throw new Error('Product not found');
+  static async updateProduct(id: string, updates: any) {
+    const existing = await prisma.product.findFirst({
+      where: { OR: [{ id }, { sku: id }] },
+    });
+    if (!existing) throw new Error('Product not found');
 
-    Object.assign(prod, updates);
-    if (prod.quantity <= 0) prod.status = 'OUT_OF_STOCK';
-    else if (prod.quantity <= prod.minStockAlert) prod.status = 'LOW_STOCK';
-    else prod.status = 'IN_STOCK';
+    const nextQty = updates.quantity !== undefined ? Number(updates.quantity) : existing.quantity;
+    const nextMin = updates.minStockAlert !== undefined ? Number(updates.minStockAlert) : existing.minStockAlert;
 
-    dbStore.logAudit('UPDATE_PRODUCT', 'Product', prod.sku, `Updated product ${prod.name}`);
-    return prod;
+    const updated = await prisma.product.update({
+      where: { id: existing.id },
+      data: {
+        ...(updates.name !== undefined ? { name: updates.name } : {}),
+        ...(updates.categoryName !== undefined ? { categoryName: updates.categoryName } : {}),
+        ...(updates.supplier !== undefined ? { supplier: updates.supplier } : {}),
+        ...(updates.location !== undefined ? { location: updates.location } : {}),
+        ...(updates.description !== undefined ? { description: updates.description } : {}),
+        ...(updates.costPrice !== undefined ? { costPrice: new Prisma.Decimal(updates.costPrice) } : {}),
+        ...(updates.unitPrice !== undefined ? { unitPrice: new Prisma.Decimal(updates.unitPrice) } : {}),
+        quantity: nextQty,
+        minStockAlert: nextMin,
+        status: computeStockStatus(nextQty, nextMin),
+      },
+    });
+
+    await logAudit('UPDATE_PRODUCT', 'Product', updated.sku, `Updated product ${updated.name}`);
+    return {
+      ...updated,
+      costPrice: Number(updated.costPrice),
+      unitPrice: Number(updated.unitPrice),
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
   }
 
   // 2. Warehouses
-  static listWarehouses() {
-    return dbStore.warehouses.map((wh) => {
-      const serializedInWarehouse = dbStore.serialNumbers.filter((s) => s.warehouseId === wh.id).length;
-      return {
-        ...wh,
-        serializedCount: serializedInWarehouse,
-      };
+  static async listWarehouses() {
+    const warehouses = await prisma.warehouse.findMany({
+      include: { _count: { select: { serialNumbers: true } } },
+      orderBy: { code: 'asc' },
     });
+
+    return warehouses.map((wh) => ({
+      ...wh,
+      serializedCount: wh._count.serialNumbers,
+      createdAt: wh.createdAt.toISOString(),
+      updatedAt: wh.updatedAt.toISOString(),
+    }));
   }
 
   // 3. Stock Movement (In / Out / Transfer) with Negative Stock Prevention
-  static recordMovement(data: {
-    productId: string;
-    fromWarehouseId?: string;
-    toWarehouseId?: string;
-    type: 'STOCK_IN' | 'STOCK_OUT' | 'TRANSFER' | 'INSTALLATION_CONSUME';
-    quantity: number;
-    reference?: string;
-    note?: string;
-    actor?: string;
-  }) {
-    const product = dbStore.products.find((p) => p.id === data.productId);
-    if (!product) throw new Error('Product not found');
-
+  static async recordMovement(
+    data: {
+      productId: string;
+      fromWarehouseId?: string;
+      toWarehouseId?: string;
+      type: 'STOCK_IN' | 'STOCK_OUT' | 'TRANSFER' | 'INSTALLATION_CONSUME';
+      quantity: number;
+      reference?: string;
+      note?: string;
+      actor?: string;
+    },
+    externalTx?: Prisma.TransactionClient
+  ) {
     const qty = Number(data.quantity);
     if (isNaN(qty) || qty <= 0) throw new Error('Quantity must be greater than zero');
 
-    // PREVENT NEGATIVE STOCK
-    if ((data.type === 'STOCK_OUT' || data.type === 'TRANSFER' || data.type === 'INSTALLATION_CONSUME') && product.quantity < qty) {
-      throw new Error(
-        `Negative stock prevented! Cannot dispatch ${qty} units of ${product.name} (SKU: ${product.sku}). Current on-hand quantity is only ${product.quantity}.`
-      );
-    }
+    const run = async (tx: Prisma.TransactionClient) => {
+      const product = await tx.product.findFirst({
+        where: { OR: [{ id: data.productId }, { sku: data.productId }] },
+      });
+      if (!product) throw new Error('Product not found');
 
-    if (data.type === 'STOCK_IN') {
-      product.quantity += qty;
-    } else {
-      product.quantity -= qty;
-    }
+      if (
+        (data.type === 'STOCK_OUT' || data.type === 'TRANSFER' || data.type === 'INSTALLATION_CONSUME') &&
+        product.quantity < qty
+      ) {
+        throw new Error(
+          `Negative stock prevented! Cannot dispatch ${qty} units of ${product.name} (SKU: ${product.sku}). Current on-hand quantity is only ${product.quantity}.`
+        );
+      }
 
-    // Refresh stock status
-    if (product.quantity <= 0) product.status = 'OUT_OF_STOCK';
-    else if (product.quantity <= product.minStockAlert) product.status = 'LOW_STOCK';
-    else product.status = 'IN_STOCK';
+      const nextQty = data.type === 'STOCK_IN' ? product.quantity + qty : product.quantity - qty;
+      const nextStatus = computeStockStatus(nextQty, product.minStockAlert);
 
-    const movementNumber = `SM-2026-${(dbStore.stockMovements.length + 1).toString().padStart(4, '0')}`;
-    const totalCost = Math.round(qty * product.costPrice * 100) / 100;
+      await tx.product.update({
+        where: { id: product.id },
+        data: {
+          quantity: nextQty,
+          status: nextStatus,
+        },
+      });
 
-    const movement = {
-      id: `mov-${Date.now()}`,
-      movementNumber,
-      productId: product.id,
-      productName: product.name,
-      fromWarehouseId: data.fromWarehouseId || null,
-      toWarehouseId: data.toWarehouseId || null,
-      type: data.type,
-      quantity: qty,
-      unitCost: product.costPrice,
-      totalCost,
-      actor: data.actor || 'Warehouse Staff',
-      reference: data.reference || null,
-      note: data.note || null,
-      timestamp: new Date().toISOString(),
+      const count = await tx.stockMovement.count();
+      const year = new Date().getFullYear();
+      let seq = count + 1;
+      let movementNumber = `SM-${year}-${seq.toString().padStart(4, '0')}`;
+      while (await tx.stockMovement.findUnique({ where: { movementNumber } })) {
+        seq++;
+        movementNumber = `SM-${year}-${seq.toString().padStart(4, '0')}`;
+      }
+
+      const unitCost = Number(product.costPrice);
+      const totalCost = Math.round(qty * unitCost * 100) / 100;
+
+      const movement = await tx.stockMovement.create({
+        data: {
+          movementNumber,
+          productId: product.id,
+          fromWarehouseId: data.fromWarehouseId || null,
+          toWarehouseId: data.toWarehouseId || null,
+          type: data.type,
+          quantity: qty,
+          unitCost: new Prisma.Decimal(unitCost),
+          totalCost: new Prisma.Decimal(totalCost),
+          actor: data.actor || 'Warehouse Staff',
+          reference: data.reference || null,
+          note: data.note || null,
+        },
+      });
+
+      if (data.type === 'INSTALLATION_CONSUME') {
+        await AccountingService.postJournalEntry(
+          {
+            description: `Inventory Consumption: ${product.name} x${qty} for ${data.reference || 'Installation'}`,
+            reference: movementNumber,
+            lines: [
+              {
+                accountCode: '5020',
+                debit: totalCost,
+                credit: 0.0,
+                description: `COGS consumed on job ${data.reference || ''}`,
+              },
+              {
+                accountCode: '1200',
+                debit: 0.0,
+                credit: totalCost,
+                description: `Reduction of inventory valuation for ${product.sku}`,
+              },
+            ],
+            createdBy: data.actor || 'Field Technician',
+          },
+          tx
+        );
+      }
+
+      await tx.auditLog.create({
+        data: {
+          action: 'STOCK_MOVEMENT',
+          resource: 'StockMovement',
+          resourceId: movementNumber,
+          details: `${data.type} of ${qty} units for ${product.name}`,
+          userEmail: data.actor || 'Warehouse Staff',
+          ipAddress: '127.0.0.1',
+          ip: '127.0.0.1',
+        },
+      });
+
+      return {
+        movement: {
+          ...movement,
+          productName: product.name,
+          unitCost,
+          totalCost,
+          timestamp: movement.createdAt.toISOString(),
+        },
+        currentStock: nextQty,
+        status: nextStatus,
+      };
     };
 
-    dbStore.stockMovements.unshift(movement);
-
-    // If stock consumed during installation, post COGS accounting journal
-    if (data.type === 'INSTALLATION_CONSUME') {
-      AccountingService.postJournalEntry({
-        description: `Inventory Consumption: ${product.name} x${qty} for ${data.reference || 'Installation'}`,
-        reference: movementNumber,
-        lines: [
-          {
-            accountCode: '5020', // Cost of Goods Sold (CPE/ONTs)
-            debit: totalCost,
-            credit: 0.0,
-            description: `COGS consumed on job ${data.reference}`,
-          },
-          {
-            accountCode: '1200', // Inventory Asset
-            debit: 0.0,
-            credit: totalCost,
-            description: `Reduction of inventory valuation for ${product.sku}`,
-          },
-        ],
-        createdBy: data.actor || 'Field Technician',
-      });
-    }
-
-    dbStore.logAudit('STOCK_MOVEMENT', 'StockMovement', movementNumber, `${data.type} of ${qty} units for ${product.name}`);
-    return { movement, currentStock: product.quantity, status: product.status };
+    if (externalTx) return run(externalTx);
+    return prisma.$transaction(run);
   }
 
   // 4. Serial Number Management (ONT/CPE lifecycle)
-  static listSerialNumbers(filters?: { productId?: string; status?: string; customerId?: string }) {
-    let list = [...dbStore.serialNumbers];
-    if (filters?.productId) list = list.filter((s) => s.productId === filters.productId);
-    if (filters?.status) list = list.filter((s) => s.status === filters.status);
-    if (filters?.customerId) list = list.filter((s) => s.customerId === filters.customerId);
+  static async listSerialNumbers(filters?: { productId?: string; status?: string; customerId?: string }) {
+    const where: any = {};
+    if (filters?.productId) where.productId = filters.productId;
+    if (filters?.status) where.status = filters.status.toUpperCase();
+    if (filters?.customerId) where.customerId = filters.customerId;
 
-    return list.map((sn) => {
-      const prod = dbStore.products.find((p) => p.id === sn.productId);
-      const cust = dbStore.customers.find((c) => c.id === sn.customerId);
-      const wh = dbStore.warehouses.find((w) => w.id === sn.warehouseId);
-      return {
-        ...sn,
-        productName: prod?.name || '',
-        productSku: prod?.sku || '',
-        customerName: cust?.fullName || null,
-        warehouseName: wh?.name || null,
-      };
+    const list = await prisma.serialNumber.findMany({
+      where,
+      include: {
+        product: true,
+        customer: true,
+        warehouse: true,
+      },
+      orderBy: { serialNumber: 'asc' },
     });
+
+    return list.map((sn) => ({
+      ...sn,
+      productName: sn.product?.name || '',
+      productSku: sn.product?.sku || '',
+      customerName: sn.customer?.fullName || null,
+      warehouseName: sn.warehouse?.name || null,
+      installedAt: sn.installedAt?.toISOString() || null,
+      createdAt: sn.createdAt.toISOString(),
+      updatedAt: sn.updatedAt.toISOString(),
+    }));
   }
 
-  static assignSerialToCustomer(serialNumber: string, customerId: string) {
-    const sn = dbStore.serialNumbers.find((s) => s.serialNumber === serialNumber);
-    if (!sn) throw new Error(`Serial number ${serialNumber} not found`);
+  static async assignSerialToCustomer(
+    serialNumber: string,
+    customerId: string,
+    externalTx?: Prisma.TransactionClient
+  ) {
+    const run = async (tx: Prisma.TransactionClient) => {
+      const sn = await tx.serialNumber.findUnique({ where: { serialNumber } });
+      if (!sn) throw new Error(`Serial number ${serialNumber} not found`);
 
-    if (sn.customerId && sn.customerId !== customerId && sn.status === 'INSTALLED') {
-      throw new Error(`Serial conflict! Equipment ${serialNumber} is already active with customer ${sn.customerId}`);
-    }
+      const customer = await tx.customer.findFirst({
+        where: { OR: [{ id: customerId }, { code: customerId }] },
+      });
+      const resolvedCustomerId = customer?.id || customerId;
 
-    sn.customerId = customerId;
-    sn.status = 'INSTALLED';
-    sn.installedAt = new Date().toISOString();
+      if (sn.customerId && sn.customerId !== resolvedCustomerId && sn.status === 'INSTALLED') {
+        throw new Error(`Serial conflict! Equipment ${serialNumber} is already active with customer ${sn.customerId}`);
+      }
 
-    dbStore.logAudit('ASSIGN_EQUIPMENT', 'SerialNumber', sn.serialNumber, `Assigned ${sn.serialNumber} to customer ${customerId}`);
-    return sn;
+      const updated = await tx.serialNumber.update({
+        where: { id: sn.id },
+        data: {
+          customerId: resolvedCustomerId,
+          status: 'INSTALLED',
+          installedAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          action: 'ASSIGN_EQUIPMENT',
+          resource: 'SerialNumber',
+          resourceId: sn.serialNumber,
+          details: `Assigned ${sn.serialNumber} to customer ${resolvedCustomerId}`,
+          ipAddress: '127.0.0.1',
+          ip: '127.0.0.1',
+        },
+      });
+
+      return updated;
+    };
+
+    if (externalTx) return run(externalTx);
+    return prisma.$transaction(run);
   }
 }

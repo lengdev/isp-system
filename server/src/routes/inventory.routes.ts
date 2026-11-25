@@ -4,15 +4,19 @@ import { InventoryService } from '../services/inventory.service.js';
 const router = Router();
 
 // GET /api/v1/inventory/products
-router.get('/products', (req, res) => {
-  const { category } = req.query;
-  res.json(InventoryService.listProducts(category as string));
+router.get('/products', async (req, res) => {
+  try {
+    const { category } = req.query;
+    res.json(await InventoryService.listProducts(category as string));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/inventory/products
-router.post('/products', (req, res) => {
+router.post('/products', async (req, res) => {
   try {
-    const product = InventoryService.createProduct(req.body);
+    const product = await InventoryService.createProduct(req.body);
     res.status(201).json(product);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -20,9 +24,9 @@ router.post('/products', (req, res) => {
 });
 
 // PUT /api/v1/inventory/products/:id
-router.put('/products/:id', (req, res) => {
+router.put('/products/:id', async (req, res) => {
   try {
-    const updated = InventoryService.updateProduct(req.params.id, req.body);
+    const updated = await InventoryService.updateProduct(String(req.params.id), req.body);
     res.json(updated);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -30,14 +34,18 @@ router.put('/products/:id', (req, res) => {
 });
 
 // GET /api/v1/inventory/warehouses
-router.get('/warehouses', (_req, res) => {
-  res.json(InventoryService.listWarehouses());
+router.get('/warehouses', async (_req, res) => {
+  try {
+    res.json(await InventoryService.listWarehouses());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/inventory/movements
-router.post('/movements', (req, res) => {
+router.post('/movements', async (req, res) => {
   try {
-    const result = InventoryService.recordMovement(req.body);
+    const result = await InventoryService.recordMovement(req.body);
     res.status(201).json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -45,18 +53,22 @@ router.post('/movements', (req, res) => {
 });
 
 // GET /api/v1/inventory/serials
-router.get('/serials', (req, res) => {
-  res.json(InventoryService.listSerialNumbers(req.query as any));
+router.get('/serials', async (req, res) => {
+  try {
+    res.json(await InventoryService.listSerialNumbers(req.query as any));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/inventory/serials/assign
-router.post('/serials/assign', (req, res) => {
+router.post('/serials/assign', async (req, res) => {
   try {
     const { serialNumber, customerId } = req.body;
     if (!serialNumber || !customerId) {
       return res.status(400).json({ error: 'serialNumber and customerId are required' });
     }
-    const sn = InventoryService.assignSerialToCustomer(serialNumber, customerId);
+    const sn = await InventoryService.assignSerialToCustomer(serialNumber, customerId);
     res.json(sn);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

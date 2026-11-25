@@ -1,59 +1,98 @@
-import { dbStore } from '../db/store.js';
-import { MikroTikService } from './mikrotik.service.js';
+import { prisma, logAudit } from '../db/store.js';
 
 export class NetworkService {
   // 1. Routers
-  static listRouters() {
-    return dbStore.routers.map((r) => ({
+  static async listRouters() {
+    const [routers, activeSubscribers] = await Promise.all([
+      prisma.router.findMany({ orderBy: { name: 'asc' } }),
+      prisma.customer.count({ where: { status: 'ACTIVE' } }),
+    ]);
+
+    return routers.map((r) => ({
       ...r,
-      activeSubscribers: dbStore.customers.filter((c) => c.status === 'ACTIVE').length,
+      lastSeenAt: r.lastSeenAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+      activeSubscribers,
     }));
   }
 
-  static getRouterById(id: string) {
-    const router = dbStore.routers.find((r) => r.id === id);
+  static async getRouterById(id: string) {
+    const router = await prisma.router.findFirst({
+      where: { OR: [{ id }, { name: id }] },
+    });
     if (!router) throw new Error('Router not found');
     return router;
   }
 
   // 2. PPPoE Accounts
-  static listPPPoEAccounts() {
-    return dbStore.customers
-      .filter((c) => c.pppoeUsername)
-      .map((c) => ({
-        id: `pppoe-${c.id}`,
-        username: c.pppoeUsername,
-        customerId: c.id,
-        customerName: c.fullName,
-        customerCode: c.code,
-        ipAddress: c.ipAddress,
-        macAddress: c.macAddress,
-        profile: c.planName,
-        status: c.status === 'ACTIVE' ? 'Online' : 'Disabled',
-        router: 'Core-CCR2004-East',
-        uptime: c.status === 'ACTIVE' ? '2d 6h 15m' : '0s',
-        rateLimit: c.planName.includes('1G') ? '1000M/500M' : c.planName.includes('300M') ? '300M/150M' : '100M/50M',
-      }));
-  }
+  static async listPPPoEAccounts() {
+    const accounts = await prisma.pPPoEAccount.findMany({
+      include: {
+        router: true,
+        subscription: {
+          include: {
+            customer: true,
+            package: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-  // 3. VLAN Management
-  static listVlans() {
-    return dbStore.vlans.map((v) => {
-      const router = dbStore.routers.find((r) => r.id === v.routerId);
-      const subscribersCount = v.purpose === 'FIBER_INTERNET'
-        ? dbStore.customers.filter((c) => c.connectionType === 'FIBER').length
-        : v.purpose === 'WIRELESS_INTERNET'
-        ? dbStore.customers.filter((c) => c.connectionType === 'WIRELESS').length
-        : 0;
+    return accounts.map((acc) => {
+      const cust = acc.subscription.customer;
+      const pkg = acc.subscription.package;
+      const planName = pkg?.name || 'Fiber Ultra 300M';
       return {
-        ...v,
-        routerName: router?.name || v.routerId,
-        subscribersCount,
+        id: acc.id,
+        username: acc.username,
+        customerId: cust.id,
+        customerName: cust.fullName,
+        customerCode: cust.code,
+        ipAddress: acc.ipAddress || '',
+        macAddress: acc.macAddress || '',
+        profile: planName,
+        status: acc.isOnline && cust.status === 'ACTIVE' ? 'Online' : 'Disabled',
+        router: acc.router?.name || 'Core-CCR2004-East',
+        uptime: acc.isOnline && cust.status === 'ACTIVE' ? '2d 6h 15m' : '0s',
+        rateLimit: pkg
+          ? `${pkg.downloadSpeed}M/${pkg.uploadSpeed}M`
+          : planName.includes('1G')
+            ? '1000M/500M'
+            : planName.includes('300M')
+              ? '300M/150M'
+              : '100M/50M',
       };
     });
   }
 
-  static createVlan(data: {
+  // 3. VLAN Management
+  static async listVlans() {
+    const [vlans, fiberCount, wirelessCount] = await Promise.all([
+      prisma.vLAN.findMany({
+        include: { router: true },
+        orderBy: { vlanId: 'asc' },
+      }),
+      prisma.subscription.count({ where: { technology: 'FIBER' } }),
+      prisma.subscription.count({ where: { technology: 'WIRELESS' } }),
+    ]);
+
+    return vlans.map((v) => ({
+      ...v,
+      routerName: v.router?.name || v.routerId,
+      subscribersCount:
+        v.purpose === 'FIBER_INTERNET'
+          ? fiberCount
+          : v.purpose === 'WIRELESS_INTERNET'
+            ? wirelessCount
+            : 0,
+      createdAt: v.createdAt.toISOString(),
+      updatedAt: v.updatedAt.toISOString(),
+    }));
+  }
+
+  static async createVlan(data: {
     vlanId: number;
     name: string;
     description?: string;
@@ -64,70 +103,123 @@ export class NetworkService {
     subnet?: string;
     gateway?: string;
   }) {
-    // Validate duplicate VLAN ID within same router & interface scope
-    const duplicate = dbStore.vlans.find(
-      (v) => v.vlanId === data.vlanId && v.routerId === data.routerId && v.interface === data.interface
-    );
+    const vlanNumber = Number(data.vlanId);
+    const router = await prisma.router.findFirst({
+      where: { OR: [{ id: data.routerId }, { name: data.routerId }] },
+    });
+    if (!router) throw new Error(`Router ${data.routerId} not found`);
+
+    const duplicate = await prisma.vLAN.findFirst({
+      where: {
+        vlanId: vlanNumber,
+        routerId: router.id,
+        interface: data.interface,
+      },
+    });
     if (duplicate) {
       throw new Error(
-        `VLAN conflict! VLAN ID ${data.vlanId} is already assigned on router ${data.routerId} interface ${data.interface}.`
+        `VLAN conflict! VLAN ID ${vlanNumber} is already assigned on router ${data.routerId} interface ${data.interface}.`
       );
     }
 
-    const newVlan = {
-      id: `vlan-${Date.now()}`,
-      vlanId: Number(data.vlanId),
-      name: data.name,
-      description: data.description || '',
-      purpose: data.purpose as any,
-      routerId: data.routerId,
-      interface: data.interface,
-      tagged: data.tagged !== undefined ? data.tagged : true,
-      subnet: data.subnet || null,
-      gateway: data.gateway || null,
-      status: 'Active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    const newVlan = await prisma.vLAN.create({
+      data: {
+        vlanId: vlanNumber,
+        name: data.name,
+        description: data.description || '',
+        purpose: (data.purpose || 'FIBER_INTERNET') as any,
+        routerId: router.id,
+        interface: data.interface,
+        tagged: data.tagged !== undefined ? data.tagged : true,
+        subnet: data.subnet || null,
+        gateway: data.gateway || null,
+        status: 'Active',
+      },
+    });
 
-    dbStore.vlans.push(newVlan as any);
-    dbStore.logAudit('CREATE_VLAN', 'VLAN', `${newVlan.vlanId}`, `Created VLAN ${newVlan.name} (VID: ${newVlan.vlanId}) on ${newVlan.interface}`);
-    return newVlan;
+    await logAudit(
+      'CREATE_VLAN',
+      'VLAN',
+      `${newVlan.vlanId}`,
+      `Created VLAN ${newVlan.name} (VID: ${newVlan.vlanId}) on ${newVlan.interface}`
+    );
+
+    return {
+      ...newVlan,
+      createdAt: newVlan.createdAt.toISOString(),
+      updatedAt: newVlan.updatedAt.toISOString(),
+    };
   }
 
   // 4. IPAM (IP Address Management)
-  static listIpPools() {
-    return dbStore.ipPools.map((pool) => {
-      const router = dbStore.routers.find((r) => r.id === pool.routerId);
-      const utilizationPercent = Math.round((pool.usedIps / pool.totalIps) * 100);
-      return {
-        ...pool,
-        routerName: router?.name || pool.routerId,
-        utilizationPercent,
-        availableIps: pool.totalIps - pool.usedIps,
-      };
+  static async listIpPools() {
+    const pools = await prisma.iPPool.findMany({
+      include: { router: true },
+      orderBy: { name: 'asc' },
     });
+
+    return pools.map((pool) => ({
+      ...pool,
+      routerName: pool.router?.name || pool.routerId,
+      utilizationPercent: pool.totalIps > 0 ? Math.round((pool.usedIps / pool.totalIps) * 100) : 0,
+      availableIps: pool.totalIps - pool.usedIps,
+      createdAt: pool.createdAt.toISOString(),
+      updatedAt: pool.updatedAt.toISOString(),
+    }));
   }
 
-  static allocateIpAddress(poolId: string, customerId: string, isStatic: boolean = false) {
-    const pool = dbStore.ipPools.find((p) => p.id === poolId);
-    if (!pool) throw new Error('IP Pool not found');
+  static async allocateIpAddress(poolId: string, customerId: string, isStatic: boolean = false) {
+    const allocated = await prisma.$transaction(async (tx) => {
+      const pool = await tx.iPPool.findFirst({
+        where: { OR: [{ id: poolId }, { name: poolId }] },
+      });
+      if (!pool) throw new Error('IP Pool not found');
+      if (pool.usedIps >= pool.totalIps) {
+        throw new Error(`IP Pool ${pool.name} is fully exhausted!`);
+      }
 
-    if (pool.usedIps >= pool.totalIps) {
-      throw new Error(`IP Pool ${pool.name} is fully exhausted!`);
-    }
+      const prefixMatch = pool.startIp.match(/^(\d+\.\d+)\./);
+      const basePrefix = prefixMatch ? prefixMatch[1] : '10.20';
 
-    pool.usedIps += 1;
-    const ip = `10.20.${Math.floor(pool.usedIps / 254) + 1}.${(pool.usedIps % 254) + 1}`;
+      let nextUsed = pool.usedIps + 1;
+      let candidateIp = `${basePrefix}.${Math.floor(nextUsed / 254) + 1}.${(nextUsed % 254) + 1}`;
+      while (await tx.iPAddress.findUnique({ where: { ipAddress: candidateIp } })) {
+        nextUsed++;
+        candidateIp = `${basePrefix}.${Math.floor(nextUsed / 254) + 1}.${(nextUsed % 254) + 1}`;
+      }
 
-    dbStore.logAudit('ALLOCATE_IP', 'IPAM', ip, `Allocated IP ${ip} to customer ${customerId} from pool ${pool.name}`);
-    return {
-      ipAddress: ip,
-      poolName: pool.name,
-      gateway: pool.gateway,
-      dnsPrimary: pool.dnsPrimary,
-      dnsSecondary: pool.dnsSecondary,
-      isStatic,
-    };
+      await tx.iPPool.update({
+        where: { id: pool.id },
+        data: { usedIps: nextUsed },
+      });
+
+      await tx.iPAddress.create({
+        data: {
+          poolId: pool.id,
+          ipAddress: candidateIp,
+          isStatic: Boolean(isStatic),
+          isAssigned: true,
+          assignedTo: customerId,
+          assignedAt: new Date(),
+        },
+      });
+
+      return {
+        ipAddress: candidateIp,
+        poolName: pool.name,
+        gateway: pool.gateway,
+        dnsPrimary: pool.dnsPrimary,
+        dnsSecondary: pool.dnsSecondary,
+        isStatic: Boolean(isStatic),
+      };
+    });
+
+    await logAudit(
+      'ALLOCATE_IP',
+      'IPAM',
+      allocated.ipAddress,
+      `Allocated IP ${allocated.ipAddress} to customer ${customerId} from pool ${allocated.poolName}`
+    );
+    return allocated;
   }
 }

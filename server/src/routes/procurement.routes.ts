@@ -4,14 +4,18 @@ import { ProcurementService } from '../services/procurement.service.js';
 const router = Router();
 
 // GET /api/v1/purchasing/suppliers
-router.get('/suppliers', (_req, res) => {
-  res.json(ProcurementService.listSuppliers());
+router.get('/suppliers', async (_req, res) => {
+  try {
+    res.json(await ProcurementService.listSuppliers());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/purchasing/suppliers
-router.post('/suppliers', (req, res) => {
+router.post('/suppliers', async (req, res) => {
   try {
-    const supplier = ProcurementService.createSupplier(req.body);
+    const supplier = await ProcurementService.createSupplier(req.body);
     res.status(201).json(supplier);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -19,14 +23,18 @@ router.post('/suppliers', (req, res) => {
 });
 
 // GET /api/v1/purchasing/orders
-router.get('/orders', (_req, res) => {
-  res.json(ProcurementService.listPurchaseOrders());
+router.get('/orders', async (_req, res) => {
+  try {
+    res.json(await ProcurementService.listPurchaseOrders());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/purchasing/orders
-router.post('/orders', (req, res) => {
+router.post('/orders', async (req, res) => {
   try {
-    const po = ProcurementService.createPurchaseOrder(req.body);
+    const po = await ProcurementService.createPurchaseOrder(req.body);
     res.status(201).json(po);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -34,10 +42,10 @@ router.post('/orders', (req, res) => {
 });
 
 // POST /api/v1/purchasing/orders/:id/receive
-router.post('/orders/:id/receive', (req, res) => {
+router.post('/orders/:id/receive', async (req, res) => {
   try {
     const { receivedBy } = req.body;
-    const result = ProcurementService.receiveGoods(req.params.id, receivedBy);
+    const result = await ProcurementService.receiveGoods(String(req.params.id), receivedBy);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -45,10 +53,10 @@ router.post('/orders/:id/receive', (req, res) => {
 });
 
 // POST /api/v1/purchasing/suppliers/:id/pay
-router.post('/suppliers/:id/pay', (req, res) => {
+router.post('/suppliers/:id/pay', async (req, res) => {
   try {
     const { amount, paymentMethod, actor } = req.body;
-    const result = ProcurementService.paySupplier(req.params.id, Number(amount), paymentMethod, actor);
+    const result = await ProcurementService.paySupplier(String(req.params.id), Number(amount), paymentMethod, actor);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

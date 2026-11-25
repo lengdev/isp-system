@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Shield, Plus, RefreshCw, Key, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { RefreshCw, Plus } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
@@ -7,23 +7,25 @@ import { Modal } from '../components/ui/Modal';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
 import { useStore } from '../store/useStore';
 import { api } from '../lib/api';
+import type { RoleItem } from '../types/roles';
 import { BRAND_DOMAIN } from '../lib/brand';
 
-const ROLE_OPTIONS: ComboboxOption[] = [
-  { value: 'SUPER_ADMIN', label: 'Super Admin (Full Access)' },
-  { value: 'ADMINISTRATOR', label: 'Administrator' },
-  { value: 'ACCOUNTANT', label: 'Accountant (General Ledger, Billing, P&L)' },
-  { value: 'CASHIER', label: 'Cashier (Payment Collections)' },
-  { value: 'NETWORK_ENGINEER', label: 'Network Engineer (MikroTik, PPPoE, VLAN, IPAM)' },
-  { value: 'TECHNICIAN', label: 'Technician (Installations & Tickets)' },
-  { value: 'SALES_STAFF', label: 'Sales Staff' },
-  { value: 'WAREHOUSE_MANAGER', label: 'Warehouse Manager' },
-];
+function formatRoleLabel(role: RoleItem): string {
+  const normalized = role.name
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+  const displayName = role.name.includes('_') ? `${normalized} (${role.name})` : role.name;
+  return role.description ? `${displayName} — ${role.description}` : displayName;
+}
 
 export const StaffUsersPage: React.FC = () => {
   const addToast = useStore((s) => s.addToast);
   const [users, setUsers] = useState<any[]>([]);
+  const [dbRoles, setDbRoles] = useState<RoleItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // New User Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,14 +33,43 @@ export const StaffUsersPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('TECHNICIAN');
+  const [role, setRole] = useState('');
   const [password, setPassword] = useState('Password123!');
+
+  const roleOptions: ComboboxOption[] = useMemo(
+    () =>
+      dbRoles.map((r) => ({
+        value: r.name,
+        label: formatRoleLabel(r),
+        shortLabel: r.name,
+        badge: r.isSystem ? undefined : 'Custom',
+      })),
+    [dbRoles]
+  );
 
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const data = await api.auth.getUsers();
-      setUsers(data);
+      const [usersResult, matrixResult] = await Promise.allSettled([
+        api.auth.getUsers(),
+        api.roles.getMatrix(),
+      ]);
+
+      if (usersResult.status === 'fulfilled') {
+        setUsers(usersResult.value);
+      } else {
+        throw usersResult.reason;
+      }
+
+      if (matrixResult.status === 'fulfilled') {
+        const fetchedRoles = matrixResult.value.roles || [];
+        setDbRoles(fetchedRoles);
+        setRole((prev) => {
+          if (prev && fetchedRoles.some((r) => r.name === prev)) return prev;
+          const preferred = fetchedRoles.find((r) => r.name === 'FIELD_TECHNICIAN' || r.name === 'TECHNICIAN');
+          return preferred?.name || fetchedRoles[0]?.name || '';
+        });
+      }
     } catch (err: any) {
       addToast({ type: 'error', title: 'Failed to load staff users', message: err.message });
     } finally {
@@ -50,14 +81,44 @@ export const StaffUsersPage: React.FC = () => {
     loadUsers();
   }, []);
 
+  const openCreateModal = () => {
+    setUsername('');
+    setEmail('');
+    setFullName('');
+    setPhone('');
+    setPassword('Password123!');
+    const preferred = dbRoles.find((r) => r.name === 'FIELD_TECHNICIAN' || r.name === 'TECHNICIAN');
+    setRole((prev) => (prev && dbRoles.some((r) => r.name === prev) ? prev : preferred?.name || dbRoles[0]?.name || ''));
+    setIsModalOpen(true);
+  };
+
   const handleCreateUser = async () => {
+    if (!fullName.trim() || !username.trim() || !email.trim() || !role || !password) {
+      addToast({
+        type: 'error',
+        title: 'Missing Required Fields',
+        message: 'Please enter full name, username, email, role, and initial password.',
+      });
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      await api.auth.createUser({ username, email, fullName, phone, role, password });
-      addToast({ type: 'success', title: 'User Account Created', message: `${fullName} (${role}) added.` });
+      await api.auth.createUser({
+        username: username.trim(),
+        email: email.trim(),
+        fullName: fullName.trim(),
+        phone: phone.trim() || undefined,
+        role,
+        password,
+      });
+      addToast({ type: 'success', title: 'User Account Created', message: `${fullName.trim()} (${role}) added.` });
       setIsModalOpen(false);
-      loadUsers();
+      await loadUsers();
     } catch (err: any) {
       addToast({ type: 'error', title: 'User Creation Failed', message: err.message });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -78,7 +139,7 @@ export const StaffUsersPage: React.FC = () => {
             <RefreshCw className={loading ? 'animate-spin w-4 h-4' : 'w-4 h-4'} />
             <span>Refresh</span>
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
+          <Button variant="primary" size="sm" onClick={openCreateModal}>
             <Plus className="w-4 h-4" />
             <span>Add Staff Member</span>
           </Button>
@@ -99,23 +160,26 @@ export const StaffUsersPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-[var(--surface-hover)]">
-                  <td className="py-3 px-3 font-sans font-bold text-[var(--text)]">{u.fullName}</td>
-                  <td className="py-3 px-3 font-bold text-[var(--brand)]">{u.username}</td>
-                  <td className="py-3 px-3 text-[var(--text-secondary)]">{u.email}</td>
-                  <td className="py-3 px-3">
-                    <Chip size="sm" color={u.role === 'SUPER_ADMIN' ? 'danger' : u.role === 'ACCOUNTANT' ? 'secondary' : u.role === 'NETWORK_ENGINEER' ? 'warning' : 'default'}>
-                      {u.role}
-                    </Chip>
-                  </td>
-                  <td className="py-3 px-3">
-                    <Chip size="sm" color={u.isActive ? 'success' : 'default'}>
-                      {u.isActive ? 'Active' : 'Disabled'}
-                    </Chip>
-                  </td>
-                </tr>
-              ))}
+              {users.map((u) => {
+                const displayRole = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles[0] : u.role;
+                return (
+                  <tr key={u.id} className="hover:bg-[var(--surface-hover)]">
+                    <td className="py-3 px-3 font-sans font-bold text-[var(--text)]">{u.fullName}</td>
+                    <td className="py-3 px-3 font-bold text-[var(--brand)]">{u.username}</td>
+                    <td className="py-3 px-3 text-[var(--text-secondary)]">{u.email}</td>
+                    <td className="py-3 px-3">
+                      <Chip size="sm" color={displayRole === 'SUPER_ADMIN' ? 'danger' : displayRole === 'ACCOUNTANT' ? 'secondary' : displayRole === 'NETWORK_ENGINEER' ? 'warning' : 'default'}>
+                        {displayRole}
+                      </Chip>
+                    </td>
+                    <td className="py-3 px-3">
+                      <Chip size="sm" color={u.isActive ? 'success' : 'default'}>
+                        {u.isActive ? 'Active' : 'Disabled'}
+                      </Chip>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -144,12 +208,14 @@ export const StaffUsersPage: React.FC = () => {
 
           <Field label="Role & Permissions">
             <Combobox
-              options={ROLE_OPTIONS}
+              options={roleOptions}
               value={role}
               onChange={(val) => setRole(val)}
-              searchable={ROLE_OPTIONS.length > 6}
+              placeholder={loading ? 'Loading roles...' : 'Select a role...'}
+              searchable={roleOptions.length > 6}
               clearable={false}
-              size="sm"
+              loading={loading && roleOptions.length === 0}
+              size="md"
             />
           </Field>
 
@@ -158,8 +224,10 @@ export const StaffUsersPage: React.FC = () => {
           </Field>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleCreateUser}>Create Account</Button>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={submitting}>Cancel</Button>
+            <Button variant="primary" onClick={handleCreateUser} disabled={submitting}>
+              {submitting ? 'Creating...' : 'Create Account'}
+            </Button>
           </div>
         </div>
       </Modal>

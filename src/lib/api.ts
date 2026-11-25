@@ -5,6 +5,8 @@ import type {
   RoleItem,
   RolesMatrixResponse,
   UserWithRoles,
+  UserPermissionsDetailResponse,
+  UpdateUserPermissionsPayload,
   CreateRolePayload,
   UpdateRolePayload,
   UpdateRolePermissionsPayload,
@@ -293,7 +295,13 @@ export const api = {
     },
     getHealth: () => fetchJson<{ status: string }>('/health'),
     getUsers: () => fetchJson<any[]>('/auth/users'),
-    createUser: (data: any) => fetchJson<any>('/auth/users', { method: 'POST', body: JSON.stringify(data) }),
+    createUser: async (data: any) => {
+      const payload = { ...data };
+      if (payload.password) {
+        payload.password = await hashPasswordClient(payload.password);
+      }
+      return fetchJson<any>('/auth/users', { method: 'POST', body: JSON.stringify(payload) });
+    },
     getNavigation: () => fetchJson<{ navigation: NavigationItem[] }>('/auth/navigation'),
     getFeatures: () => fetchJson<{ features: FeatureItem[] }>('/auth/features'),
     createFeature: (data: any) =>
@@ -506,6 +514,13 @@ export const api = {
       fetchJson<{ id: string; username: string; roles: string[] }>(`/auth/users/${userId}/roles`, {
         method: 'PATCH',
         body: JSON.stringify({ roles }),
+      }),
+    getUserPermissions: (userId: string) =>
+      fetchJson<UserPermissionsDetailResponse>(`/auth/users/${userId}/permissions`),
+    updateUserPermissions: (userId: string, payload: UpdateUserPermissionsPayload) =>
+      fetchJson<UserPermissionsDetailResponse>(`/auth/users/${userId}/permissions`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
       }),
   },
 };

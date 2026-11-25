@@ -4,15 +4,19 @@ import { AutomationService } from '../services/automation.service.js';
 const router = Router();
 
 // GET /api/v1/automation/rules
-router.get('/rules', (_req, res) => {
-  res.json(AutomationService.listRules());
+router.get('/rules', async (_req, res) => {
+  try {
+    res.json(await AutomationService.listRules());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/automation/rules/:id/toggle
-router.post('/rules/:id/toggle', (req, res) => {
+router.post('/rules/:id/toggle', async (req, res) => {
   try {
     const { enabled } = req.body;
-    const rule = AutomationService.toggleRule(req.params.id, Boolean(enabled));
+    const rule = await AutomationService.toggleRule(String(req.params.id), Boolean(enabled));
     res.json(rule);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -20,9 +24,9 @@ router.post('/rules/:id/toggle', (req, res) => {
 });
 
 // POST /api/v1/automation/jobs/billing
-router.post('/jobs/billing', (req, res) => {
+router.post('/jobs/billing', async (req, res) => {
   try {
-    const result = AutomationService.runMonthlyBillingJob(req.body?.billingPeriod);
+    const result = await AutomationService.runMonthlyBillingJob(req.body?.billingPeriod);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

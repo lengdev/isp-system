@@ -47,11 +47,12 @@ model User {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
-  userRoles    UserRole[]
-  sessions     Session[]
-  auditLogs    AuditLog[]
-  technician   Technician?
-  customer     Customer?
+  userRoles       UserRole[]
+  userPermissions UserPermission[]
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  technician      Technician?
+  customer        Customer?
 
   @@index([email])
   @@index([role])
@@ -94,6 +95,7 @@ model Permission {
   updatedAt    DateTime         @updatedAt
 
   rolePermissions    RolePermission[]
+  userPermissions    UserPermission[]
   featurePermissions FeaturePermission[]
 }
 
@@ -156,6 +158,27 @@ model RolePermission {
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
+}
+
+enum UserPermissionEffect {
+  GRANT
+  DENY
+}
+
+model UserPermission {
+  id           String               @id @default(uuid())
+  userId       String
+  permissionId String
+  effect       UserPermissionEffect @default(GRANT)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
 }
 
 model Session {

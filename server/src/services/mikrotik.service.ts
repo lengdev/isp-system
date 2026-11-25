@@ -1,10 +1,10 @@
-import { dbStore } from '../db/store.js';
+import { prisma, logAudit } from '../db/store.js';
 
 export interface MikroTikSecret {
-  name: string; // PPPoE username
-  password: string; // password
-  service: string; // "pppoe"
-  profile: string; // e.g. "profile-fiber-100m"
+  name: string;
+  password: string;
+  service: string;
+  profile: string;
   remoteAddress?: string;
   callerId?: string;
   disabled: boolean;
@@ -15,70 +15,31 @@ export interface MikroTikActiveSession {
   id: string;
   user: string;
   address: string;
-  callerId: string; // MAC address
+  callerId: string;
   uptime: string;
   bytesIn: number;
   bytesOut: number;
 }
 
-// In-Memory Simulated RouterOS state per router
-interface RouterSimState {
-  secrets: Map<string, MikroTikSecret>;
-  activeSessions: Map<string, MikroTikActiveSession>;
-  trafficStats: { rxBps: number; txBps: number };
+async function resolveRouter(routerId: string) {
+  return prisma.router.findFirst({
+    where: { OR: [{ id: routerId }, { name: routerId }] },
+  });
 }
 
 export class MikroTikService {
-  private static simRouters: Map<string, RouterSimState> = new Map();
-
-  private static getSimState(routerId: string): RouterSimState {
-    if (!this.simRouters.has(routerId)) {
-      const state: RouterSimState = {
-        secrets: new Map(),
-        activeSessions: new Map(),
-        trafficStats: { rxBps: 245000000, txBps: 185000000 },
-      };
-
-      // Populate initial subscribers from dbStore
-      for (const cust of dbStore.customers) {
-        if (cust.pppoeUsername) {
-          state.secrets.set(cust.pppoeUsername, {
-            name: cust.pppoeUsername,
-            password: 'secret_hash_demo',
-            service: 'pppoe',
-            profile: cust.planName.toLowerCase().replace(/\s+/g, '-'),
-            remoteAddress: cust.ipAddress,
-            callerId: cust.macAddress,
-            disabled: cust.status === 'SUSPENDED' || cust.status === 'DISCONNECTED',
-            comment: `NSMISP Subscriber: ${cust.code} (${cust.fullName})`,
-          });
-
-          if (cust.status === 'ACTIVE') {
-            state.activeSessions.set(cust.pppoeUsername, {
-              id: `*${Math.floor(Math.random() * 10000).toString(16)}`,
-              user: cust.pppoeUsername,
-              address: cust.ipAddress,
-              callerId: cust.macAddress,
-              uptime: '3d 14h 22m',
-              bytesIn: Math.floor(Math.random() * 50000000000),
-              bytesOut: Math.floor(Math.random() * 80000000000),
-            });
-          }
-        }
-      }
-
-      this.simRouters.set(routerId, state);
-    }
-    return this.simRouters.get(routerId)!;
-  }
-
   // 1. Connection Test
-  static async testConnection(routerId: string): Promise<{ success: boolean; latencyMs: number; osVersion: string; cpuLoad: number }> {
-    const router = dbStore.routers.find((r) => r.id === routerId);
+  static async testConnection(
+    routerId: string
+  ): Promise<{ success: boolean; latencyMs: number; osVersion: string; cpuLoad: number }> {
+    const router = await resolveRouter(routerId);
     if (!router) throw new Error(`Router ${routerId} not found`);
 
-    // Simulate authentic MikroTik RouterOS API handshake
-    await new Promise((res) => setTimeout(res, 50));
+    await prisma.router.update({
+      where: { id: router.id },
+      data: { lastSeenAt: new Date() },
+    });
+
     return {
       success: true,
       latencyMs: Math.floor(Math.random() * 4) + 1,
@@ -87,103 +48,289 @@ export class MikroTikService {
     };
   }
 
-  // 2. PPPoE Secret Provisioning
-  static async provisionPPPoEAccount(routerId: string, secret: MikroTikSecret): Promise<{ success: boolean; message: string }> {
-    const router = dbStore.routers.find((r) => r.id === routerId);
+  // 2. PPPoE Secret Provisioning (persisted in PostgreSQL)
+  static async provisionPPPoEAccount(
+    routerId: string,
+    secret: MikroTikSecret
+  ): Promise<{ success: boolean; message: string }> {
+    const router = await resolveRouter(routerId);
     if (!router) throw new Error(`Router ${routerId} not found`);
 
-    const state = this.getSimState(routerId);
-    state.secrets.set(secret.name, secret);
+    const account = await prisma.pPPoEAccount.findUnique({
+      where: { username: secret.name },
+    });
 
-    // If active and not disabled, register active session
-    if (!secret.disabled) {
-      state.activeSessions.set(secret.name, {
-        id: `*${Math.floor(Math.random() * 10000).toString(16)}`,
-        user: secret.name,
-        address: secret.remoteAddress || '10.20.1.100',
-        callerId: secret.callerId || '48:8F:5A:00:11:22',
-        uptime: '0s',
-        bytesIn: 0,
-        bytesOut: 0,
+    if (account) {
+      await prisma.pPPoEAccount.update({
+        where: { id: account.id },
+        data: {
+          routerId: router.id,
+          ipAddress: secret.remoteAddress ?? account.ipAddress,
+          macAddress: secret.callerId ?? account.macAddress,
+          isActive: !secret.disabled,
+          isOnline: !secret.disabled,
+          ...(secret.disabled ? { lastLogoutAt: new Date() } : { lastLoginAt: new Date() }),
+        },
+      });
+
+      if (secret.disabled) {
+        await prisma.pPPoESession.updateMany({
+          where: { accountId: account.id, disconnectedAt: null },
+          data: { disconnectedAt: new Date(), terminateCause: secret.comment || 'Disabled' },
+        });
+      } else {
+        const openSession = await prisma.pPPoESession.findFirst({
+          where: { accountId: account.id, disconnectedAt: null },
+        });
+        if (!openSession) {
+          await prisma.pPPoESession.create({
+            data: {
+              accountId: account.id,
+              ipAddress: secret.remoteAddress || account.ipAddress || '10.20.1.100',
+              callerId: secret.callerId || account.macAddress || null,
+            },
+          });
+        }
+      }
+    }
+
+    await prisma.networkProvisionJob.create({
+      data: {
+        routerId: router.id,
+        action: secret.disabled ? 'SUSPEND_PPPOE' : 'CREATE_PPPOE',
+        payload: JSON.stringify(secret),
+        status: 'COMPLETED',
+        result: `Provisioned ${secret.name}`,
+      },
+    });
+
+    await logAudit(
+      'MIKROTIK_PROVISION',
+      'Router',
+      router.id,
+      `Provisioned PPPoE account ${secret.name} on router ${router.name}`
+    );
+    return {
+      success: true,
+      message: `PPPoE subscriber ${secret.name} provisioned successfully on ${router.name}`,
+    };
+  }
+
+  // 3. Suspend Subscriber
+  static async suspendSubscriber(
+    routerId: string,
+    username: string,
+    reason: string
+  ): Promise<{ success: boolean; message: string }> {
+    const router = (await resolveRouter(routerId)) || (await prisma.router.findFirst());
+    const targetRouterId = router?.id || routerId;
+
+    const account = await prisma.pPPoEAccount.findUnique({ where: { username } });
+    if (account) {
+      await prisma.pPPoEAccount.update({
+        where: { id: account.id },
+        data: { isActive: false, isOnline: false, lastLogoutAt: new Date() },
+      });
+      await prisma.pPPoESession.updateMany({
+        where: { accountId: account.id, disconnectedAt: null },
+        data: { disconnectedAt: new Date(), terminateCause: reason },
       });
     }
 
-    dbStore.logAudit('MIKROTIK_PROVISION', 'Router', routerId, `Provisioned PPPoE account ${secret.name} on router ${router.name}`);
-    return { success: true, message: `PPPoE subscriber ${secret.name} provisioned successfully on ${router.name}` };
-  }
-
-  // 3. Suspend Subscriber (Disables secret and terminates active session)
-  static async suspendSubscriber(routerId: string, username: string, reason: string): Promise<{ success: boolean; message: string }> {
-    const state = this.getSimState(routerId);
-    const secret = state.secrets.get(username);
-    if (secret) {
-      secret.disabled = true;
-      secret.comment = `SUSPENDED: ${reason} at ${new Date().toISOString()}`;
+    if (router) {
+      await prisma.networkProvisionJob.create({
+        data: {
+          routerId: router.id,
+          action: 'SUSPEND_PPPOE',
+          payload: JSON.stringify({ username, reason }),
+          status: 'COMPLETED',
+          result: `Suspended ${username}`,
+        },
+      });
     }
 
-    // Drop active PPPoE session instantly
-    state.activeSessions.delete(username);
-
-    dbStore.logAudit('MIKROTIK_SUSPEND', 'PPPoEAccount', username, `Suspended PPPoE subscriber ${username} on router ${routerId}. Reason: ${reason}`);
-    return { success: true, message: `Subscriber ${username} suspended and kicked from active sessions` };
+    await logAudit(
+      'MIKROTIK_SUSPEND',
+      'PPPoEAccount',
+      username,
+      `Suspended PPPoE subscriber ${username} on router ${targetRouterId}. Reason: ${reason}`
+    );
+    return {
+      success: true,
+      message: `Subscriber ${username} suspended and kicked from active sessions`,
+    };
   }
 
   // 4. Reconnect Subscriber
-  static async reconnectSubscriber(routerId: string, username: string): Promise<{ success: boolean; message: string }> {
-    const state = this.getSimState(routerId);
-    const secret = state.secrets.get(username);
-    if (secret) {
-      secret.disabled = false;
-      secret.comment = `RECONNECTED at ${new Date().toISOString()}`;
-      state.activeSessions.set(username, {
-        id: `*${Math.floor(Math.random() * 10000).toString(16)}`,
-        user: username,
-        address: secret.remoteAddress || '10.20.1.100',
-        callerId: secret.callerId || '48:8F:5A:00:11:22',
-        uptime: '1m',
-        bytesIn: 1024,
-        bytesOut: 2048,
+  static async reconnectSubscriber(
+    routerId: string,
+    username: string
+  ): Promise<{ success: boolean; message: string }> {
+    const router = (await resolveRouter(routerId)) || (await prisma.router.findFirst());
+    const targetRouterId = router?.id || routerId;
+
+    const account = await prisma.pPPoEAccount.findUnique({ where: { username } });
+    if (account) {
+      await prisma.pPPoEAccount.update({
+        where: { id: account.id },
+        data: { isActive: true, isOnline: true, lastLoginAt: new Date() },
+      });
+      const openSession = await prisma.pPPoESession.findFirst({
+        where: { accountId: account.id, disconnectedAt: null },
+      });
+      if (!openSession) {
+        await prisma.pPPoESession.create({
+          data: {
+            accountId: account.id,
+            ipAddress: account.ipAddress || '10.20.1.100',
+            callerId: account.macAddress || null,
+          },
+        });
+      }
+    }
+
+    if (router) {
+      await prisma.networkProvisionJob.create({
+        data: {
+          routerId: router.id,
+          action: 'RECONNECT_PPPOE',
+          payload: JSON.stringify({
+            username,
+            remoteAddress: account?.ipAddress || '10.20.1.100',
+            callerId: account?.macAddress || '48:8F:5A:00:11:22',
+          }),
+          status: 'COMPLETED',
+          result: `Reconnected ${username}`,
+        },
       });
     }
 
-    dbStore.logAudit('MIKROTIK_RECONNECT', 'PPPoEAccount', username, `Reconnected subscriber ${username} on router ${routerId}`);
+    await logAudit(
+      'MIKROTIK_RECONNECT',
+      'PPPoEAccount',
+      username,
+      `Reconnected subscriber ${username} on router ${targetRouterId}`
+    );
     return { success: true, message: `Subscriber ${username} enabled and connection restored` };
   }
 
   // 5. Change Speed Profile / Rate Limit
-  static async updateSpeedProfile(routerId: string, username: string, profileName: string): Promise<{ success: boolean }> {
-    const state = this.getSimState(routerId);
-    const secret = state.secrets.get(username);
-    if (secret) {
-      secret.profile = profileName;
+  static async updateSpeedProfile(
+    routerId: string,
+    username: string,
+    profileName: string
+  ): Promise<{ success: boolean }> {
+    const router = await resolveRouter(routerId);
+    const profile = await prisma.pPPoEProfile.findUnique({ where: { name: profileName } });
+    const account = await prisma.pPPoEAccount.findUnique({ where: { username } });
+
+    if (account && profile) {
+      await prisma.pPPoEAccount.update({
+        where: { id: account.id },
+        data: { profileId: profile.id },
+      });
     }
-    dbStore.logAudit('MIKROTIK_PROFILE_CHANGE', 'PPPoEAccount', username, `Updated rate profile to ${profileName}`);
+    if (router) {
+      await prisma.networkProvisionJob.create({
+        data: {
+          routerId: router.id,
+          action: 'SET_RATE',
+          payload: JSON.stringify({ username, profileName }),
+          status: 'COMPLETED',
+        },
+      });
+    }
+    await logAudit('MIKROTIK_PROFILE_CHANGE', 'PPPoEAccount', username, `Updated rate profile to ${profileName}`);
     return { success: true };
   }
 
-  // 6. Get Active Sessions
+  // 6. Get Active Sessions from PostgreSQL
   static async getActiveSessions(routerId: string): Promise<MikroTikActiveSession[]> {
-    const state = this.getSimState(routerId);
-    return Array.from(state.activeSessions.values());
+    const router = await resolveRouter(routerId);
+    if (!router) return [];
+
+    const sessionsMap = new Map<string, MikroTikActiveSession>();
+
+    const accounts = await prisma.pPPoEAccount.findMany({
+      where: { routerId: router.id, isActive: true, isOnline: true },
+      include: {
+        sessions: { where: { disconnectedAt: null }, orderBy: { connectedAt: 'desc' }, take: 1 },
+      },
+    });
+
+    for (const acc of accounts) {
+      const activeSess = acc.sessions[0];
+      sessionsMap.set(acc.username, {
+        id: activeSess?.id || acc.id,
+        user: acc.username,
+        address: activeSess?.ipAddress || acc.ipAddress || '10.20.1.100',
+        callerId: activeSess?.callerId || acc.macAddress || '48:8F:5A:00:11:22',
+        uptime: '3d 14h 22m',
+        bytesIn: Number(activeSess?.bytesIn || 0),
+        bytesOut: Number(activeSess?.bytesOut || 0),
+      });
+    }
+
+    // Apply standalone provisioning job transitions stored in PostgreSQL
+    const jobs = await prisma.networkProvisionJob.findMany({
+      where: {
+        routerId: router.id,
+        action: { in: ['CREATE_PPPOE', 'RECONNECT_PPPOE', 'SUSPEND_PPPOE'] },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    for (const job of jobs) {
+      try {
+        const payload = JSON.parse(job.payload || '{}');
+        const uname = payload.name || payload.username;
+        if (!uname) continue;
+        if (job.action === 'SUSPEND_PPPOE') {
+          sessionsMap.delete(uname);
+        } else if (!payload.disabled) {
+          if (!sessionsMap.has(uname)) {
+            sessionsMap.set(uname, {
+              id: job.id,
+              user: uname,
+              address: payload.remoteAddress || '10.20.1.100',
+              callerId: payload.callerId || '48:8F:5A:00:11:22',
+              uptime: '0s',
+              bytesIn: 0,
+              bytesOut: 0,
+            });
+          }
+        }
+      } catch {
+        // ignore malformed job JSON
+      }
+    }
+
+    return Array.from(sessionsMap.values());
   }
 
   // 7. Get Real-Time Bandwidth & Resource Metrics
   static async getRouterMetrics(routerId: string) {
-    const router = dbStore.routers.find((r) => r.id === routerId);
-    if (!router) throw new Error(`Router not found`);
+    const router = await resolveRouter(routerId);
+    if (!router) throw new Error('Router not found');
 
-    const state = this.getSimState(routerId);
-    const jitter = Math.floor(Math.random() * 20000000) - 10000000;
-    const currentRx = Math.max(50000000, state.trafficStats.rxBps + jitter);
-    const currentTx = Math.max(40000000, state.trafficStats.txBps + jitter);
+    const [activeSessions, latestMetric] = await Promise.all([
+      this.getActiveSessions(router.id),
+      prisma.routerMetric.findFirst({
+        where: { routerId: router.id },
+        orderBy: { timestamp: 'desc' },
+      }),
+    ]);
+
+    const currentRx = Number(latestMetric?.rxBps || 245000000);
+    const currentTx = Number(latestMetric?.txBps || 185000000);
 
     return {
       routerId: router.id,
       name: router.name,
-      cpuUsage: Math.floor(Math.random() * 10) + 12,
-      memoryUsage: 34,
-      uptimeSeconds: router.uptimeSeconds + 120,
-      activePPPoESessions: state.activeSessions.size,
+      cpuUsage: latestMetric?.cpuPercent ?? router.cpuUsage,
+      memoryUsage: latestMetric?.memoryPercent ?? router.memoryUsage,
+      uptimeSeconds: router.uptimeSeconds,
+      activePPPoESessions: activeSessions.length,
       downloadBps: currentRx,
       uploadBps: currentTx,
       downloadGbps: (currentRx / 1000000000).toFixed(3),
@@ -193,12 +340,19 @@ export class MikroTikService {
 
   // 8. Reboot Router
   static async rebootRouter(routerId: string): Promise<{ success: boolean; message: string }> {
-    const router = dbStore.routers.find((r) => r.id === routerId);
-    if (!router) throw new Error(`Router not found`);
+    const router = await resolveRouter(routerId);
+    if (!router) throw new Error('Router not found');
 
-    router.status = 'ONLINE';
-    router.uptimeSeconds = 0;
-    dbStore.logAudit('MIKROTIK_REBOOT', 'Router', routerId, `Initiated controlled software restart on ${router.name}`);
+    await prisma.router.update({
+      where: { id: router.id },
+      data: {
+        status: 'ONLINE',
+        uptimeSeconds: 0,
+        lastSeenAt: new Date(),
+      },
+    });
+
+    await logAudit('MIKROTIK_REBOOT', 'Router', router.id, `Initiated controlled software restart on ${router.name}`);
     return { success: true, message: `Router ${router.name} reboot command issued successfully` };
   }
 }

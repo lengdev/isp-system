@@ -21,18 +21,17 @@ The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)
 |                     NSMISP API Gateway (Express 5)               |
 |   Node.js · TypeScript · Helmet · Zod · JWT · Dynamic RBAC       |
 |   Swagger / OpenAPI 3.0 (/api/docs)                              |
-+--------+-----------------+-------------------+-------------------+
-         |                 |                   |
-         v                 v                   v
-+-----------------+ +---------------+ +----------------------------+
-| Prisma ORM +    | | In-Memory     | | MikroTik RouterOS Layer    |
-| PostgreSQL 16   | | dbStore       | | - Fleet Metrics & Ping     |
-| - Auth & Session| | - Accounting  | | - PPPoE Secrets & Sessions |
-| - Audit Logs    | | - Billing/Pay | | - Simulator Fallback       |
-| - RBAC & Menus  | | - Inventory   | +----------------------------+
-| - Customers     | | - Procurement |
-| - Packages/Subs | | - Network/Ops |
-+-----------------+ +---------------+
++-----------------+--------------------------------+---------------+
+                  |                                |
+                  v                                v
++-----------------------------------+ +----------------------------+
+| Prisma ORM + PostgreSQL 16        | | MikroTik RouterOS Layer    |
+| - Auth, Sessions, RBAC & AuditLog | | - Fleet Metrics & Ping     |
+| - Customers, Packages & Subs      | | - PPPoE Secrets & Sessions |
+| - Billing, Payments & Accounting  | | - Simulator Fallback       |
+| - Inventory, Procurement & Ops    | +----------------------------+
+| - Network, Reports & Automation   |
++-----------------------------------+
 ```
 
 ---
@@ -59,8 +58,12 @@ The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)
 - **Brute-Force Defense & Account Lockout**: Sliding 15-minute attempt counter (5 failed attempts per IP + username) triggers rate limiting and locks existing accounts for **15 minutes** (`lockedUntil`), logging `ACCOUNT_LOCKED` to `AuditLog`.
 - **Timing-Safe Comparison**: Non-existent usernames run a dummy `bcrypt.compare` against `DUMMY_HASH` to mitigate username enumeration timing differences.
 
-### 3. Dynamic RBAC, Permissions Matrix & Feature Registry (`/settings/roles`)
-NSMISP replaces static hardcoded role checks with a database-synchronized modular registry (`server/src/rbac/registry/`):
+### 3. Dynamic RBAC, Permissions Matrix, Per-User Overrides & Feature Registry (`/settings/roles`)
+NSMISP replaces static hardcoded role checks with a database-synchronized modular registry (`server/src/rbac/registry/`) and three-layer authorization model:
+
+```text
+Effective Permissions = (Union of Assigned Role Permissions ∪ User GRANTs) \ User DENYs
+```
 
 - **Registry Modules (`server/src/rbac/registry/`)**:
   - Domain definitions for `dashboard`, `customers`, `packages`, `network`, `billing`, `accounting`, `inventory`, `procurement`, `operations`, `reports`, `automation`, `portal`, `messages`, `integrations`, `settings`, and `users-roles`.
@@ -68,21 +71,36 @@ NSMISP replaces static hardcoded role checks with a database-synchronized modula
     - **5 System Roles (`isSystem: true`)**: `SUPER_ADMIN`, `NETWORK_ENGINEER`, `BILLING_CASHIER`, `FIELD_TECHNICIAN`, `SUPPORT_AGENT`.
     - **7 Predefined Custom-Editable Roles (`isSystem: false`)**: `ACCOUNTANT`, `ADMINISTRATOR`, `CASHIER`, `TECHNICIAN`, `SALES_STAFF`, `WAREHOUSE_MANAGER`, `PROCUREMENT_OFFICER`.
   - Custom roles can also be created, duplicated, renamed, and deleted from the UI.
+- **Per-User Permission Overrides (`UserPermission`: `INHERIT` / `GRANT` / `DENY`)**:
+  - When two staff members share the same role (for example, two `FIELD_TECHNICIAN` or `BILLING_CASHIER` users), an admin can customize permissions for **just one user** without altering the shared role.
+  - Each permission per user has 3 states:
+    - **Inherit** *(no row in `UserPermission`)*: uses the user's assigned role(s).
+    - **Grant** *(`effect = GRANT`)*: grants that extra permission only to this user (prerequisite `view` permissions are auto-granted when needed).
+    - **Deny** *(`effect = DENY`)*: blocks a permission for this user even if their role includes it (`DENY` wins over role grants; dependent actions cascade when a parent `view` is denied).
+  - **Safeguards**: `SUPER_ADMIN` accounts always retain full `*` access and reject restriction overrides, and admins cannot deny `roles.manage` on their own account.
+- **Menus & Features (`Feature` & `FeaturePermission`)**:
+  - Controls which sidebar links, pages, tabs, action buttons, and API endpoints require which permissions:
+    - **`MENU`** *(blue)*: Top-level sidebar navigation entries (`/dashboard`, `/customers`) rendered by `Sidebar.tsx` via `GET /api/v1/auth/navigation`.
+    - **`PAGE`** *(green)*: Route/page access and submenu items guarded by `<RequirePermission feature="...">` and backend `requireFeature(...)`.
+    - **`TAB`** *(purple)*: Individual tabs inside pages/drawers (such as showing or hiding a subscriber's billing tab independently of overview).
+    - **`ACTION`** *(amber)*: Action buttons (`Create`, `Edit`, `Delete`) and corresponding write API endpoints.
+  - **Permission Mode (`ANY` / `ALL` / Public)**: Features with **no permissions attached** (`Public`) are accessible to any authenticated user; `ANY` grants access if the user has at least one listed permission, while `ALL` requires every listed permission.
+  - **Active & Sort Controls**: Turning a feature's **Active** switch off hides it in the UI and causes `requireFeature(...)` to return `404` for non-`SUPER_ADMIN` users; **Sort** controls sidebar order; **Locked** (`locked: true`, e.g. `page.roles`) protects critical admin screens from permission remapping or deactivation.
 - **Startup & Seed Synchronization (`RbacService.syncRegistry()` / `RbacService.seedRbac()`)**:
   - Runs automatically on server startup (`server/src/server.ts`) and during `npm run db:seed`.
   - Upserts `Permission` and `Feature` (`MENU`, `PAGE`, `TAB`, `ACTION`) records by `key`, marks removed code keys as `isActive: false` without deleting rows, and initializes default `FeaturePermission` links only when a feature is first created so admin edits are preserved.
 - **Backend Enforcement (`server/src/middleware/auth.middleware.ts`)**:
   - `authenticate`: Verifies Bearer JWT and loads current `UserRole` assignments from PostgreSQL.
-  - `authorize(...permissions)`: Checks effective role permissions (cached in-memory with a 30-second TTL, invalidated on role/permission updates).
-  - `requireFeature(featureKey)`: Evaluates database-backed `Feature` + `FeaturePermission` mappings (`ANY` vs `ALL` mode; features with zero mapped permissions are open to all authenticated users).
+  - `authorize(...permissions)`: Evaluates effective user permissions (`Roles ∪ User GRANTs \ User DENYs`, cached with a 30-second TTL and invalidated immediately on role, user-role, or user-permission updates).
+  - `requireFeature(featureKey)`: Evaluates database-backed `Feature` + `FeaturePermission` mappings (`ANY` vs `ALL` mode) against the user's effective permissions.
   - `requireRole(...roles)`: Enforces route-level role groups in `server/src/server.ts`.
 - **Frontend Enforcement & Navigation**:
-  - `GET /api/v1/auth/navigation` builds the dynamic sidebar tree (`Sidebar.tsx`) filtered by the user's effective permissions.
+  - `GET /api/v1/auth/navigation` builds the dynamic sidebar tree (`Sidebar.tsx`) filtered by the user's effective permissions (including per-user overrides).
   - `GET /api/v1/auth/me` returns effective `permissions` and `features` arrays.
   - `<ProtectedRoute>`, `<RequirePermission feature="...">`, `can()`, `useCan()`, and `<Can>` (`src/lib/permissions.ts`) guard pages and UI controls.
 - **Roles & Permissions UI (`/settings/roles`, `src/pages/RolesPage.tsx` -> `src/features/roles/RolesPage.tsx`)**:
   - **Permissions Tab (`PermissionsMatrix.tsx` / `MobileRoleView.tsx`)**: Sticky-column matrix, tri-state module checkboxes, dependency cascading (`src/features/roles/rolesUtils.ts`), keyboard navigation, Shift+click range selection, dirty counters, optimistic concurrency (`expectedUpdatedAt` returning `409 STALE_UPDATE`), and role management modals (`AddRoleModal`, `RenameRoleModal`).
-  - **Users Tab (`UsersTab.tsx`)**: Search/filter staff accounts and reassign roles with confirmation modal.
+  - **Users Tab (`UsersTab.tsx` + `UserPermissionsModal.tsx`)**: Search/filter staff accounts, reassign roles with confirmation, inspect custom override badges (`+Granted / -Denied`), and open the **Permissions** modal to configure per-user `Inherit / Grant / Deny` overrides without modifying the shared role.
   - **Menus & Features Tab (`FeaturesTab.tsx`)**: Hierarchical feature tree, multi-permission assignment, `ANY`/`ALL` mode toggle, active switch, sort reordering, locked anti-lockout protection (`page.roles`), and unassigned permission warnings.
 
 ---
@@ -114,9 +132,9 @@ isp-system-2/
 ├── tsconfig.node.json               # Vite/Node config TypeScript configuration
 ├── vite.config.ts                   # Vite dev server (:5173) + /api proxy -> 127.0.0.1:5000
 ├── prisma/
-│   ├── schema.prisma                # PostgreSQL schema (56 models)
+│   ├── schema.prisma                # PostgreSQL schema (57 models)
 │   ├── seed.ts                      # Database seed (Super Admin, demo staff, RBAC matrix)
-│   ├── migrations/                  # Prisma migration history (5 migrations)
+│   ├── migrations/                  # Prisma migration history (7 migrations)
 │   └── backups/                     # SQL backup dumps
 ├── scripts/
 │   ├── dev-all.mjs                  # Builds server, starts tsc -w, node --watch, and vite
@@ -135,8 +153,7 @@ isp-system-2/
 │   ├── src/
 │   │   ├── server.ts                # Express gateway, startup DB & RBAC sync, route mounts
 │   │   ├── db/
-│   │   │   ├── store.ts             # PrismaClient, initDatabaseConnection(), NsmispDataStore
-│   │   │   └── seedData.ts          # In-memory domain seed fixtures
+│   │   │   └── store.ts             # Shared PrismaClient, initDatabaseConnection(), logAudit()
 │   │   ├── docs/openapi.ts          # OpenAPI 3.0 specification
 │   │   ├── middleware/
 │   │   │   └── auth.middleware.ts   # authenticate, authorize, requireRole, requireFeature, validateBody
@@ -160,7 +177,7 @@ isp-system-2/
 │   ├── features/
 │   │   ├── customers/               # CustomersPage, CustomerTable, CustomerDetailDrawer, modals
 │   │   ├── inventory/               # ProductsPage, ProductModal, ProductLogModal, DeleteProductModal
-│   │   └── roles/                   # Flat roles feature: index.ts, RolesPage, PermissionsMatrix, MatrixHeader, MatrixCheckbox, UsersTab, FeaturesTab, MobileRoleView, modals, hooks, constants, rolesUtils.ts, rolesUtils.test.ts
+│   │   └── roles/                   # Flat roles feature: index.ts, RolesPage, PermissionsMatrix, MatrixHeader, MatrixCheckbox, UsersTab, UserPermissionsModal, FeaturesTab, MobileRoleView, modals, hooks, constants, rolesUtils.ts, rolesUtils.test.ts
 │   ├── lib/                         # api.ts, permissions.ts, motion.ts, queryClient.ts, utils.ts
 │   ├── pages/                       # 28 application & dev pages
 │   ├── store/                       # authStore.ts, useStore.ts
@@ -199,17 +216,10 @@ export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 });
 
-let isPostgresConnected = false;
-
 export async function initDatabaseConnection(): Promise<void> {
   await prisma.$connect();
   await prisma.$queryRaw`SELECT 1`;
-  isPostgresConnected = true;
   console.log('✓ Successfully connected to PostgreSQL via Prisma ORM');
-}
-
-export function isUsingPostgres(): boolean {
-  return isPostgresConnected;
 }
 ```
 
@@ -230,17 +240,15 @@ async function startServer() {
 
 - **PostgreSQL Required on Startup**: If PostgreSQL is offline or `DATABASE_URL` is invalid, `initDatabaseConnection()` throws and `startServer()` exits with code `1`.
 - **Runtime Database Error Mapping**: Express error middleware maps Prisma initialization/connection errors (`P1001`, `P1002`, `P1017`, `PrismaClientInitializationError`) to HTTP `503 Service temporarily unavailable`.
-- **Hybrid Storage Across Services**:
-  - **PostgreSQL via Prisma**: `auth.service.ts` (users, sessions, audit logs), `rbac.service.ts` (roles, permissions, features, role/feature/user mappings), `customer.service.ts` (customers, addresses, subscriptions, packages, activities), and `package.routes.ts` (packages).
-  - **In-Memory `dbStore` (`NsmispDataStore` in `server/src/db/store.ts`)**: `accounting.service.ts`, `automation.service.ts`, `billing.service.ts`, `inventory.service.ts`, `mikrotik.service.ts`, `network.service.ts`, `operations.service.ts`, `payment.service.ts`, `procurement.service.ts`, and `report.service.ts` currently read and mutate the seeded in-memory `dbStore` repository (and `auth.service.ts` mirrors audit log entries to `dbStore.logAudit(...)` as well as PostgreSQL).
+- **Full PostgreSQL Persistence**: All 13 backend services (`auth`, `rbac`, `customer`, `accounting`, `automation`, `billing`, `inventory`, `mikrotik`, `network`, `operations`, `payment`, `procurement`, and `report`) and audit logging (`logAudit`) read and mutate PostgreSQL directly through the shared `prisma` client without an in-memory fallback store.
 
 ### 3. Database Schema & Migrations (`prisma/schema.prisma`)
 
-The Prisma schema defines **56 models** across applied migrations (`20261123000000_init`, `20261123010000_auth_enhancements`, `20261123153906_session_family_id`, `20261124180000_rbac_permissions_matrix`, `20261124193500_features_and_permissions`, `20261125000000_rename_brand_to_nsmisp`):
+The Prisma schema defines **57 models** across applied migrations (`20261123000000_init`, `20261123010000_auth_enhancements`, `20261123153906_session_family_id`, `20261124180000_rbac_permissions_matrix`, `20261124193500_features_and_permissions`, `20261125000000_rename_brand_to_nsmisp`, `20261125150000_user_permission_overrides`):
 
 | Domain | Models |
 |---|---|
-| **Identity, RBAC & Features** | `User`, `Role`, `Permission`, `Feature`, `FeaturePermission`, `UserRole`, `RolePermission`, `Session`, `AuditLog` |
+| **Identity, RBAC & Features** | `User`, `Role`, `Permission`, `Feature`, `FeaturePermission`, `UserRole`, `RolePermission`, `UserPermission`, `Session`, `AuditLog` |
 | **CRM & Subscriptions** | `Customer`, `CustomerAddress`, `CustomerAttachment`, `CustomerActivity`, `Package`, `Subscription`, `SubscriptionHistory` |
 | **Network & Provisioning** | `Router`, `RouterMetric`, `NetworkDevice`, `PPPoEProfile`, `PPPoEAccount`, `PPPoESession`, `VLAN`, `IPPool`, `IPAddress`, `NetworkProvisionJob` |
 | **Billing & Payments** | `Invoice`, `InvoiceItem`, `Payment`, `PaymentAllocation`, `CreditNote` |
@@ -362,7 +370,7 @@ All API routes are mounted under `/api/v1` (with `/api/health` and OpenAPI docs 
 - `GET /api/v1/auth/me` – Authenticated user profile, roles, effective `permissions`, and `features`
 - `GET /api/v1/auth/navigation` – Dynamic sidebar menu tree for the authenticated user
 - `POST /api/v1/auth/forgot-password` / `POST /api/v1/auth/reset-password` / `POST /api/v1/auth/change-password`
-- `GET /api/v1/auth/users` / `POST /api/v1/auth/users` / `PATCH /api/v1/auth/users/:id/roles` *(requires `roles.manage`)*
+- `GET /api/v1/auth/users` / `POST /api/v1/auth/users` / `PATCH /api/v1/auth/users/:id/roles` / `GET /api/v1/auth/users/:id/permissions` / `PUT /api/v1/auth/users/:id/permissions` *(requires `roles.manage`)*
 - `GET /api/v1/auth/roles` / `POST /api/v1/auth/roles` / `PATCH /api/v1/auth/roles/:id` / `PUT /api/v1/auth/roles/:id/permissions` / `DELETE /api/v1/auth/roles/:id` / `POST /api/v1/auth/roles/:id/duplicate` *(requires `roles.manage`)*
 - `GET /api/v1/auth/features` / `POST /api/v1/auth/features` / `PATCH /api/v1/auth/features/:id` *(requires `roles.manage`)*
 - `GET /api/v1/auth/permissions` / `PATCH /api/v1/auth/permissions/:id` *(requires `roles.manage`)*
@@ -420,9 +428,9 @@ npm run test:backend       # server/test/nsmisp.test.mjs
 npm test                   # Runs test:unit, test:backend, and test:frontend-auth
 
 # Additional Node Test Suites
-node --test src/features/roles/rolesUtils.test.ts  # 6 matrix tri-state, dependency & diff tests
+node --test src/features/roles/rolesUtils.test.ts  # 7 matrix & per-user override unit tests
 node --test server/test/features-frontend.test.mjs # 8 permission & feature ANY/ALL mode tests
-node --test server/test/rbac.test.mjs              # 17 RBAC & requireFeature API/DB tests (requires built dist-server & PostgreSQL)
+node --test server/test/rbac.test.mjs              # 21 RBAC, feature & per-user override API/DB tests (requires built dist-server & PostgreSQL)
 
 # Playwright E2E Suite
 npm run test:pw            # Executes tests/*.spec.ts against http://127.0.0.1:5173

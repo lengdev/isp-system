@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { initDatabaseConnection, prisma } from './db/store.js';
 import { openApiSpec } from './docs/openapi.js';
-import { authenticate, requireRole } from './middleware/auth.middleware.js';
+import { authenticate, authorize } from './middleware/auth.middleware.js';
 import { RbacService } from './services/rbac.service.js';
 
 // Route imports
@@ -131,117 +131,106 @@ app.get('/api/docs', (_req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/portal', portalRoutes);
 
-// Protected routes with RBAC role authorization
+// Protected routes with dynamic RBAC permission & user-override authorization
 app.use(
   '/api/v1/billing',
   authenticate,
-  requireRole('SUPER_ADMIN', 'BILLING_CASHIER', 'CASHIER', 'ACCOUNTANT', 'ADMINISTRATOR'),
+  authorize('billing.view', 'billing.create', 'billing.edit', 'billing.delete', 'payments.view', 'payments.record', 'payments.khqr', 'payments.delete'),
   billingRoutes
 );
 app.use(
   '/api/v1/invoices',
   authenticate,
-  requireRole('SUPER_ADMIN', 'BILLING_CASHIER', 'CASHIER', 'ACCOUNTANT', 'ADMINISTRATOR'),
+  authorize('billing.view', 'billing.create', 'billing.edit', 'billing.delete', 'payments.view', 'payments.record', 'payments.khqr', 'payments.delete'),
   billingRoutes
 );
 app.use(
   '/api/v1/payments',
   authenticate,
-  requireRole('SUPER_ADMIN', 'BILLING_CASHIER', 'CASHIER', 'ACCOUNTANT', 'ADMINISTRATOR'),
+  authorize('payments.view', 'payments.record', 'payments.khqr', 'payments.delete', 'billing.view'),
   paymentRoutes
 );
 app.use(
   '/api/v1/network',
   authenticate,
-  requireRole('SUPER_ADMIN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
+  authorize('network.view', 'network.create', 'network.edit', 'network.delete', 'routers.manage', 'routers.reboot', 'pppoe.manage', 'vlans.manage', 'ipam.manage'),
   networkRoutes
 );
 app.use(
   '/api/v1/routers',
   authenticate,
-  requireRole('SUPER_ADMIN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
+  authorize('network.view', 'network.create', 'network.edit', 'network.delete', 'routers.manage', 'routers.reboot', 'pppoe.manage', 'vlans.manage', 'ipam.manage'),
   networkRoutes
 );
 app.use(
   '/api/v1/accounting',
   authenticate,
-  requireRole('SUPER_ADMIN', 'ACCOUNTANT', 'ADMINISTRATOR'),
+  authorize('accounting.view', 'accounting.create', 'accounting.edit', 'accounting.delete', 'accounting.reports'),
   accountingRoutes
 );
 app.use(
   '/api/v1/operations',
   authenticate,
-  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'NETWORK_ENGINEER', 'SUPPORT_AGENT', 'ADMINISTRATOR'),
+  authorize('operations.view', 'installations.manage', 'tickets.create', 'tickets.edit', 'tickets.delete', 'technicians.manage'),
   operationsRoutes
 );
 app.use(
   '/api/v1/installations',
   authenticate,
-  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
+  authorize('operations.view', 'installations.manage'),
   operationsRoutes
 );
 app.use(
   '/api/v1/technicians',
   authenticate,
-  requireRole('SUPER_ADMIN', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
+  authorize('operations.view', 'technicians.manage'),
   operationsRoutes
 );
 app.use(
   '/api/v1/inventory',
   authenticate,
-  requireRole('SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PROCUREMENT_OFFICER', 'FIELD_TECHNICIAN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
+  authorize('inventory.view', 'inventory.create', 'inventory.edit', 'inventory.delete', 'warehouses.manage'),
   inventoryRoutes
 );
 app.use(
   '/api/v1/purchasing',
   authenticate,
-  requireRole('SUPER_ADMIN', 'PROCUREMENT_OFFICER', 'WAREHOUSE_MANAGER', 'ADMINISTRATOR'),
+  authorize('procurement.view', 'procurement.create', 'procurement.edit', 'procurement.delete'),
   procurementRoutes
 );
 app.use(
   '/api/v1/customers',
   authenticate,
-  requireRole(
-    'SUPER_ADMIN',
-    'ADMINISTRATOR',
-    'SUPPORT_AGENT',
-    'SALES_STAFF',
-    'BILLING_CASHIER',
-    'CASHIER',
-    'NETWORK_ENGINEER',
-    'FIELD_TECHNICIAN',
-    'TECHNICIAN'
-  ),
   customerRoutes
 );
 app.use(
   '/api/v1/packages',
   authenticate,
-  requireRole('SUPER_ADMIN', 'ADMINISTRATOR', 'NETWORK_ENGINEER', 'SALES_STAFF'),
+  authorize('packages.view', 'packages.create', 'packages.edit', 'packages.delete', 'subscriptions.view', 'subscriptions.create', 'subscriptions.edit', 'subscriptions.delete', 'customers.view'),
   packageRoutes
 );
 app.use(
   '/api/v1/tickets',
   authenticate,
-  requireRole('SUPER_ADMIN', 'SUPPORT_AGENT', 'FIELD_TECHNICIAN', 'TECHNICIAN', 'NETWORK_ENGINEER', 'ADMINISTRATOR'),
+  authorize('operations.view', 'tickets.create', 'tickets.edit', 'tickets.delete'),
   operationsRoutes
 );
 app.use(
   '/api/v1/reports',
   authenticate,
-  requireRole('SUPER_ADMIN', 'ADMINISTRATOR', 'ACCOUNTANT', 'NETWORK_ENGINEER', 'BILLING_CASHIER'),
+  authorize('reports.view', 'reports.create', 'reports.export', 'accounting.reports'),
   reportsRoutes
 );
 app.use(
   '/api/v1/automation',
   authenticate,
-  requireRole('SUPER_ADMIN', 'ADMINISTRATOR', 'NETWORK_ENGINEER'),
+  authorize('automation.view', 'automation.create', 'automation.edit', 'automation.delete'),
   automationRoutes
 );
 app.use(
   '/api/v1/settings',
   authenticate,
-  requireRole('SUPER_ADMIN', 'ADMINISTRATOR'),
+  authorize('settings.view', 'settings.edit', 'audit.view', 'integrations.view', 'integrations.manage'),
   settingsRoutes
 );
 

@@ -5,14 +5,18 @@ import { MikroTikService } from '../services/mikrotik.service.js';
 const router = Router();
 
 // GET /api/v1/routers
-router.get('/routers', (_req, res) => {
-  res.json(NetworkService.listRouters());
+router.get('/routers', async (_req, res) => {
+  try {
+    res.json(await NetworkService.listRouters());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/v1/routers/:id/metrics
 router.get('/routers/:id/metrics', async (req, res) => {
   try {
-    const metrics = await MikroTikService.getRouterMetrics(req.params.id);
+    const metrics = await MikroTikService.getRouterMetrics(String(req.params.id));
     res.json(metrics);
   } catch (err: any) {
     res.status(404).json({ error: err.message });
@@ -22,7 +26,7 @@ router.get('/routers/:id/metrics', async (req, res) => {
 // POST /api/v1/routers/:id/test
 router.post('/routers/:id/test', async (req, res) => {
   try {
-    const test = await MikroTikService.testConnection(req.params.id);
+    const test = await MikroTikService.testConnection(String(req.params.id));
     res.json(test);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -32,7 +36,7 @@ router.post('/routers/:id/test', async (req, res) => {
 // POST /api/v1/routers/:id/reboot
 router.post('/routers/:id/reboot', async (req, res) => {
   try {
-    const result = await MikroTikService.rebootRouter(req.params.id);
+    const result = await MikroTikService.rebootRouter(String(req.params.id));
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -40,19 +44,27 @@ router.post('/routers/:id/reboot', async (req, res) => {
 });
 
 // GET /api/v1/network/pppoe
-router.get('/pppoe', (_req, res) => {
-  res.json(NetworkService.listPPPoEAccounts());
+router.get('/pppoe', async (_req, res) => {
+  try {
+    res.json(await NetworkService.listPPPoEAccounts());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/v1/network/vlans
-router.get('/vlans', (_req, res) => {
-  res.json(NetworkService.listVlans());
+router.get('/vlans', async (_req, res) => {
+  try {
+    res.json(await NetworkService.listVlans());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/network/vlans
-router.post('/vlans', (req, res) => {
+router.post('/vlans', async (req, res) => {
   try {
-    const vlan = NetworkService.createVlan(req.body);
+    const vlan = await NetworkService.createVlan(req.body);
     res.status(201).json(vlan);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -60,15 +72,19 @@ router.post('/vlans', (req, res) => {
 });
 
 // GET /api/v1/network/ipam/pools
-router.get('/ipam/pools', (_req, res) => {
-  res.json(NetworkService.listIpPools());
+router.get('/ipam/pools', async (_req, res) => {
+  try {
+    res.json(await NetworkService.listIpPools());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/v1/network/ipam/allocate
-router.post('/ipam/allocate', (req, res) => {
+router.post('/ipam/allocate', async (req, res) => {
   try {
     const { poolId, customerId, isStatic } = req.body;
-    const result = NetworkService.allocateIpAddress(poolId, customerId, isStatic);
+    const result = await NetworkService.allocateIpAddress(poolId, customerId, isStatic);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

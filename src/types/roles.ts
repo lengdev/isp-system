@@ -32,10 +32,37 @@ export interface UserWithRoles {
   role: string;
   roles: string[];
   roleIds: string[];
+  grants?: string[];
+  denies?: string[];
+  grantCount?: number;
+  denyCount?: number;
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserPermissionsDetailResponse {
+  user: {
+    id: string;
+    username: string;
+    fullName: string;
+    email: string;
+    role: string;
+    roles: string[];
+    roleIds: string[];
+    isSuperAdmin: boolean;
+  };
+  permissions: PermissionItem[];
+  rolePermissions: string[];
+  grants: string[];
+  denies: string[];
+  effectivePermissions: string[];
+}
+
+export interface UpdateUserPermissionsPayload {
+  grants: string[];
+  denies: string[];
 }
 
 export interface CreateRolePayload {

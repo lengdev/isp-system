@@ -14,6 +14,7 @@ import { Button } from '../../components/ui/Button';
 import { StatusTabs } from './StatusTabs';
 import { CustomerTable } from './CustomerTable';
 import { BulkActionBar } from './BulkActionBar';
+import { Can } from '../../lib/permissions';
 
 export const CustomersPage: React.FC = () => {
   const customers = useStore((s) => s.customers);
@@ -65,16 +66,18 @@ export const CustomersPage: React.FC = () => {
             <span className="hidden min-[480px]:inline">Refresh</span>
           </Button>
 
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => openModal('addEditCustomer')}
-            className="h-8 px-3 text-[12px] font-semibold gap-1.5 shrink-0"
-            title="Add New Customer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden min-[480px]:inline">Add New Customer</span>
-          </Button>
+          <Can feature="customers.btn.create">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => openModal('addEditCustomer')}
+              className="h-8 px-3 text-[12px] font-semibold gap-1.5 shrink-0"
+              title="Add New Customer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="hidden min-[480px]:inline">Add New Customer</span>
+            </Button>
+          </Can>
         </div>
       </div>
 

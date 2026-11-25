@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { prisma, dbStore } from '../db/store.js';
+import { prisma, logAudit } from '../db/store.js';
 import { RbacService } from './rbac.service.js';
 
 // Environment configurations
@@ -24,6 +24,23 @@ export interface TokenPayload {
   roleIds?: string[];
   fullName: string;
 }
+
+const VALID_USER_ROLE_ENUMS = new Set([
+  'SUPER_ADMIN',
+  'ADMINISTRATOR',
+  'MANAGER',
+  'ACCOUNTANT',
+  'CASHIER',
+  'BILLING_CASHIER',
+  'NETWORK_ENGINEER',
+  'TECHNICIAN',
+  'FIELD_TECHNICIAN',
+  'SUPPORT_AGENT',
+  'SALES_STAFF',
+  'WAREHOUSE_MANAGER',
+  'PROCUREMENT_OFFICER',
+  'CUSTOMER',
+]);
 
 // Role Permissions Mapping
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -184,23 +201,7 @@ export class AuthService {
     ip: string = '127.0.0.1',
     userId?: string | null
   ) {
-    try {
-      dbStore.logAudit(action, resource, resourceId, details, userIdentifier, ip);
-      await prisma.auditLog.create({
-        data: {
-          action,
-          resource,
-          resourceId: resourceId ? String(resourceId) : null,
-          details,
-          userEmail: userIdentifier,
-          userId: userId || null,
-          ipAddress: ip,
-          ip,
-        },
-      });
-    } catch (err: any) {
-      console.error('[AuditLog Error]:', err?.message || err);
-    }
+    await logAudit(action, resource, resourceId, details, userIdentifier, ip, userId);
   }
 
   /**
@@ -239,32 +240,7 @@ export class AuthService {
       throw new Error('Invalid username/email or password');
     }
 
-    // Sync memory user if test/dev environment
-    const memUser = dbStore.users.find(
-      (u) =>
-        u.email.toLowerCase() === user.email.toLowerCase() ||
-        u.username.toLowerCase() === user.username.toLowerCase()
-    );
-
-    // If memory user state was reset (e.g. by test runner), sync DB
-    if (memUser) {
-      if (memUser.lockedUntil === null && user.lockedUntil !== null) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lockedUntil: null, failedLoginAttempts: memUser.failedLoginAttempts || 0 },
-        });
-        user.lockedUntil = null;
-        user.failedLoginAttempts = memUser.failedLoginAttempts || 0;
-      } else if (memUser.failedLoginAttempts === 0 && user.failedLoginAttempts > 0 && !memUser.lockedUntil) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { failedLoginAttempts: 0 },
-        });
-        user.failedLoginAttempts = 0;
-      }
-    }
-
-    // Check if account is locked
+    // Check if account is locked in PostgreSQL
     if (user.lockedUntil) {
       const lockExpiry = new Date(user.lockedUntil).getTime();
       const now = Date.now();
@@ -278,15 +254,17 @@ export class AuthService {
           where: { id: user.id },
           data: { lockedUntil: null, failedLoginAttempts: 0 },
         });
-        if (memUser) {
-          memUser.lockedUntil = null;
-          memUser.failedLoginAttempts = 0;
-        }
+        user.lockedUntil = null;
+        user.failedLoginAttempts = 0;
       }
     }
 
-    // Compare password with bcrypt
+    // Compare password with bcrypt (accept both raw plaintext and client SHA-256 pre-hash)
     let isMatch = await bcrypt.compare(passwordPlain, user.passwordHash);
+    if (!isMatch && !/^[a-f0-9]{64}$/i.test(passwordPlain)) {
+      const sha256Password = crypto.createHash('sha256').update(passwordPlain).digest('hex');
+      isMatch = await bcrypt.compare(sha256Password, user.passwordHash);
+    }
 
     // Support client-side pre-hashed passwords or dev convenience passwords in non-production
     const isDev = process.env.NODE_ENV !== 'production';
@@ -310,8 +288,7 @@ export class AuthService {
 
     if (!isMatch) {
       recordFailedAttempt(attemptKey);
-      const currentAttempts = memUser?.failedLoginAttempts !== undefined ? memUser.failedLoginAttempts : (user.failedLoginAttempts || 0);
-      const newFailedAttempts = currentAttempts + 1;
+      const newFailedAttempts = (user.failedLoginAttempts || 0) + 1;
 
       if (newFailedAttempts >= 5) {
         const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
@@ -322,10 +299,6 @@ export class AuthService {
             lockedUntil: lockUntil,
           },
         });
-        if (memUser) {
-          memUser.failedLoginAttempts = newFailedAttempts;
-          memUser.lockedUntil = lockUntil.toISOString() as any;
-        }
         await this.logAudit('ACCOUNT_LOCKED', 'User', user.id, `User ${user.username} locked after 5 failed login attempts`, user.username, ip, user.id);
         throw new Error('Too many attempts. Account is locked for 15 minutes.');
       }
@@ -334,9 +307,6 @@ export class AuthService {
         where: { id: user.id },
         data: { failedLoginAttempts: newFailedAttempts },
       });
-      if (memUser) {
-        memUser.failedLoginAttempts = newFailedAttempts;
-      }
       await this.logAudit('LOGIN_FAILURE', 'User', user.id, `Bad password attempt for ${user.username} (${newFailedAttempts}/5)`, user.username, ip, user.id);
       throw new Error('Invalid username/email or password');
     }
@@ -351,10 +321,6 @@ export class AuthService {
         lastLoginAt: new Date(),
       },
     });
-    if (memUser) {
-      memUser.failedLoginAttempts = 0;
-      memUser.lockedUntil = null;
-    }
 
     // Fetch assigned roles from UserRole table
     const userRoleLinks = await prisma.userRole.findMany({
@@ -364,13 +330,14 @@ export class AuthService {
     const roleNames = userRoleLinks.map((ur) => ur.role.name);
     const roleIds = userRoleLinks.map((ur) => ur.role.id);
     const effectiveRoles = roleNames.length > 0 ? roleNames : [user.role];
+    const primaryRole = effectiveRoles[0] || user.role;
 
     // Issue JWT Access Token (15m)
     const payload: TokenPayload = {
       userId: user.id,
       username: user.username,
       email: user.email,
-      role: user.role,
+      role: primaryRole,
       roles: effectiveRoles,
       roleIds: roleIds,
       fullName: user.fullName,
@@ -421,7 +388,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         phone: user.phone,
-        role: user.role,
+        role: primaryRole,
         roles: effectiveRoles,
         roleIds: roleIds,
         permissions: Array.from(effectivePerms),
@@ -480,12 +447,21 @@ export class AuthService {
           Math.abs(new Date(activeSession.createdAt).getTime() - revokedAtMs) <= 1500
         ) {
           const user = activeSession.user;
+          const userRoleLinks = await prisma.userRole.findMany({
+            where: { userId: user.id },
+            include: { role: true },
+          });
+          const roleNames = userRoleLinks.map((ur) => ur.role.name);
+          const roleIds = userRoleLinks.map((ur) => ur.role.id);
+          const effectiveRoles = roleNames.length > 0 ? roleNames : [user.role];
+          const primaryRole = effectiveRoles[0] || user.role;
           const payload: TokenPayload = {
             userId: user.id,
             username: user.username,
             email: user.email,
-            role: user.role,
-            roles: [user.role],
+            role: primaryRole,
+            roles: effectiveRoles,
+            roleIds,
             fullName: user.fullName,
           };
           const newAccessToken = jwt.sign(payload, JWT_SECRET, {
@@ -493,6 +469,12 @@ export class AuthService {
             issuer: JWT_ISSUER,
             audience: JWT_AUDIENCE,
           });
+          const effectivePerms = await RbacService.getUserEffectivePermissions(
+            user.id,
+            roleIds.length > 0 ? roleIds : effectiveRoles
+          );
+          const features = await RbacService.getAllowedFeatureKeys(effectivePerms);
+
           return {
             token: newAccessToken,
             accessToken: newAccessToken,
@@ -503,9 +485,11 @@ export class AuthService {
               username: user.username,
               email: user.email,
               fullName: user.fullName,
-              role: user.role,
-              roles: [user.role],
-              permissions: await AuthService.getUserPermissions(user.role),
+              role: primaryRole,
+              roles: effectiveRoles,
+              roleIds,
+              permissions: Array.from(effectivePerms),
+              features,
               mustChangePassword: Boolean(user.mustChangePassword),
             },
           };
@@ -557,12 +541,22 @@ export class AuthService {
     const newHash = this.hashToken(newRawRefreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+    const userRoleLinks = await prisma.userRole.findMany({
+      where: { userId: user.id },
+      include: { role: true },
+    });
+    const roleNames = userRoleLinks.map((ur) => ur.role.name);
+    const roleIds = userRoleLinks.map((ur) => ur.role.id);
+    const effectiveRoles = roleNames.length > 0 ? roleNames : [user.role];
+    const primaryRole = effectiveRoles[0] || user.role;
+
     const payload: TokenPayload = {
       userId: user.id,
       username: user.username,
       email: user.email,
-      role: user.role,
-      roles: [user.role],
+      role: primaryRole,
+      roles: effectiveRoles,
+      roleIds,
       fullName: user.fullName,
     };
     const newAccessToken = jwt.sign(payload, JWT_SECRET, {
@@ -593,13 +587,6 @@ export class AuthService {
 
     await this.logAudit('TOKEN_REFRESH', 'User', user.id, `Rotated refresh token for ${user.username}`, user.username, ip, user.id);
 
-    const userRoleLinks = await prisma.userRole.findMany({
-      where: { userId: user.id },
-      include: { role: true },
-    });
-    const roleNames = userRoleLinks.map((ur) => ur.role.name);
-    const roleIds = userRoleLinks.map((ur) => ur.role.id);
-    const effectiveRoles = roleNames.length > 0 ? roleNames : [user.role];
     const effectivePerms = await RbacService.getUserEffectivePermissions(
       user.id,
       roleIds.length > 0 ? roleIds : effectiveRoles
@@ -616,7 +603,7 @@ export class AuthService {
         username: user.username,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
+        role: primaryRole,
         roles: effectiveRoles,
         roleIds: roleIds,
         permissions: Array.from(effectivePerms),
@@ -893,14 +880,15 @@ export class AuthService {
   }
 
   /**
-   * Create new user in PostgreSQL
+   * Create new user in PostgreSQL and link their RBAC role via UserRole
    */
   static async createUser(data: {
     username: string;
     email: string;
     password: string;
     fullName: string;
-    role: any;
+    role?: string;
+    roleId?: string;
     phone?: string;
   }) {
     const existing = await prisma.user.findFirst({
@@ -913,38 +901,70 @@ export class AuthService {
       throw new Error('Username or email already in use');
     }
 
-    const passwordHash = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
+    const roleInput = (data.roleId || data.role || '').trim();
+    if (!roleInput) {
+      throw new Error('Role is required');
+    }
 
-    const newUser = await prisma.user.create({
-      data: {
-        username: data.username,
-        email: data.email,
-        passwordHash,
-        fullName: data.fullName,
-        phone: data.phone || null,
-        role: data.role,
-        isActive: true,
-        failedLoginAttempts: 0,
-        mustChangePassword: false,
-      },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        fullName: true,
-        phone: true,
-        avatarUrl: true,
-        role: true,
-        isActive: true,
-        mustChangePassword: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
+    const dbRole = await prisma.role.findFirst({
+      where: {
+        OR: [{ id: roleInput }, { name: roleInput }],
       },
     });
 
-    await this.logAudit('CREATE_USER', 'User', newUser.id, `Created user ${newUser.username} (${newUser.role})`);
+    if (!dbRole) {
+      throw new Error(`Role "${roleInput}" not found`);
+    }
 
-    return newUser;
+    const legacyEnumRole = (VALID_USER_ROLE_ENUMS.has(dbRole.name) ? dbRole.name : 'SALES_STAFF') as any;
+    const passwordHash = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
+
+    const newUser = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          username: data.username,
+          email: data.email,
+          passwordHash,
+          fullName: data.fullName,
+          phone: data.phone || null,
+          role: legacyEnumRole,
+          isActive: true,
+          failedLoginAttempts: 0,
+          mustChangePassword: false,
+        },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          fullName: true,
+          phone: true,
+          avatarUrl: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      await tx.userRole.create({
+        data: {
+          userId: created.id,
+          roleId: dbRole.id,
+        },
+      });
+
+      return created;
+    });
+
+    await this.logAudit('CREATE_USER', 'User', newUser.id, `Created user ${newUser.username} (${dbRole.name})`);
+
+    return {
+      ...newUser,
+      role: dbRole.name,
+      roles: [dbRole.name],
+      roleIds: [dbRole.id],
+    };
   }
 }

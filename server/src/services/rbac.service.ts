@@ -1,4 +1,4 @@
-import { prisma, dbStore } from '../db/store.js';
+import { prisma } from '../db/store.js';
 import { AuthService } from './auth.service.js';
 import {
   ALL_REGISTRY_PERMISSIONS,
@@ -45,6 +45,13 @@ interface CacheEntry {
 }
 const rolePermissionsCache = new Map<string, CacheEntry>();
 
+interface UserOverrideCacheEntry {
+  grants: string[];
+  denies: string[];
+  timestamp: number;
+}
+const userOverridesCache = new Map<string, UserOverrideCacheEntry>();
+
 interface FeatureCacheEntry {
   feature: {
     id: string;
@@ -73,9 +80,22 @@ export class RbacService {
   static invalidateCache(roleIdentifier?: string) {
     if (roleIdentifier) {
       rolePermissionsCache.delete(roleIdentifier);
+      userOverridesCache.clear();
     } else {
       rolePermissionsCache.clear();
+      userOverridesCache.clear();
       this.invalidateFeatureCache();
+    }
+  }
+
+  /**
+   * Invalidate cached per-user permission overrides
+   */
+  static invalidateUserCache(userId?: string) {
+    if (userId) {
+      userOverridesCache.delete(userId);
+    } else {
+      userOverridesCache.clear();
     }
   }
 
@@ -406,7 +426,37 @@ export class RbacService {
   }
 
   /**
-   * Get user's effective permissions: Set union of permissions from all assigned roles.
+   * Load per-user GRANT / DENY permission overrides (30s TTL cache)
+   */
+  static async getUserPermissionOverrides(userId: string): Promise<{ grants: string[]; denies: string[] }> {
+    const cached = userOverridesCache.get(userId);
+    const now = Date.now();
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      return { grants: [...cached.grants], denies: [...cached.denies] };
+    }
+
+    const rows = await prisma.userPermission.findMany({
+      where: { userId },
+      include: { permission: { select: { key: true, isActive: true } } },
+    });
+
+    const grants: string[] = [];
+    const denies: string[] = [];
+    for (const row of rows) {
+      if (!row.permission.isActive) continue;
+      if (row.effect === 'DENY') {
+        denies.push(row.permission.key);
+      } else {
+        grants.push(row.permission.key);
+      }
+    }
+
+    userOverridesCache.set(userId, { grants, denies, timestamp: now });
+    return { grants: [...grants], denies: [...denies] };
+  }
+
+  /**
+   * Get user's effective permissions: (role union ∪ user GRANTs) \ user DENYs.
    */
   static async getUserEffectivePermissions(userId: string, roleIdsOrNames: string[]): Promise<Set<string>> {
     const effective = new Set<string>();
@@ -427,6 +477,14 @@ export class RbacService {
       for (const p of perms) {
         effective.add(p);
       }
+    }
+
+    const { grants, denies } = await this.getUserPermissionOverrides(userId);
+    for (const g of grants) {
+      effective.add(g);
+    }
+    for (const d of denies) {
+      effective.delete(d);
     }
 
     return effective;
@@ -962,6 +1020,13 @@ export class RbacService {
             },
           },
         },
+        userPermissions: {
+          include: {
+            permission: {
+              select: { key: true, isActive: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -969,6 +1034,12 @@ export class RbacService {
     return users.map((u) => {
       const assignedRoles = u.userRoles.map((ur) => ur.role.name);
       const primaryRole = assignedRoles[0] || u.role;
+      const grants = u.userPermissions
+        .filter((up) => up.permission.isActive && up.effect === 'GRANT')
+        .map((up) => up.permission.key);
+      const denies = u.userPermissions
+        .filter((up) => up.permission.isActive && up.effect === 'DENY')
+        .map((up) => up.permission.key);
       return {
         id: u.id,
         username: u.username,
@@ -979,6 +1050,10 @@ export class RbacService {
         role: primaryRole,
         roles: assignedRoles.length > 0 ? assignedRoles : [u.role],
         roleIds: u.userRoles.map((ur) => ur.role.id),
+        grants,
+        denies,
+        grantCount: grants.length,
+        denyCount: denies.length,
         isActive: u.isActive,
         lastLoginAt: u.lastLoginAt?.toISOString() || null,
         createdAt: u.createdAt.toISOString(),
@@ -1118,6 +1193,209 @@ export class RbacService {
       username: targetUser.username,
       roles: targetRoles.map((r) => r.name),
     };
+  }
+
+  /**
+   * GET /users/:id/permissions - Returns role baseline permissions, per-user GRANT/DENY overrides, and effective permissions
+   */
+  static async getUserPermissionsDetail(targetUserId: string) {
+    const [targetUser, permissions] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          email: true,
+          role: true,
+          userRoles: {
+            include: {
+              role: { select: { id: true, name: true } },
+            },
+          },
+          userPermissions: {
+            include: {
+              permission: { select: { key: true, isActive: true } },
+            },
+          },
+        },
+      }),
+      prisma.permission.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { key: 'asc' }],
+      }),
+    ]);
+
+    if (!targetUser) {
+      const err: any = new Error('User not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const roleNames = targetUser.userRoles.map((ur) => ur.role.name);
+    const roleIds = targetUser.userRoles.map((ur) => ur.role.id);
+    const effectiveRoles = roleNames.length > 0 ? roleNames : [targetUser.role];
+    const isSuperAdmin = effectiveRoles.includes('SUPER_ADMIN') || targetUser.role === 'SUPER_ADMIN';
+
+    const rolePermSet = new Set<string>();
+    if (isSuperAdmin) {
+      for (const p of permissions) rolePermSet.add(p.key);
+    } else {
+      const identifiers = roleIds.length > 0 ? roleIds : effectiveRoles;
+      for (const roleIdentifier of identifiers) {
+        const perms = await this.getRolePermissions(roleIdentifier);
+        if (perms.has('*')) {
+          for (const p of permissions) rolePermSet.add(p.key);
+          break;
+        }
+        for (const key of perms) rolePermSet.add(key);
+      }
+    }
+
+    const grants = targetUser.userPermissions
+      .filter((up) => up.permission.isActive && up.effect === 'GRANT')
+      .map((up) => up.permission.key);
+    const denies = targetUser.userPermissions
+      .filter((up) => up.permission.isActive && up.effect === 'DENY')
+      .map((up) => up.permission.key);
+
+    const effectiveSet = new Set<string>(rolePermSet);
+    if (!isSuperAdmin) {
+      for (const g of grants) effectiveSet.add(g);
+      for (const d of denies) effectiveSet.delete(d);
+    }
+
+    return {
+      user: {
+        id: targetUser.id,
+        username: targetUser.username,
+        fullName: targetUser.fullName,
+        email: targetUser.email,
+        role: effectiveRoles[0] || targetUser.role,
+        roles: effectiveRoles,
+        roleIds,
+        isSuperAdmin,
+      },
+      permissions: permissions.map((p) => ({
+        id: p.id,
+        key: p.key,
+        group: p.group,
+        label: p.label,
+        description: p.description,
+        sortOrder: p.sortOrder,
+      })),
+      rolePermissions: Array.from(rolePermSet),
+      grants,
+      denies,
+      effectivePermissions: Array.from(effectiveSet),
+    };
+  }
+
+  /**
+   * PUT /users/:id/permissions - Replace per-user GRANT/DENY permission overrides
+   */
+  static async updateUserPermissions(
+    targetUserId: string,
+    body: { grants?: string[]; denies?: string[] },
+    actor: { id: string; username: string; ip: string }
+  ) {
+    const grants = Array.from(new Set((body.grants || []).filter(Boolean)));
+    const denies = Array.from(new Set((body.denies || []).filter(Boolean)));
+
+    const grantSet = new Set(grants);
+    const conflicts = denies.filter((k) => grantSet.has(k));
+    if (conflicts.length > 0) {
+      const err: any = new Error(`Permissions cannot be both granted and denied: ${conflicts.join(', ')}`);
+      err.status = 400;
+      throw err;
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        userRoles: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
+      },
+    });
+
+    if (!targetUser) {
+      const err: any = new Error('User not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const isSuperAdmin =
+      targetUser.role === 'SUPER_ADMIN' ||
+      targetUser.userRoles.some((ur) => ur.role.name === 'SUPER_ADMIN');
+    if (isSuperAdmin && (grants.length > 0 || denies.length > 0)) {
+      const err: any = new Error('SUPER_ADMIN users always retain full system permissions and cannot use per-user overrides.');
+      err.status = 400;
+      throw err;
+    }
+
+    if (actor.id === targetUserId && denies.includes('roles.manage')) {
+      const err: any = new Error('You cannot deny roles.manage on your own account.');
+      err.status = 400;
+      throw err;
+    }
+
+    const allKeys = [...grants, ...denies];
+    const dbPerms = allKeys.length > 0
+      ? await prisma.permission.findMany({ where: { key: { in: allKeys } } })
+      : [];
+    const permIdByKey = new Map(dbPerms.map((p) => [p.key, p.id]));
+    const unknownKeys = allKeys.filter((k) => !permIdByKey.has(k));
+    if (unknownKeys.length > 0) {
+      const err: any = new Error(`Unknown permission key(s): ${unknownKeys.join(', ')}`);
+      err.status = 400;
+      throw err;
+    }
+
+    const before = {
+      grants: targetUser.userPermissions.filter((up) => up.effect === 'GRANT').map((up) => up.permission.key),
+      denies: targetUser.userPermissions.filter((up) => up.effect === 'DENY').map((up) => up.permission.key),
+    };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.userPermission.deleteMany({
+        where: { userId: targetUserId },
+      });
+
+      const rowsToInsert = [
+        ...grants.map((key) => ({
+          userId: targetUserId,
+          permissionId: permIdByKey.get(key)!,
+          effect: 'GRANT' as const,
+        })),
+        ...denies.map((key) => ({
+          userId: targetUserId,
+          permissionId: permIdByKey.get(key)!,
+          effect: 'DENY' as const,
+        })),
+      ];
+
+      if (rowsToInsert.length > 0) {
+        await tx.userPermission.createMany({ data: rowsToInsert });
+      }
+    });
+
+    this.invalidateUserCache(targetUserId);
+
+    await AuthService.logAudit(
+      'USER_PERMISSION_UPDATE',
+      'User',
+      targetUserId,
+      JSON.stringify({
+        username: targetUser.username,
+        before,
+        after: { grants, denies },
+      }),
+      actor.username,
+      actor.ip,
+      actor.id
+    );
+
+    return await this.getUserPermissionsDetail(targetUserId);
   }
 
   /**

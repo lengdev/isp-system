@@ -5,6 +5,8 @@ import {
   applyDependencyRules,
   computeDirtyDiff,
   countChangedCells,
+  computeUserEffectivePermissions,
+  applyUserOverrideMode,
 } from './rolesUtils.ts';
 
 test('--- RBAC MATRIX UNIT TESTS ---', async (t) => {
@@ -103,5 +105,52 @@ test('--- RBAC MATRIX UNIT TESTS ---', async (t) => {
     assert.strictEqual(diffs[0].expectedUpdatedAt, '2026-11-24T10:00:00.000Z');
 
     assert.strictEqual(countChangedCells(initialMatrix, modifiedMatrix), 2);
+  });
+
+  await t.test('6. computeUserEffectivePermissions & applyUserOverrideMode: GRANT/DENY overrides isolate per-user access', () => {
+    const roleBaseline = new Set(['customers.view', 'tickets.view']);
+
+    // Granting customers.create when customers.view is already in role only adds customers.create
+    const grantAction = applyUserOverrideMode(
+      roleBaseline,
+      new Set(),
+      new Set(),
+      'customers.create',
+      'GRANT'
+    );
+    assert.strictEqual(grantAction.grants.has('customers.create'), true);
+    assert.strictEqual(grantAction.grants.has('customers.view'), false);
+
+    // Denying a role-granted view permission blocks dependent action grants as well
+    const denyView = applyUserOverrideMode(
+      roleBaseline,
+      grantAction.grants,
+      grantAction.denies,
+      'customers.view',
+      'DENY'
+    );
+    assert.strictEqual(denyView.denies.has('customers.view'), true);
+    assert.strictEqual(denyView.grants.has('customers.create'), false);
+
+    // Granting billing.create without billing.view auto-grants billing.view prerequisite
+    const grantMissingParent = applyUserOverrideMode(
+      roleBaseline,
+      new Set(),
+      new Set(),
+      'billing.create',
+      'GRANT'
+    );
+    assert.strictEqual(grantMissingParent.grants.has('billing.create'), true);
+    assert.strictEqual(grantMissingParent.grants.has('billing.view'), true);
+
+    const effective = computeUserEffectivePermissions(
+      roleBaseline,
+      grantMissingParent.grants,
+      new Set(['tickets.view'])
+    );
+    assert.strictEqual(effective.has('customers.view'), true);
+    assert.strictEqual(effective.has('billing.view'), true);
+    assert.strictEqual(effective.has('billing.create'), true);
+    assert.strictEqual(effective.has('tickets.view'), false);
   });
 });

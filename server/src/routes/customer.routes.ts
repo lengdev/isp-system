@@ -56,11 +56,11 @@ router.delete('/:id', authenticate, requireFeature('customers.btn.delete'), asyn
 });
 
 // POST /api/v1/customers/:id/status
-router.post('/:id/status', async (req, res) => {
+router.post('/:id/status', authenticate, requireFeature('customers.btn.edit'), async (req, res) => {
   try {
     const { status, reason } = req.body;
     if (!status) return res.status(400).json({ error: 'Status is required' });
-    const result = await CustomerService.setStatus(req.params.id, status, reason);
+    const result = await CustomerService.setStatus(String(req.params.id), status, reason);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -68,9 +68,9 @@ router.post('/:id/status', async (req, res) => {
 });
 
 // POST /api/v1/customers/:id/speedtest
-router.post('/:id/speedtest', async (req, res) => {
+router.post('/:id/speedtest', authenticate, requireFeature('page.customers'), async (req, res) => {
   try {
-    const result = await CustomerService.runSpeedTest(req.params.id);
+    const result = await CustomerService.runSpeedTest(String(req.params.id));
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
