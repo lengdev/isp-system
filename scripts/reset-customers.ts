@@ -10,13 +10,18 @@
  */
 
 import dotenv from 'dotenv';
+import { pathToFileURL } from 'node:url';
 import { Prisma, PrismaClient } from '@prisma/client';
 
 dotenv.config();
 
 const ALLOWED_DEV_DBS = new Set(['nsmisp', 'nsmisp_dev', 'netpulse']);
 
-function assertDevSafety(): { dbName: string; host: string; port: string } {
+export function assertDevDbSafety(requireConfirm: boolean = true): {
+  dbName: string;
+  host: string;
+  port: string;
+} {
   if (process.env.NODE_ENV === 'production') {
     console.error('REFUSED: NODE_ENV is "production". Customer reset is strictly dev-only.');
     process.exit(1);
@@ -44,7 +49,7 @@ function assertDevSafety(): { dbName: string; host: string; port: string } {
     process.exit(1);
   }
 
-  if (!process.argv.includes('--confirm')) {
+  if (requireConfirm && !process.argv.includes('--confirm')) {
     console.error(
       'REFUSED: Destructive operation requires explicit --confirm flag.\n' +
         'Run: npm run db:reset:customers -- --confirm'
@@ -229,25 +234,20 @@ function printComparisonTable(
   console.table(rows);
 }
 
-async function main() {
-  const target = assertDevSafety();
-  console.log(`Target DB: ${target.host}:${target.port}/${target.dbName} (DEV mode verified)`);
+export async function resetCustomersDatabase(
+  prisma: PrismaClient,
+  opts: { quiet?: boolean } = {}
+) {
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const before = await collectCounts(tx);
+      const ledgerBefore = await computeLedgerTotals(tx);
 
-  const prisma = new PrismaClient({
-    log: ['error', 'warn'],
-  });
-
-  try {
-    const result = await prisma.$transaction(
-      async (tx) => {
-        const before = await collectCounts(tx);
-        const ledgerBefore = await computeLedgerTotals(tx);
-
-        if (Math.abs(ledgerBefore.totalDebit - ledgerBefore.totalCredit) > 0.01) {
-          throw new Error(
-            `ABORTED: Pre-reset ledger is already unbalanced (debit=${ledgerBefore.totalDebit}, credit=${ledgerBefore.totalCredit}).`
-          );
-        }
+      if (Math.abs(ledgerBefore.totalDebit - ledgerBefore.totalCredit) > 0.01) {
+        throw new Error(
+          `ABORTED: Pre-reset ledger is already unbalanced (debit=${ledgerBefore.totalDebit}, credit=${ledgerBefore.totalCredit}).`
+        );
+      }
 
         // Gather customer-linked billing/payment/installation source references for GL cleanup
         const [customerRows, invoiceRows, paymentRows, installationRows, creditNoteRows] =
@@ -475,26 +475,44 @@ async function main() {
       { timeout: 60000 }
     );
 
-    printComparisonTable('Customer-Owned Tables (Reset)', result.before.customerOwned, result.after.customerOwned);
-    printComparisonTable('Kept Infrastructure & Catalog Tables', result.before.kept, result.after.kept);
+    if (!opts.quiet) {
+      printComparisonTable('Customer-Owned Tables (Reset)', result.before.customerOwned, result.after.customerOwned);
+      printComparisonTable('Kept Infrastructure & Catalog Tables', result.before.kept, result.after.kept);
 
-    console.log('\n=== Ledger & Sequences Summary ===');
-    console.log(
-      `Customer journal entries removed: ${result.removedJournalCount} (app-generated CUST-XXXX codes auto-start at CUST-1001; DB sequences reset: ${result.resetSequenceCount})`
-    );
-    console.log(
-      `Ledger before: sumDebit=${result.ledgerBefore.totalDebit.toFixed(2)}, sumCredit=${result.ledgerBefore.totalCredit.toFixed(2)}, trialBalance=(${result.ledgerBefore.tbDebit.toFixed(2)} == ${result.ledgerBefore.tbCredit.toFixed(2)})`
-    );
-    console.log(
-      `Ledger after:  sumDebit=${result.ledgerAfter.totalDebit.toFixed(2)}, sumCredit=${result.ledgerAfter.totalCredit.toFixed(2)}, trialBalance=(${result.ledgerAfter.tbDebit.toFixed(2)} == ${result.ledgerAfter.tbCredit.toFixed(2)})`
-    );
-    console.log('\n✓ Customer reset complete and verified.');
+      console.log('\n=== Ledger & Sequences Summary ===');
+      console.log(
+        `Customer journal entries removed: ${result.removedJournalCount} (app-generated CUST-XXXX codes auto-start at CUST-1001; DB sequences reset: ${result.resetSequenceCount})`
+      );
+      console.log(
+        `Ledger before: sumDebit=${result.ledgerBefore.totalDebit.toFixed(2)}, sumCredit=${result.ledgerBefore.totalCredit.toFixed(2)}, trialBalance=(${result.ledgerBefore.tbDebit.toFixed(2)} == ${result.ledgerBefore.tbCredit.toFixed(2)})`
+      );
+      console.log(
+        `Ledger after:  sumDebit=${result.ledgerAfter.totalDebit.toFixed(2)}, sumCredit=${result.ledgerAfter.totalCredit.toFixed(2)}, trialBalance=(${result.ledgerAfter.tbDebit.toFixed(2)} == ${result.ledgerAfter.tbCredit.toFixed(2)})`
+      );
+      console.log('\n✓ Customer reset complete and verified.');
+    }
+
+    return result;
+}
+
+async function main() {
+  const target = assertDevDbSafety(true);
+  console.log(`Target DB: ${target.host}:${target.port}/${target.dbName} (DEV mode verified)`);
+
+  const prisma = new PrismaClient({
+    log: ['error', 'warn'],
+  });
+
+  try {
+    await resetCustomersDatabase(prisma);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main().catch((err) => {
-  console.error('\n✗ Customer reset failed:', err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error('\n✗ Customer reset failed:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
