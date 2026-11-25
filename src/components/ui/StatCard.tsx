@@ -49,37 +49,78 @@ export const StatCard: React.FC<StatCardProps> = ({
   const navigate = useNavigate();
   const addToast = useStore((s) => s.addToast);
 
-  // Animated count-up simulation for numbers
+  // Animated count-up simulation for numbers (cleanup-safe, handles 0 cleanly)
   const [displayValue, setDisplayValue] = useState<string | number>(value);
+  const manualTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevNumericRef = React.useRef<number>(typeof value === 'number' ? value : 0);
 
-  const runAnimation = () => {
-    if (typeof value === 'number') {
-      let start = 0;
-      const end = value;
-      const duration = 400;
-      const steps = 16;
-      const stepTime = duration / steps;
-      const increment = (end - start) / steps;
-
-      const timer = setInterval(() => {
-        start += increment;
-        if ((increment > 0 && start >= end) || (increment < 0 && start <= end)) {
-          setDisplayValue(end);
-          clearInterval(timer);
-        } else {
-          setDisplayValue(Math.floor(start));
-        }
-      }, stepTime);
-
-      return () => clearInterval(timer);
-    } else {
-      setDisplayValue(value);
+  const clearManualTimer = () => {
+    if (manualTimerRef.current) {
+      clearInterval(manualTimerRef.current);
+      manualTimerRef.current = null;
     }
   };
 
+  const animateCount = (from: number, to: number, assignTimer?: (t: ReturnType<typeof setInterval>) => void) => {
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReduced || from === to || to === 0) {
+      setDisplayValue(to);
+      return () => {};
+    }
+
+    let current = from;
+    const duration = 360;
+    const steps = 15;
+    const stepTime = duration / steps;
+    const increment = (to - from) / steps;
+    let tick = 0;
+
+    const timer = setInterval(() => {
+      tick += 1;
+      current += increment;
+      if (
+        tick >= steps ||
+        (increment > 0 && current >= to) ||
+        (increment < 0 && current <= to)
+      ) {
+        setDisplayValue(to);
+        clearInterval(timer);
+      } else {
+        setDisplayValue(Math.round(current));
+      }
+    }, stepTime);
+
+    assignTimer?.(timer);
+    return () => clearInterval(timer);
+  };
+
+  const runAnimation = () => {
+    clearManualTimer();
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return animateCount(0, value, (t) => {
+        manualTimerRef.current = t;
+      });
+    }
+    setDisplayValue(value);
+    return () => {};
+  };
+
   useEffect(() => {
-    runAnimation();
+    clearManualTimer();
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      setDisplayValue(value);
+      return;
+    }
+    const startFrom = prevNumericRef.current;
+    prevNumericRef.current = value;
+    return animateCount(startFrom, value);
   }, [value]);
+
+  useEffect(() => clearManualTimer, []);
 
   const formattedDisplay = () => {
     if (typeof displayValue === 'number') {

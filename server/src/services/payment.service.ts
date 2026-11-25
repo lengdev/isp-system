@@ -37,6 +37,22 @@ async function nextPaymentNumber(tx: Prisma.TransactionClient): Promise<{ paymen
 }
 
 export class PaymentService {
+  private static formatPaymentRecord(p: any) {
+    return {
+      ...p,
+      amount: Number(p.amount),
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+      customerName: p.customer?.nameEn || p.customer?.nameKm || p.customer?.fullName || 'Customer',
+      customerCode: p.customer?.code || '',
+      allocations: (p.allocations || []).map((al: any) => ({
+        invoiceId: al.invoiceId,
+        invoiceNumber: al.invoice.invoiceNumber,
+        allocatedAmount: Number(al.amount),
+      })),
+    };
+  }
+
   // 1. List Payments
   static async listPayments(customerId?: string) {
     const payments = await prisma.payment.findMany({
@@ -48,19 +64,99 @@ export class PaymentService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return payments.map((p) => ({
-      ...p,
-      amount: Number(p.amount),
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString(),
-      customerName: p.customer?.fullName || 'Customer',
-      customerCode: p.customer?.code || '',
-      allocations: p.allocations.map((al) => ({
-        invoiceId: al.invoiceId,
-        invoiceNumber: al.invoice.invoiceNumber,
-        allocatedAmount: Number(al.amount),
-      })),
-    }));
+    return payments.map(PaymentService.formatPaymentRecord);
+  }
+
+  static async listPaymentsPaged(filters: {
+    customerId?: string;
+    page?: number | string;
+    limit?: number | string;
+    search?: string;
+    method?: string;
+    paymentNumber?: string;
+    customerName?: string;
+    sortBy?: string;
+    sortDir?: string;
+  } = {}) {
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filters.limit) || 25));
+    const skip = (page - 1) * limit;
+
+    const andClauses: Prisma.PaymentWhereInput[] = [];
+    if (filters.customerId) andClauses.push({ customerId: filters.customerId });
+
+    if (filters.method) {
+      const methods = String(filters.method)
+        .split(',')
+        .map((m) => m.trim().toUpperCase())
+        .filter((m) => ['CASH', 'BANK_TRANSFER', 'KHQR_BAKONG', 'GATEWAY_ONLINE'].includes(m));
+      if (methods.length > 0) {
+        andClauses.push({ method: { in: methods as any[] } });
+      }
+    }
+
+    if (filters.paymentNumber) {
+      andClauses.push({ paymentNumber: { contains: filters.paymentNumber.trim(), mode: 'insensitive' } });
+    }
+    if (filters.customerName) {
+      const cn = filters.customerName.trim().normalize('NFC');
+      andClauses.push({
+        customer: {
+          OR: [
+            { fullName: { contains: cn, mode: 'insensitive' } },
+            { nameEn: { contains: cn, mode: 'insensitive' } },
+            { nameKm: { contains: cn, mode: 'insensitive' } },
+            { code: { contains: cn, mode: 'insensitive' } },
+          ],
+        },
+      });
+    }
+
+    if (filters.search) {
+      const q = filters.search.trim().normalize('NFC');
+      andClauses.push({
+        OR: [
+          { paymentNumber: { contains: q, mode: 'insensitive' } },
+          { transactionRef: { contains: q, mode: 'insensitive' } },
+          { customer: { fullName: { contains: q, mode: 'insensitive' } } },
+          { customer: { nameEn: { contains: q, mode: 'insensitive' } } },
+          { customer: { nameKm: { contains: q, mode: 'insensitive' } } },
+          { customer: { code: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    const where: Prisma.PaymentWhereInput = andClauses.length > 0 ? { AND: andClauses } : {};
+    const sortDir = filters.sortDir === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.PaymentOrderByWithRelationInput = { createdAt: 'desc' };
+    if (filters.sortBy === 'paymentNumber') orderBy = { paymentNumber: sortDir };
+    else if (filters.sortBy === 'customerName') orderBy = { customer: { fullName: sortDir } };
+    else if (filters.sortBy === 'method') orderBy = { method: sortDir };
+    else if (filters.sortBy === 'amount') orderBy = { amount: sortDir };
+    else if (filters.sortBy === 'status') orderBy = { status: sortDir };
+    else if (filters.sortBy === 'createdAt') orderBy = { createdAt: sortDir };
+
+    const [total, payments] = await prisma.$transaction([
+      prisma.payment.count({ where }),
+      prisma.payment.findMany({
+        where,
+        include: {
+          customer: true,
+          allocations: { include: { invoice: true } },
+        },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items: payments.map(PaymentService.formatPaymentRecord),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   // 2. Record Customer Payment with Balanced Double-Entry Journal & Auto-Reconnection

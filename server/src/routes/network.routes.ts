@@ -44,8 +44,12 @@ router.post('/routers/:id/reboot', async (req, res) => {
 });
 
 // GET /api/v1/network/pppoe
-router.get('/pppoe', async (_req, res) => {
+router.get('/pppoe', async (req, res) => {
   try {
+    if (req.query.paged === '1' || req.query.paged === 'true') {
+      res.json(await NetworkService.listPPPoEAccountsPaged(req.query as any));
+      return;
+    }
     res.json(await NetworkService.listPPPoEAccounts());
   } catch (err: any) {
     res.status(500).json({ error: err.message });

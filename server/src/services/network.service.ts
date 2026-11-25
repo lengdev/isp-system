@@ -25,6 +25,32 @@ export class NetworkService {
     return router;
   }
 
+  private static formatPPPoERecord(acc: any) {
+    const cust = acc.subscription.customer;
+    const pkg = acc.subscription.package;
+    const planName = pkg?.name || 'Fiber Ultra 300M';
+    return {
+      id: acc.id,
+      username: acc.username,
+      customerId: cust.id,
+      customerName: cust.nameEn || cust.nameKm || cust.fullName,
+      customerCode: cust.code,
+      ipAddress: acc.ipAddress || '',
+      macAddress: acc.macAddress || '',
+      profile: planName,
+      status: acc.isOnline && cust.status === 'ACTIVE' ? 'Online' : 'Disabled',
+      router: acc.router?.name || 'Core-CCR2004-East',
+      uptime: acc.isOnline && cust.status === 'ACTIVE' ? '2d 6h 15m' : '0s',
+      rateLimit: pkg
+        ? `${pkg.downloadSpeed}M/${pkg.uploadSpeed}M`
+        : planName.includes('1G')
+          ? '1000M/500M'
+          : planName.includes('300M')
+            ? '300M/150M'
+            : '100M/50M',
+    };
+  }
+
   // 2. PPPoE Accounts
   static async listPPPoEAccounts() {
     const accounts = await prisma.pPPoEAccount.findMany({
@@ -40,31 +66,85 @@ export class NetworkService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return accounts.map((acc) => {
-      const cust = acc.subscription.customer;
-      const pkg = acc.subscription.package;
-      const planName = pkg?.name || 'Fiber Ultra 300M';
-      return {
-        id: acc.id,
-        username: acc.username,
-        customerId: cust.id,
-        customerName: cust.fullName,
-        customerCode: cust.code,
-        ipAddress: acc.ipAddress || '',
-        macAddress: acc.macAddress || '',
-        profile: planName,
-        status: acc.isOnline && cust.status === 'ACTIVE' ? 'Online' : 'Disabled',
-        router: acc.router?.name || 'Core-CCR2004-East',
-        uptime: acc.isOnline && cust.status === 'ACTIVE' ? '2d 6h 15m' : '0s',
-        rateLimit: pkg
-          ? `${pkg.downloadSpeed}M/${pkg.uploadSpeed}M`
-          : planName.includes('1G')
-            ? '1000M/500M'
-            : planName.includes('300M')
-              ? '300M/150M'
-              : '100M/50M',
-      };
-    });
+    return accounts.map(NetworkService.formatPPPoERecord);
+  }
+
+  static async listPPPoEAccountsPaged(filters: {
+    page?: number | string;
+    limit?: number | string;
+    search?: string;
+    status?: string;
+    sortBy?: string;
+    sortDir?: string;
+  } = {}) {
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filters.limit) || 25));
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    const search = typeof filters.search === 'string' ? filters.search.trim().normalize('NFC') : '';
+    if (search) {
+      where.OR = [
+        { username: { contains: search, mode: 'insensitive' } },
+        { ipAddress: { contains: search, mode: 'insensitive' } },
+        { macAddress: { contains: search, mode: 'insensitive' } },
+        { subscription: { customer: { fullName: { contains: search, mode: 'insensitive' } } } },
+        { subscription: { customer: { nameEn: { contains: search, mode: 'insensitive' } } } },
+        { subscription: { customer: { nameKm: { contains: search, mode: 'insensitive' } } } },
+        { subscription: { customer: { code: { contains: search, mode: 'insensitive' } } } },
+      ];
+    }
+
+    if (filters.status) {
+      const st = String(filters.status).toUpperCase();
+      if (st === 'ONLINE') {
+        where.isOnline = true;
+        where.subscription = { ...(where.subscription || {}), customer: { status: 'ACTIVE' } };
+      } else if (st === 'DISABLED' || st === 'OFFLINE') {
+        where.OR = [
+          ...(where.OR ? [{ AND: [{ OR: where.OR }, { OR: [{ isOnline: false }, { subscription: { customer: { status: { not: 'ACTIVE' } } } }] }] }] : [
+            { isOnline: false },
+            { subscription: { customer: { status: { not: 'ACTIVE' } } } },
+          ]),
+        ];
+      }
+    }
+
+    const sortDir = filters.sortDir === 'asc' ? 'asc' : 'desc';
+    let orderBy: any = { createdAt: 'desc' };
+    if (filters.sortBy === 'username') orderBy = { username: sortDir };
+    else if (filters.sortBy === 'ipAddress') orderBy = { ipAddress: sortDir };
+    else if (filters.sortBy === 'status') orderBy = { isOnline: sortDir };
+    else if (filters.sortBy === 'customerName') {
+      orderBy = { subscription: { customer: { fullName: sortDir } } };
+    }
+
+    const [total, accounts] = await prisma.$transaction([
+      prisma.pPPoEAccount.count({ where }),
+      prisma.pPPoEAccount.findMany({
+        where,
+        include: {
+          router: true,
+          subscription: {
+            include: {
+              customer: true,
+              package: true,
+            },
+          },
+        },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items: accounts.map(NetworkService.formatPPPoERecord),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   // 3. VLAN Management

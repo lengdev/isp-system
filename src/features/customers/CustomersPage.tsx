@@ -90,14 +90,14 @@ export const CustomersPage: React.FC = () => {
 
   const statsQuery = useQuery({
     queryKey: ['customer-stats'],
-    queryFn: ({ signal }) => api.customers.getStats(signal),
+    queryFn: () => api.customers.getStats(),
     staleTime: 30_000,
   });
 
   const customersQuery = useQuery({
     queryKey: ['customers', queryParams],
-    queryFn: async ({ signal }) => {
-      const res = await api.customers.listPaged(queryParams, signal);
+    queryFn: async () => {
+      const res = await api.customers.listPaged(queryParams);
       return {
         ...res,
         items: (res.items || []).map(normalizeApiCustomer),

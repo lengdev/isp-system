@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   CreditCard,
@@ -10,7 +10,7 @@ import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
-import { DataTable, DataTableColumnDef } from '../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, TableQuery } from '../components/ui/DataTable';
 import { Avatar } from '../components/ui/Avatar';
 import { Can, useCan } from '../lib/permissions';
 import { useStore } from '../store/useStore';
@@ -52,9 +52,48 @@ export const PaymentsPage: React.FC = () => {
   const [isKhqrModalOpen, setIsKhqrModalOpen] = useState(false);
   const [khqrData, setKhqrData] = useState<any>(null);
 
-  const paymentsQuery = useQuery<PaymentRecord[], Error>({
-    queryKey: ['payments'],
-    queryFn: () => api.payments.list(),
+  // Server pagination state
+  const [tableQuery, setTableQuery] = useState<TableQuery>({
+    page: 1,
+    pageSize: 10,
+    search: '',
+    sort: [],
+    filters: {},
+  });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const q = (tableQuery.search || '').trim();
+    if (!q) {
+      setDebouncedSearch('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedSearch(q), 120);
+    return () => clearTimeout(timer);
+  }, [tableQuery.search]);
+
+  const handleQueryChange = useCallback((nextQuery: TableQuery) => {
+    setTableQuery(nextQuery);
+  }, []);
+
+  const queryParams = useMemo(() => {
+    const colFilters = tableQuery.filters || {};
+    const primarySort = tableQuery.sort?.[0];
+    return {
+      page: tableQuery.page,
+      limit: tableQuery.pageSize,
+      search: debouncedSearch || undefined,
+      sortBy: primarySort?.id || undefined,
+      sortDir: primarySort ? (primarySort.desc ? 'desc' : 'asc') : undefined,
+      method: Array.isArray(colFilters.method) && colFilters.method.length ? colFilters.method : undefined,
+      paymentNumber: typeof colFilters.paymentNumber === 'string' && colFilters.paymentNumber ? colFilters.paymentNumber : undefined,
+      customerName: typeof colFilters.customerName === 'string' && colFilters.customerName ? colFilters.customerName : undefined,
+    };
+  }, [tableQuery, debouncedSearch]);
+
+  const paymentsQuery = useQuery({
+    queryKey: ['payments', queryParams],
+    queryFn: () => api.payments.listPaged(queryParams),
     placeholderData: keepPreviousData,
   });
 
@@ -64,10 +103,14 @@ export const PaymentsPage: React.FC = () => {
       const res = await api.customers.listPaged({ page: 1, limit: 100 });
       return res.items || [];
     },
+    enabled: isRecordModalOpen,
     staleTime: 60_000,
   });
 
-  const payments = useMemo(() => paymentsQuery.data ?? [], [paymentsQuery.data]);
+  const payments = useMemo<PaymentRecord[]>(
+    () => paymentsQuery.data?.items ?? [],
+    [paymentsQuery.data?.items]
+  );
   const customers = useMemo(
     () => customersPickerQuery.data ?? [],
     [customersPickerQuery.data]
@@ -308,14 +351,25 @@ export const PaymentsPage: React.FC = () => {
       <DataTable<PaymentRecord>
         columns={columns}
         data={payments}
+        serverMode={true}
+        total={paymentsQuery.data?.total}
+        onQueryChange={handleQueryChange}
         rowId={(p) => p.id}
         viewKey="payments_history_table"
         searchPlaceholder="Search receipts or customer..."
-        loading={paymentsQuery.isLoading}
+        loading={paymentsQuery.isLoading || (paymentsQuery.isFetching && paymentsQuery.isPlaceholderData)}
         fetching={paymentsQuery.isFetching}
+        loadingMode={
+          paymentsQuery.isLoading || (paymentsQuery.isFetching && paymentsQuery.isPlaceholderData)
+            ? 'skeleton'
+            : undefined
+        }
         error={paymentsQuery.error ? 'Unable to load payment records.' : null}
         onRetry={handleRefresh}
         onRefresh={handleRefresh}
+        isFilterActive={Boolean(
+          (tableQuery.search || '').trim() || Object.keys(tableQuery.filters || {}).length > 0
+        )}
         renderCard={renderCard}
         noDataTitle="No payments recorded yet"
         noDataDescription="Cash, ABA bank and Bakong KHQR payments will appear here once you record one."

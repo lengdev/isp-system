@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   RefreshCw,
@@ -16,7 +16,7 @@ import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
-import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, RowAction, TableQuery } from '../components/ui/DataTable';
 import { DataTableCheckbox } from '../components/ui/DataTable/DataTableCheckbox';
 import { TableStateBody } from '../components/ui/TableState';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -86,6 +86,49 @@ export const NetworkPage: React.FC = () => {
   const [selectedPoolId, setSelectedPoolId] = useState('pool-fiber-1');
   const [targetCustId, setTargetCustId] = useState('cust-1001');
 
+  // Server pagination state for PPPoE tab (avoids downloading 10k rows on page load)
+  const [pppoeTableQuery, setPppoeTableQuery] = useState<TableQuery>({
+    page: 1,
+    pageSize: 10,
+    search: '',
+    sort: [],
+    filters: {},
+  });
+  const [debouncedPppoeSearch, setDebouncedPppoeSearch] = useState('');
+
+  useEffect(() => {
+    const q = (pppoeTableQuery.search || '').trim();
+    if (!q) {
+      setDebouncedPppoeSearch('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedPppoeSearch(q), 120);
+    return () => clearTimeout(timer);
+  }, [pppoeTableQuery.search]);
+
+  const handlePppoeQueryChange = useCallback((nextQuery: TableQuery) => {
+    setPppoeTableQuery(nextQuery);
+  }, []);
+
+  const pppoeParams = useMemo(() => {
+    const primarySort = pppoeTableQuery.sort?.[0];
+    const colFilters = pppoeTableQuery.filters || {};
+    const statusFilter =
+      Array.isArray(colFilters.status) && colFilters.status.length === 1
+        ? String(colFilters.status[0]).toUpperCase()
+        : typeof colFilters.status === 'string' && colFilters.status
+          ? colFilters.status.toUpperCase()
+          : undefined;
+    return {
+      page: pppoeTableQuery.page,
+      limit: pppoeTableQuery.pageSize,
+      search: debouncedPppoeSearch || undefined,
+      status: statusFilter,
+      sortBy: primarySort?.id || undefined,
+      sortDir: primarySort ? (primarySort.desc ? 'desc' : 'asc') : undefined,
+    };
+  }, [pppoeTableQuery, debouncedPppoeSearch]);
+
   const routersQuery = useQuery<NetworkDevice[], Error>({
     queryKey: ['network-routers'],
     queryFn: async () => {
@@ -95,26 +138,29 @@ export const NetworkPage: React.FC = () => {
     placeholderData: keepPreviousData,
   });
 
-  const pppoeQuery = useQuery<any[], Error>({
-    queryKey: ['network-pppoe'],
-    queryFn: () => api.network.getPPPoE(),
+  const pppoeQuery = useQuery({
+    queryKey: ['network-pppoe', pppoeParams],
+    queryFn: () => api.network.getPPPoEPaged(pppoeParams),
+    enabled: networkTab === 'pppoe',
     placeholderData: keepPreviousData,
   });
 
   const vlansQuery = useQuery<any[], Error>({
     queryKey: ['network-vlans'],
     queryFn: () => api.network.getVlans(),
+    enabled: networkTab === 'vlans' || isIpModalOpen,
     placeholderData: keepPreviousData,
   });
 
   const ipamQuery = useQuery<any[], Error>({
     queryKey: ['network-ipam'],
     queryFn: () => api.network.getIpPools(),
+    enabled: networkTab === 'ipam' || isIpModalOpen,
     placeholderData: keepPreviousData,
   });
 
   const devices = useMemo(() => routersQuery.data ?? [], [routersQuery.data]);
-  const pppoeAccounts = useMemo(() => pppoeQuery.data ?? [], [pppoeQuery.data]);
+  const pppoeAccounts = useMemo(() => pppoeQuery.data?.items ?? [], [pppoeQuery.data?.items]);
   const vlans = useMemo(() => vlansQuery.data ?? [], [vlansQuery.data]);
   const ipPools = useMemo(() => ipamQuery.data ?? [], [ipamQuery.data]);
   const isRefreshing =
@@ -129,12 +175,11 @@ export const NetworkPage: React.FC = () => {
   );
 
   const loadNetworkData = async () => {
-    await Promise.all([
-      routersQuery.refetch(),
-      pppoeQuery.refetch(),
-      vlansQuery.refetch(),
-      ipamQuery.refetch(),
-    ]);
+    const tasks: Array<Promise<any>> = [routersQuery.refetch()];
+    if (networkTab === 'pppoe') tasks.push(pppoeQuery.refetch());
+    if (networkTab === 'vlans' || isIpModalOpen) tasks.push(vlansQuery.refetch());
+    if (networkTab === 'ipam' || isIpModalOpen) tasks.push(ipamQuery.refetch());
+    await Promise.all(tasks);
   };
 
   const handleRebootDevice = async (dev: NetworkDevice) => {
@@ -569,66 +614,131 @@ export const NetworkPage: React.FC = () => {
 
       {/* TAB 2: PPPoE SUBSCRIBERS */}
       {networkTab === 'pppoe' && (
-        <div className="p-5 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-card)] space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[var(--text)] uppercase tracking-wider">Active PPPoE Sessions & Secrets</h3>
-            <span className="text-xs text-[var(--text-muted)]">MikroTik RouterOS v7 Core Engine</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
-                  <th className="py-2.5 px-3">PPPoE Username</th>
-                  <th className="py-2.5 px-3">Subscriber Name</th>
-                  <th className="py-2.5 px-3">Assigned IP</th>
-                  <th className="py-2.5 px-3">Caller MAC</th>
-                  <th className="py-2.5 px-3">Queue Rate Limit</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                <TableStateBody
-                  colSpan={7}
-                  loading={pppoeQuery.isLoading}
-                  hasData={pppoeAccounts.length > 0}
-                  error={pppoeQuery.error ? 'Unable to load PPPoE sessions.' : null}
-                  onRetry={() => pppoeQuery.refetch()}
-                  emptyTitle="No active PPPoE accounts"
-                  emptyDescription="PPPoE secrets provisioned for subscriber lines will appear here."
-                >
-                  {pppoeAccounts.map((p) => (
-                    <tr key={p.id} className="hover:bg-[var(--surface-hover)]">
-                      <td className="py-3 px-3 font-bold text-[var(--brand)]">{p.username}</td>
-                      <td className="py-3 px-3 font-sans font-semibold text-[var(--text)]">{p.customerName}</td>
-                      <td className="py-3 px-3">{p.ipAddress}</td>
-                      <td className="py-3 px-3 text-[var(--text-muted)]">{p.macAddress || '-'}</td>
-                      <td className="py-3 px-3 font-bold text-emerald-600 dark:text-emerald-400">{p.rateLimit}</td>
-                      <td className="py-3 px-3">
-                        <Chip size="sm" color={p.status === 'Online' ? 'success' : 'danger'}>
-                          {p.status}
-                        </Chip>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        {canManagePPPoE && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleTogglePPPoE(p.customerId, p.username, p.status)}
-                          >
-                            <Power className="w-3.5 h-3.5" />
-                            <span>{p.status === 'Online' ? 'Suspend Secret' : 'Enable & Kick'}</span>
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </TableStateBody>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DataTable<any>
+          columns={[
+            {
+              id: 'username',
+              header: 'PPPoE Username',
+              accessorKey: 'username',
+              width: 190,
+              sortable: true,
+              cell: ({ row }) => (
+                <span className="font-mono font-bold text-[var(--brand)]">{row.original.username}</span>
+              ),
+            },
+            {
+              id: 'customerName',
+              header: 'Subscriber Name',
+              accessorKey: 'customerName',
+              width: 210,
+              sortable: true,
+              skeleton: 'avatar-text',
+              cell: ({ row }) => (
+                <div className="min-w-0">
+                  <div className="font-semibold text-[var(--text)] truncate">{row.original.customerName}</div>
+                  {row.original.customerCode && (
+                    <div className="text-[11px] font-mono text-[var(--text-muted)]">{row.original.customerCode}</div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              id: 'ipAddress',
+              header: 'Assigned IP',
+              accessorKey: 'ipAddress',
+              width: 135,
+              sortable: true,
+              cell: ({ row }) => <span className="font-mono">{row.original.ipAddress || '-'}</span>,
+            },
+            {
+              id: 'macAddress',
+              header: 'Caller MAC',
+              accessorKey: 'macAddress',
+              width: 155,
+              cell: ({ row }) => (
+                <span className="font-mono text-[var(--text-muted)]">{row.original.macAddress || '-'}</span>
+              ),
+            },
+            {
+              id: 'rateLimit',
+              header: 'Queue Rate Limit',
+              accessorKey: 'rateLimit',
+              width: 140,
+              cell: ({ row }) => (
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                  {row.original.rateLimit}
+                </span>
+              ),
+            },
+            {
+              id: 'status',
+              header: 'Status',
+              accessorKey: 'status',
+              width: 120,
+              sortable: true,
+              skeleton: 'badge',
+              filter: {
+                type: 'select',
+                options: [
+                  { value: 'Online', label: 'Online' },
+                  { value: 'Disabled', label: 'Disabled' },
+                ],
+              },
+              cell: ({ row }) => (
+                <Chip size="sm" color={row.original.status === 'Online' ? 'success' : 'danger'}>
+                  {row.original.status}
+                </Chip>
+              ),
+            },
+            ...(canManagePPPoE
+              ? [
+                  {
+                    id: 'pppoeAction',
+                    header: 'Action',
+                    width: 165,
+                    align: 'right' as const,
+                    skeleton: 'none' as const,
+                    cell: ({ row }: { row: { original: any } }) => {
+                      const p = row.original;
+                      return (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTogglePPPoE(p.customerId, p.username, p.status);
+                          }}
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          <span>{p.status === 'Online' ? 'Suspend Secret' : 'Enable & Kick'}</span>
+                        </Button>
+                      );
+                    },
+                  },
+                ]
+              : []),
+          ]}
+          data={pppoeAccounts}
+          serverMode={true}
+          total={pppoeQuery.data?.total}
+          onQueryChange={handlePppoeQueryChange}
+          loading={pppoeQuery.isLoading || (pppoeQuery.isFetching && pppoeQuery.isPlaceholderData)}
+          fetching={pppoeQuery.isFetching}
+          loadingMode={pppoeQuery.isLoading || (pppoeQuery.isFetching && pppoeQuery.isPlaceholderData) ? 'skeleton' : undefined}
+          error={pppoeQuery.error ? 'Unable to load PPPoE sessions.' : null}
+          onRetry={() => pppoeQuery.refetch()}
+          onRefresh={() => pppoeQuery.refetch()}
+          rowId={(p) => p.id}
+          viewKey="network_pppoe_table"
+          searchPlaceholder="Search username, subscriber, IP, MAC..."
+          isFilterActive={Boolean(
+            (pppoeTableQuery.search || '').trim() || Object.keys(pppoeTableQuery.filters || {}).length > 0
+          )}
+          noDataTitle="No active PPPoE accounts"
+          noDataDescription="PPPoE secrets provisioned for subscriber lines will appear here."
+          emptyTitle="No matching PPPoE accounts"
+          emptySubtitle="Try adjusting search terms or status filters."
+        />
       )}
 
       {/* TAB 3: VLAN SEGMENTATION */}

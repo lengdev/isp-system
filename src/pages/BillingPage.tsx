@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Receipt,
@@ -15,7 +15,7 @@ import { Invoice } from '../types';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { formatDate } from '../lib/utils';
-import { DataTable, DataTableColumnDef, RowAction } from '../components/ui/DataTable';
+import { DataTable, DataTableColumnDef, RowAction, TableQuery } from '../components/ui/DataTable';
 
 function mapApiInvoice(raw: any): Invoice {
   const st = String(raw.status || 'UNPAID').toUpperCase();
@@ -52,16 +52,66 @@ export const BillingPage: React.FC = () => {
   const canRecordPayment = useCan('payments.record') || useCan('billing.create');
   const canEditInvoice = useCan('billing.edit') || useCan('payments.record');
 
-  const invoicesQuery = useQuery<Invoice[], Error>({
-    queryKey: ['invoices'],
+  const [tableQuery, setTableQuery] = useState<TableQuery>({
+    page: 1,
+    pageSize: 10,
+    search: '',
+    sort: [],
+    filters: {},
+  });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const q = (tableQuery.search || '').trim();
+    if (!q) {
+      setDebouncedSearch('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedSearch(q), 120);
+    return () => clearTimeout(timer);
+  }, [tableQuery.search]);
+
+  const handleQueryChange = useCallback((nextQuery: TableQuery) => {
+    setTableQuery(nextQuery);
+  }, []);
+
+  const queryParams = useMemo(() => {
+    const colFilters = tableQuery.filters || {};
+    const primarySort = tableQuery.sort?.[0];
+    const amountRange = colFilters.amount;
+    const statusFilter =
+      Array.isArray(colFilters.status) && colFilters.status.length === 1
+        ? colFilters.status[0]
+        : typeof colFilters.status === 'string' && colFilters.status
+          ? colFilters.status
+          : undefined;
+    return {
+      page: tableQuery.page,
+      limit: tableQuery.pageSize,
+      search: debouncedSearch || undefined,
+      sortBy: primarySort?.id || undefined,
+      sortDir: primarySort ? (primarySort.desc ? 'desc' : 'asc') : undefined,
+      status: statusFilter,
+      invoiceNumber: typeof colFilters.invoiceNumber === 'string' && colFilters.invoiceNumber ? colFilters.invoiceNumber : undefined,
+      customerName: typeof colFilters.customerName === 'string' && colFilters.customerName ? colFilters.customerName : undefined,
+      minAmount: amountRange?.min ?? undefined,
+      maxAmount: amountRange?.max ?? undefined,
+    };
+  }, [tableQuery, debouncedSearch]);
+
+  const invoicesQuery = useQuery({
+    queryKey: ['invoices', queryParams],
     queryFn: async () => {
-      const list = await api.billing.getInvoices();
-      return (Array.isArray(list) ? list : []).map(mapApiInvoice);
+      const res = await api.billing.getInvoicesPaged(queryParams);
+      return {
+        ...res,
+        items: (res.items || []).map(mapApiInvoice),
+      };
     },
     placeholderData: keepPreviousData,
   });
 
-  const invoices = useMemo(() => invoicesQuery.data ?? [], [invoicesQuery.data]);
+  const invoices = useMemo(() => invoicesQuery.data?.items ?? [], [invoicesQuery.data?.items]);
 
   const handleMarkPaid = async (inv: Invoice) => {
     try {
@@ -81,13 +131,9 @@ export const BillingPage: React.FC = () => {
     }
   };
 
-  const totalBilled = invoices.reduce((sum, inv) => sum + inv.amount, 0);
-  const totalPaid = invoices
-    .filter((inv) => inv.status === 'Paid')
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const totalOverdue = invoices
-    .filter((inv) => inv.status === 'Overdue')
-    .reduce((sum, inv) => sum + inv.amount, 0);
+  const totalBilled = invoicesQuery.data?.stats?.totalBilled ?? 0;
+  const totalPaid = invoicesQuery.data?.stats?.totalPaid ?? 0;
+  const totalOverdue = invoicesQuery.data?.stats?.totalOverdue ?? 0;
 
   const handleDownloadPDF = (invNum: string) => {
     addToast({
@@ -411,11 +457,22 @@ export const BillingPage: React.FC = () => {
       <DataTable<Invoice>
         columns={columns}
         data={invoices}
-        loading={invoicesQuery.isLoading}
+        serverMode={true}
+        total={invoicesQuery.data?.total}
+        onQueryChange={handleQueryChange}
+        loading={invoicesQuery.isLoading || (invoicesQuery.isFetching && invoicesQuery.isPlaceholderData)}
         fetching={invoicesQuery.isFetching}
+        loadingMode={
+          invoicesQuery.isLoading || (invoicesQuery.isFetching && invoicesQuery.isPlaceholderData)
+            ? 'skeleton'
+            : undefined
+        }
         error={invoicesQuery.error ? 'Unable to load invoices.' : null}
         onRetry={() => invoicesQuery.refetch()}
         onRefresh={() => invoicesQuery.refetch()}
+        isFilterActive={Boolean(
+          (tableQuery.search || '').trim() || Object.keys(tableQuery.filters || {}).length > 0
+        )}
         rowId={(inv) => inv.id}
         viewKey="billing_invoices_table"
         onRowClick={(inv) => openDrawer(inv.customerId, 'billing')}

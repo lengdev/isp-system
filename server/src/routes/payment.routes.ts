@@ -6,6 +6,10 @@ const router = Router();
 // GET /api/v1/payments
 router.get('/', async (req, res) => {
   try {
+    if (req.query.paged === '1' || req.query.paged === 'true') {
+      res.json(await PaymentService.listPaymentsPaged(req.query as any));
+      return;
+    }
     const { customerId } = req.query;
     res.json(await PaymentService.listPayments(customerId as string));
   } catch (err: any) {

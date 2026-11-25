@@ -6,6 +6,10 @@ const router = Router();
 // GET /api/v1/invoices
 router.get('/', async (req, res) => {
   try {
+    if (req.query.paged === '1' || req.query.paged === 'true') {
+      res.json(await BillingService.listInvoicesPaged(req.query as any));
+      return;
+    }
     const invoices = await BillingService.listInvoices(req.query as any);
     res.json(invoices);
   } catch (err: any) {

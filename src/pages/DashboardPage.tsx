@@ -35,7 +35,7 @@ export const DashboardPage: React.FC = () => {
 
   const statsQuery = useQuery({
     queryKey: ['customer-stats'],
-    queryFn: ({ signal }) => api.customers.getStats(signal),
+    queryFn: () => api.customers.getStats(),
     staleTime: 30_000,
   });
 

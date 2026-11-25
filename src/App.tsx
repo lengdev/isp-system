@@ -148,12 +148,14 @@ export const AppContent: React.FC = () => {
       try {
         setStatus('loading');
         const refreshRes = await api.auth.refresh();
+        if (!isMounted) return;
         if (refreshRes && refreshRes.accessToken) {
           setAuth(refreshRes.accessToken, refreshRes.user);
         } else {
           clearAuth();
         }
       } catch {
+        if (!isMounted) return;
         clearAuth();
       }
     };

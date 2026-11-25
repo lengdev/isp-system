@@ -39,12 +39,12 @@ The system follows a decoupled **PERN (PostgreSQL, Express 5, React 18, Node.js)
 ## Key Features & Core Modules
 
 ### 1. Subscriber CRM & Operations
-- **Customers Hub (`/customers`)**: Search, multi-filter toolbar, status tabs (`Active`, `Suspended`, `Overdue`, `Pending`, `Disconnected`), bulk actions bar, table/compact/card views, column customization, CSV/XLSX export, and a 6-tab **Customer Detail Drawer** (Overview, Billing History, 14-day Usage Chart, Tickets, Activity Log, Internal Notes).
-- **Modals & Diagnostics**: 3-step subscriber onboarding wizard (`React Hook Form` + `Zod`), payment recording, SMS/Email broadcast messaging, suspension status workflow, and diagnostic line speed tests.
+- **Customers Hub (`/customers`)**: Server-paginated, server-filtered, and server-sorted subscriber directory backed by PostgreSQL (`GET /api/v1/customers` + `GET /api/v1/customers/stats`) and `pg_trgm` GIN trigram indexes ([10k benchmark report](docs/perf/customers-10k.md)). Supports bilingual Khmer & Latin customer names (`nameKm`, `nameEn`, `fullName`) with self-hosted `Noto Sans Khmer` & `Kantumruy Pro` fonts, status tabs (`Active`, `Suspended`, `Overdue`, `Pending`, `Disconnected`), bulk actions bar, table/compact/card views, column customization, CSV/XLSX export, and a 6-tab **Customer Detail Drawer** (Overview, Billing History, 14-day Usage Chart, Tickets, Activity Log, Internal Notes).
+- **Modals & Diagnostics**: 3-step subscriber onboarding wizard (`React Hook Form` + `Zod`) with Khmer/Latin name support, payment recording, SMS/Email broadcast messaging, suspension status workflow, and diagnostic line speed tests.
 - **Broadband Plans (`/plans`)**: Fiber, Wireless, and DSL package catalog synced with PostgreSQL via Prisma.
 - **MikroTik Network Management & RouterOS API (`/network`, `mikrotik.service.ts`, `network.service.ts`)**: Fleet monitoring, PPPoE secret provisioning/suspension/reconnection, active session telemetry, CPU/memory/uptime metrics, controlled reboot, scope-aware VLAN conflict validation, and IPAM pool/static IP allocation (with built-in RouterOS simulator fallback when no live hardware is reachable).
 - **Double-Entry Accounting (`/accounting`, `accounting.service.ts`)**: Zero-sum ledger validation ($\sum \text{Debits} \equiv \sum \text{Credits}$), Chart of Accounts, balanced Journal Entries & reversals, Trial Balance, Profit & Loss, Balance Sheet, AR Aging, Expenses, and Fixed Asset tracking.
-- **Billing & Payments (`/billing`, `/payments`)**: Invoice lifecycle, cashier counter payments, and Bakong KHQR payload generation.
+- **Billing & Payments (`/billing`, `/payments`)**: Invoice lifecycle (including derived `Partial` status for partially settled open invoices and balanced GL void reversals), cashier counter payments, and Bakong KHQR payload generation, wired with shared `<DataTable>` skeleton/overlay loading and permission-aware `<EmptyState>` prompts.
 - **Multi-Warehouse Inventory & Procurement (`/inventory/products`, `/inventory/warehouses`, `/inventory/procurement`, `inventory.service.ts`, `procurement.service.ts`)**: Multi-location stock movements (`IN`, `OUT`, `TRANSFER`) with negative stock prevention, serialized ONT/CPE tracking, suppliers, purchase orders, and Goods Received Notes (GRN).
 - **Field Operations & Installations (`/installations`, `/technicians`, `/tickets`, `operations.service.ts`)**: Installation scheduling, technician roster, hardware serial allocation, PPPoE activation, and support ticket queues.
 - **Customer Self-Service Portal (`/portal`, `portal.routes.ts`, `CustomerPortalPage.tsx`)**: Customer login, connection/billing overview, Bakong KHQR payment checkout, and support ticket creation.
@@ -131,14 +131,21 @@ isp-system-2/
 ├── tsconfig.json                    # Frontend TypeScript configuration
 ├── tsconfig.node.json               # Vite/Node config TypeScript configuration
 ├── vite.config.ts                   # Vite dev server (:5173) + /api proxy -> 127.0.0.1:5000
+├── docs/
+│   ├── erd/nsmisp-erd.drawio        # Prisma DMMF -> draw.io ER diagram
+│   └── perf/customers-10k.md        # 10,000-customer benchmark & EXPLAIN report
 ├── prisma/
 │   ├── schema.prisma                # PostgreSQL schema (57 models)
 │   ├── seed.ts                      # Database seed (Super Admin, demo staff, RBAC matrix)
-│   ├── migrations/                  # Prisma migration history (7 migrations)
+│   ├── seed-customers.ts            # Synthetic bilingual (Khmer/Latin) customer seeder
+│   ├── migrations/                  # Prisma migration history (10 migrations)
 │   └── backups/                     # SQL backup dumps
 ├── scripts/
 │   ├── dev-all.mjs                  # Builds server, starts tsc -w, node --watch, and vite
 │   ├── seed-admin.mjs               # Standalone Super Admin & dev user seed script
+│   ├── reset-customers.ts           # Dev-only customer/billing reset (preserves GL balance & core catalog)
+│   ├── seed-billing-demo.ts         # Dev-only deterministic invoice/payment demo seeder (via real services)
+│   ├── generate-erd.ts              # Generates docs/erd/nsmisp-erd.drawio from Prisma DMMF
 │   ├── db-backup.sh                 # Automated gzipped pg_dump script
 │   ├── db-restore.sh                # Automated gunzip + psql restore script
 │   ├── eslint-motion-rules.js       # Custom Framer Motion ESLint rule helpers
@@ -161,10 +168,12 @@ isp-system-2/
 │   │   ├── routes/                  # 14 Express route modules mounted under /api/v1
 │   │   └── services/                # 13 backend service modules
 │   └── test/
+│       ├── bilingualName.test.mjs   # Bilingual customer name normalization & validation tests
 │       ├── nsmisp.test.mjs          # Core domain & auth service integration tests
 │       ├── nsmisp.test.ts           # TypeScript source test reference
 │       ├── rbac.test.mjs            # RBAC matrix, features & requireFeature API tests
-│       └── features-frontend.test.mjs # Dynamic permission & ANY/ALL feature mode tests
+│       ├── features-frontend.test.mjs # Dynamic permission & ANY/ALL feature mode tests
+│       └── users.test.mjs           # Users & session revocation API integration tests
 ├── src/
 │   ├── main.tsx                     # React 18 entrypoint
 │   ├── App.tsx                      # BrowserRouter, theme/comfort/density init, session restore, routes
@@ -172,24 +181,28 @@ isp-system-2/
 │   ├── components/
 │   │   ├── auth/                    # ProtectedRoute.tsx, RequirePermission.tsx
 │   │   ├── layout/                  # Sidebar.tsx, TopBar.tsx, CommandPalette.tsx, NotificationPanel.tsx, ErrorBoundary.tsx
-│   │   └── ui/                      # Reusable UI kit + DataTable/
+│   │   └── ui/                      # Reusable UI kit, EmptyState, TableState, Skeleton & DataTable/ (loadingUtils)
 │   ├── data/mockData.ts             # Static frontend helper/mock fixtures
 │   ├── features/
 │   │   ├── customers/               # CustomersPage, CustomerTable, CustomerDetailDrawer, modals
 │   │   ├── inventory/               # ProductsPage, ProductModal, ProductLogModal, DeleteProductModal
 │   │   └── roles/                   # Flat roles feature: index.ts, RolesPage, PermissionsMatrix, MatrixHeader, MatrixCheckbox, UsersTab, UserPermissionsModal, FeaturesTab, MobileRoleView, modals, hooks, constants, rolesUtils.ts, rolesUtils.test.ts
 │   ├── lib/                         # api.ts, permissions.ts, motion.ts, queryClient.ts, utils.ts
-│   ├── pages/                       # 28 application & dev pages
+│   ├── pages/                       # Application & dev pages (with React Query & unified empty/loading states)
 │   ├── store/                       # authStore.ts, useStore.ts
 │   └── types/                       # Shared frontend TypeScript definitions (index.ts, roles.ts)
 └── tests/
     ├── customers.spec.ts            # Customers Playwright E2E spec
+    ├── datatable-skeleton.spec.ts   # DataTable skeleton/overlay, aria-busy & reduced-motion E2E spec
+    ├── e2e-skeleton-and-states.spec.ts # Throttled API skeletons, server pagination & empty-state E2E spec
     ├── features-permissions.spec.ts # Menus & Features tab E2E spec
     ├── inventory.spec.ts            # Inventory Playwright E2E spec
+    ├── khmer-rendering.spec.ts      # Self-hosted Khmer/Latin font & clipping E2E spec
     ├── modals.spec.ts               # Modals Playwright E2E spec
     ├── responsive-and-motion.spec.ts# Responsive & reduced-motion E2E spec
     ├── roles-permissions.spec.ts    # Roles & Permissions matrix E2E spec
-    └── smoke.spec.ts                # Application smoke E2E spec
+    ├── smoke.spec.ts                # Application smoke E2E spec
+    └── users.spec.ts                # Users workspace Playwright E2E spec
 ```
 
 ---
@@ -244,7 +257,7 @@ async function startServer() {
 
 ### 3. Database Schema & Migrations (`prisma/schema.prisma`)
 
-The Prisma schema defines **57 models** across applied migrations (`20261123000000_init`, `20261123010000_auth_enhancements`, `20261123153906_session_family_id`, `20261124180000_rbac_permissions_matrix`, `20261124193500_features_and_permissions`, `20261125000000_rename_brand_to_nsmisp`, `20261125150000_user_permission_overrides`):
+The Prisma schema defines **57 models** across 10 applied migrations (`20261123000000_init`, `20261123010000_auth_enhancements`, `20261123153906_session_family_id`, `20261124180000_rbac_permissions_matrix`, `20261124193500_features_and_permissions`, `20261125000000_rename_brand_to_nsmisp`, `20261125150000_user_permission_overrides`, `20261125160000_bilingual_customer_names`, `20261125180000_update_admin_email_to_nsmisp`, `20261125200000_customer_search_trgm_indexes`):
 
 | Domain | Models |
 |---|---|
@@ -338,6 +351,24 @@ Services defined in `docker-compose.yml`:
 
 > **Upgrading from an earlier NetPulse database/volume:** Renaming `DATABASE_URL` or Docker volume names does not move existing rows. Before switching `.env` to `nsmisp` or recreating containers, dump the legacy `netpulse` database with `pg_dump`, restore into `nsmisp`, verify row counts, and run `npx prisma migrate deploy`.
 
+### 4. Dev Database Reset & Synthetic Seeding
+
+> **Safety Guard:** `db:reset:customers`, `db:seed:customers`, and `db:seed:billing` refuse to run when `NODE_ENV=production` or against non-dev databases, and destructive reset flags require explicit `--confirm`. Run `npm run build:server` before `db:seed:billing`.
+
+```bash
+# Safely reset customer/billing/customer-owned network rows (sets hardware serial customerId = NULL)
+npm run db:reset:customers -- --confirm
+
+# Seed 10,000 synthetic bilingual (Khmer / Latin / Both) customers & subscriptions
+npm run db:seed:customers -- --count=10000 --seed=42
+
+# Seed deterministic billing & payments through real services (verified Trial Balance & GL 1100 reconciliation)
+npm run db:seed:billing -- --reset-billing --confirm --customers=2000 --months=3 --seed=42
+
+# Clear billing & payment records only (useful for verifying empty-state screens)
+npm run db:seed:billing -- --reset-billing --reset-only --confirm
+```
+
 ---
 
 ## Pre-Configured Staff Accounts (`prisma/seed.ts`)
@@ -376,7 +407,7 @@ All API routes are mounted under `/api/v1` (with `/api/health` and OpenAPI docs 
 - `GET /api/v1/auth/permissions` / `PATCH /api/v1/auth/permissions/:id` *(requires `roles.manage`)*
 
 ### Customers & Packages
-- `GET /api/v1/customers` / `GET /api/v1/customers/:id` / `POST /api/v1/customers` / `PUT /api/v1/customers/:id` / `DELETE /api/v1/customers/:id` / `POST /api/v1/customers/:id/status` / `POST /api/v1/customers/:id/speedtest`
+- `GET /api/v1/customers` *(supports `paged=1`, `page`, `limit`, `search`, `sortBy`, `sortDir`, and facet filters)* / `GET /api/v1/customers/stats` / `GET /api/v1/customers/:id` / `POST /api/v1/customers` / `PUT /api/v1/customers/:id` / `DELETE /api/v1/customers/:id` / `POST /api/v1/customers/:id/status` / `POST /api/v1/customers/:id/speedtest`
 - `GET /api/v1/packages` / `POST /api/v1/packages` / `PUT /api/v1/packages/:id` / `DELETE /api/v1/packages/:id`
 
 ### Network & MikroTik (`/api/v1/network` & `/api/v1/routers`)
@@ -408,7 +439,7 @@ All API routes are mounted under `/api/v1` (with `/api/health` and OpenAPI docs 
 - **Primary Brand Accent**: `#EA6A3C` (`--brand`), hover `#D95A2C`, soft tint `#FDEFE8`
 - **Light Mode Surfaces**: App background `#F7F7F5`, surface `#FFFFFF`, subtle `#F8F7F4` (plus `soft`, `standard`, and `high-contrast` comfort modes)
 - **Dark Mode Surfaces**: App background `#111214`, sidebar `#16181D`, surface `#1A1C20`, raised `#212429`
-- **Typography**: `Inter`, `Noto Sans Khmer`, `Kantumruy Pro`, `Plus Jakarta Sans`
+- **Typography**: Self-hosted `@fontsource/inter`, `@fontsource/noto-sans-khmer`, and `@fontsource/kantumruy-pro` (`Inter`, `Noto Sans Khmer`, `Kantumruy Pro`, `Plus Jakarta Sans`)
 
 ---
 
@@ -422,16 +453,19 @@ npm run build:all          # Both backend and frontend builds
 npm run lint               # ESLint across repository
 
 # Core Test Suites
-npm run test:unit          # scripts/test-regression.mjs (22 DataTable & UI checks)
-npm run test:frontend-auth # scripts/test-auth-frontend.mjs (7 auth & RBAC schema tests)
-npm run test:backend       # server/test/nsmisp.test.mjs
+npm run test:unit          # scripts/test-regression.mjs (DataTable & UI checks)
+npm run test:frontend-auth # scripts/test-auth-frontend.mjs (auth & RBAC schema tests)
+npm run test:backend       # server/test/nsmisp.test.mjs (16 backend integration tests)
 npm test                   # Runs test:unit, test:backend, and test:frontend-auth
 
 # Additional Node Test Suites
-node --test src/features/roles/rolesUtils.test.ts  # 7 matrix & per-user override unit tests
-node --test server/test/features-frontend.test.mjs # 8 permission & feature ANY/ALL mode tests
-node --test server/test/rbac.test.mjs              # 21 RBAC, feature & per-user override API/DB tests (requires built dist-server & PostgreSQL)
+node --test --experimental-strip-types src/components/ui/DataTable/loadingUtils.test.ts # DataTable skeleton/loading helper tests
+node --test src/features/roles/rolesUtils.test.ts  # Matrix & per-user override unit tests
+node --test server/test/bilingualName.test.mjs     # Bilingual Khmer/Latin customer name unit tests
+node --test server/test/features-frontend.test.mjs # Permission & feature ANY/ALL mode tests
+node --test server/test/rbac.test.mjs              # RBAC, feature & per-user override API/DB tests (requires built dist-server & PostgreSQL)
 
 # Playwright E2E Suite
 npm run test:pw            # Executes tests/*.spec.ts against http://127.0.0.1:5173
+npx playwright test tests/datatable-skeleton.spec.ts tests/khmer-rendering.spec.ts tests/e2e-skeleton-and-states.spec.ts
 ```

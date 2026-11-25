@@ -237,6 +237,30 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}, 
   return response.json();
 }
 
+function buildPagedQuery(params?: Record<string, any>): string {
+  const qs = new URLSearchParams();
+  qs.set('paged', '1');
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null || v === '') continue;
+      if (Array.isArray(v)) {
+        if (v.length > 0) qs.set(k, v.join(','));
+      } else {
+        qs.set(k, String(v));
+      }
+    }
+  }
+  return qs.toString();
+}
+
+export interface PagedResponse<T = any> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const api = {
   // Authentication & Session
   auth: {
@@ -372,26 +396,8 @@ export const api = {
     listPaged: (
       params?: Record<string, any>,
       signal?: AbortSignal
-    ): Promise<{
-      items: any[];
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    }> => {
-      const qs = new URLSearchParams();
-      qs.set('paged', '1');
-      if (params) {
-        for (const [k, v] of Object.entries(params)) {
-          if (v === undefined || v === null || v === '') continue;
-          if (Array.isArray(v)) {
-            if (v.length > 0) qs.set(k, v.join(','));
-          } else {
-            qs.set(k, String(v));
-          }
-        }
-      }
-      return fetchJson(`/customers?${qs.toString()}`, signal ? { signal } : {});
+    ): Promise<PagedResponse<any>> => {
+      return fetchJson(`/customers?${buildPagedQuery(params)}`, signal ? { signal } : {});
     },
     getStats: (signal?: AbortSignal): Promise<{
       totalCustomers: number;
@@ -432,6 +438,8 @@ export const api = {
     testRouter: (id: string) => fetchJson<any>(`/network/routers/${id}/test`, { method: 'POST' }),
     rebootRouter: (id: string) => fetchJson<any>(`/network/routers/${id}/reboot`, { method: 'POST' }),
     getPPPoE: () => fetchJson<any[]>('/network/pppoe'),
+    getPPPoEPaged: (params?: Record<string, any>) =>
+      fetchJson<PagedResponse<any>>(`/network/pppoe?${buildPagedQuery(params)}`),
     getVlans: () => fetchJson<any[]>('/network/vlans'),
     createVlan: (data: any) => fetchJson<any>('/network/vlans', { method: 'POST', body: JSON.stringify(data) }),
     getIpPools: () => fetchJson<any[]>('/network/ipam/pools'),
@@ -444,6 +452,10 @@ export const api = {
       const query = new URLSearchParams(params).toString();
       return fetchJson<any[]>(`/invoices${query ? `?${query}` : ''}`);
     },
+    getInvoicesPaged: (params?: Record<string, any>) =>
+      fetchJson<PagedResponse<any> & { stats?: { totalBilled: number; totalPaid: number; totalOverdue: number } }>(
+        `/invoices?${buildPagedQuery(params)}`
+      ),
     createInvoice: (data: any) => fetchJson<any>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
     markPaid: (id: string, paymentMethod: string = 'CASH') =>
       fetchJson<any>(`/invoices/${id}/pay`, { method: 'PUT', body: JSON.stringify({ paymentMethod }) }),
@@ -453,6 +465,8 @@ export const api = {
   payments: {
     list: (customerId?: string) =>
       fetchJson<any[]>(`/payments${customerId ? `?customerId=${customerId}` : ''}`),
+    listPaged: (params?: Record<string, any>) =>
+      fetchJson<PagedResponse<any>>(`/payments?${buildPagedQuery(params)}`),
     record: (data: any) => fetchJson<any>('/payments/record', { method: 'POST', body: JSON.stringify(data) }),
     generateKHQR: (customerId: string, amount: number) =>
       fetchJson<any>('/payments/khqr', { method: 'POST', body: JSON.stringify({ customerId, amount }) }),

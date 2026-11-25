@@ -126,7 +126,7 @@ console.log('--- Running DataTable Regression Tests ---');
   const expectedSpec = [
     { id: 'select', width: 40, pinned: 'left' },
     { id: 'expander', width: 28, pinned: 'left' },
-    { id: 'fullName', name: 'Customer', width: 240, pinned: 'left' },
+    { id: 'fullName', name: 'Customer', width: 260, pinned: 'left' },
     { id: 'planName', name: 'Plan', width: 170 },
     { id: 'monthlyPrice', name: 'Price', width: 100, align: 'right' },
     { id: 'dataUsageGB', name: 'Usage', width: 170 },
@@ -140,7 +140,7 @@ console.log('--- Running DataTable Regression Tests ---');
 
   // Verify total table min-width
   const totalWidth = expectedSpec.reduce((sum, col) => sum + col.width, 0);
-  assert.strictEqual(totalWidth, 1312, 'Total width should be exactly 1,312px');
+  assert.strictEqual(totalWidth, 1332, 'Total width should be exactly 1,332px');
   assert.ok(totalWidth >= 1140, 'Table min-width exceeds 1,140px spec requirement');
 
   // Verify CustomerTable source file adheres to this spec
@@ -149,7 +149,7 @@ console.log('--- Running DataTable Regression Tests ---');
     'utf-8'
   );
 
-  assert.ok(customerTableSource.includes("width: 240"), 'Customer width = 240');
+  assert.ok(customerTableSource.includes("width: 260"), 'Customer width = 260');
   assert.ok(customerTableSource.includes("width: 170"), 'Plan and Usage width = 170');
   assert.ok(customerTableSource.includes("width: 100"), 'Price width = 100');
   assert.ok(customerTableSource.includes("width: 90"), 'Due width = 90');
@@ -158,7 +158,7 @@ console.log('--- Running DataTable Regression Tests ---');
   assert.ok(customerTableSource.includes("width: 124"), 'IP width = 124');
   assert.ok(customerTableSource.includes("width: 130"), 'City width = 130');
 
-  console.log('✓ Test 5 Passed: Customer table fixed column specification matches exact px values (1312px total, min-width >= 1140px)');
+  console.log('✓ Test 5 Passed: Customer table fixed column specification matches exact px values (1332px total, min-width >= 1140px)');
 }
 
 // 6. TEST: Sticky left and right offset computation for pinned columns
@@ -166,7 +166,7 @@ console.log('--- Running DataTable Regression Tests ---');
   const columns = [
     { id: 'select', width: 40, pinned: 'left' },
     { id: 'expander', width: 28, pinned: 'left' },
-    { id: 'fullName', width: 240, pinned: 'left' },
+    { id: 'fullName', width: 260, pinned: 'left' },
     { id: 'planName', width: 170 },
     { id: 'monthlyPrice', width: 100 },
     { id: 'dataUsageGB', width: 170 },
@@ -276,7 +276,7 @@ console.log('--- Running DataTable Regression Tests ---');
 
 // 8. TEST: Column alignment verification (cell.getBoundingClientRect().left === header.getBoundingClientRect().left ± 1px)
 {
-  const colWidths = [40, 28, 240, 170, 100, 170, 90, 104, 72, 124, 130, 44];
+  const colWidths = [40, 28, 260, 170, 100, 170, 90, 104, 72, 124, 130, 44];
   const tableLeft = 240; // Simulated table start position (e.g. after sidebar)
 
   // Header boundingClientRect.left
@@ -352,9 +352,9 @@ console.log('--- Running DataTable Regression Tests ---');
     path.resolve('src/features/customers/CustomerTable.tsx'),
     'utf-8'
   );
-  assert.ok(customerTableSource.includes('filteredCustomers'), 'CustomerTable filters data before passing to DataTable');
-  assert.ok(customerTableSource.includes('data={filteredCustomers}'), 'DataTable receives filteredCustomers');
-  assert.ok(customerTableSource.includes('filters.status'), 'CustomerTable filters by status');
+  assert.ok(customerTableSource.includes('serverMode={true}'), 'CustomerTable operates in serverMode for high performance');
+  assert.ok(customerTableSource.includes('data={customers}'), 'DataTable receives customers');
+  assert.ok(customerTableSource.includes('statusOptions'), 'CustomerTable defines status options');
 
   const dataTableSource = fs.readFileSync(
     path.resolve('src/components/ui/DataTable/DataTable.tsx'),

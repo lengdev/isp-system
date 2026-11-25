@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { CreditCard, Check, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Modal, ModalFooter } from '../../components/ui/Modal';
@@ -61,6 +61,26 @@ export const RecordPaymentModal: React.FC = () => {
       description: `${c.code} • Due: ${currency}${c.balanceDue.toFixed(2)} • ${c.planName}`,
     }));
   }, [customers, currency]);
+
+  // ── Async search: searches ALL customers in the store by name, code, or plan
+  const handleCustomerSearch = useCallback(
+    async (query: string): Promise<ComboboxOption[]> => {
+      const q = query.toLowerCase().trim();
+      return customers
+        .filter(
+          (c) =>
+            c.fullName.toLowerCase().includes(q) ||
+            c.code.toLowerCase().includes(q) ||
+            (c.planName && c.planName.toLowerCase().includes(q))
+        )
+        .map((c) => ({
+          value: c.id,
+          label: c.fullName,
+          description: `${c.code} • Due: ${currency}${c.balanceDue.toFixed(2)} • ${c.planName}`,
+        }));
+    },
+    [customers, currency]
+  );
 
   // Clean split of label vs description
   const methodOptions: ComboboxOption[] = [
@@ -182,6 +202,8 @@ export const RecordPaymentModal: React.FC = () => {
             value={selectedCustomerId}
             onChange={(val) => handleCustomerChange(val as string)}
             placeholder="Search subscriber name or code..."
+            onSearch={handleCustomerSearch}
+            searchDebounceMs={150}
             size="md"
           />
         </Field>

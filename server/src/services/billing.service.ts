@@ -36,35 +36,8 @@ async function nextInvoiceNumber(tx: Prisma.TransactionClient): Promise<string> 
 }
 
 export class BillingService {
-  // 1. List Invoices with search and filters
-  static async listInvoices(filters?: {
-    customerId?: string;
-    status?: string;
-    billingPeriod?: string;
-    search?: string;
-  }) {
-    const where: any = {};
-    if (filters?.customerId) where.customerId = filters.customerId;
-    if (filters?.status) where.status = filters.status.toUpperCase();
-    if (filters?.billingPeriod) where.billingPeriod = filters.billingPeriod;
-    if (filters?.search) {
-      const q = filters.search;
-      where.OR = [
-        { invoiceNumber: { contains: q, mode: 'insensitive' } },
-        { customerId: { contains: q, mode: 'insensitive' } },
-      ];
-    }
-
-    const invoices = await prisma.invoice.findMany({
-      where,
-      include: {
-        customer: true,
-        items: true,
-      },
-      orderBy: { issueDate: 'desc' },
-    });
-
-    return invoices.map((inv) => ({
+  private static formatInvoiceRecord(inv: any) {
+    return {
       ...inv,
       amount: Number(inv.amount),
       paidAmount: Number(inv.paidAmount),
@@ -74,15 +47,169 @@ export class BillingService {
       paidAt: inv.paidAt?.toISOString() || null,
       createdAt: inv.createdAt.toISOString(),
       updatedAt: inv.updatedAt.toISOString(),
-      items: inv.items.map((it) => ({
+      items: inv.items.map((it: any) => ({
         ...it,
         unitPrice: Number(it.unitPrice),
         amount: Number(it.amount),
       })),
-      customerName: inv.customer?.fullName || 'Customer',
+      customerName: inv.customer?.nameEn || inv.customer?.nameKm || inv.customer?.fullName || 'Customer',
       customerEmail: inv.customer?.email || '',
       customerPhone: inv.customer?.phone || '',
-    }));
+    };
+  }
+
+  private static buildInvoiceWhere(filters: {
+    customerId?: string;
+    status?: string;
+    billingPeriod?: string;
+    search?: string;
+    invoiceNumber?: string;
+    customerName?: string;
+    minAmount?: number | string;
+    maxAmount?: number | string;
+  } = {}): Prisma.InvoiceWhereInput {
+    const andClauses: Prisma.InvoiceWhereInput[] = [];
+    if (filters.customerId) andClauses.push({ customerId: filters.customerId });
+    if (filters.billingPeriod) andClauses.push({ billingPeriod: filters.billingPeriod });
+
+    if (filters.status) {
+      const st = String(filters.status).toUpperCase();
+      if (st === 'PARTIAL') {
+        andClauses.push({
+          status: { notIn: ['PAID', 'CANCELLED'] },
+          paidAmount: { gt: 0 },
+          balanceDue: { gt: 0 },
+        });
+      } else if (st === 'PENDING' || st === 'OVERDUE' || st === 'PAID' || st === 'CANCELLED') {
+        andClauses.push({ status: st as any });
+      }
+    }
+
+    if (filters.invoiceNumber) {
+      andClauses.push({ invoiceNumber: { contains: filters.invoiceNumber.trim(), mode: 'insensitive' } });
+    }
+    if (filters.customerName) {
+      const cn = filters.customerName.trim().normalize('NFC');
+      andClauses.push({
+        customer: {
+          OR: [
+            { fullName: { contains: cn, mode: 'insensitive' } },
+            { nameEn: { contains: cn, mode: 'insensitive' } },
+            { nameKm: { contains: cn, mode: 'insensitive' } },
+            { email: { contains: cn, mode: 'insensitive' } },
+          ],
+        },
+      });
+    }
+
+    const minA = filters.minAmount !== undefined && filters.minAmount !== '' ? Number(filters.minAmount) : NaN;
+    const maxA = filters.maxAmount !== undefined && filters.maxAmount !== '' ? Number(filters.maxAmount) : NaN;
+    if (!Number.isNaN(minA)) andClauses.push({ amount: { gte: minA } });
+    if (!Number.isNaN(maxA)) andClauses.push({ amount: { lte: maxA } });
+
+    if (filters.search) {
+      const q = filters.search.trim().normalize('NFC');
+      andClauses.push({
+        OR: [
+          { invoiceNumber: { contains: q, mode: 'insensitive' } },
+          { customerId: { contains: q, mode: 'insensitive' } },
+          { customer: { fullName: { contains: q, mode: 'insensitive' } } },
+          { customer: { nameEn: { contains: q, mode: 'insensitive' } } },
+          { customer: { nameKm: { contains: q, mode: 'insensitive' } } },
+          { customer: { email: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    return andClauses.length > 0 ? { AND: andClauses } : {};
+  }
+
+  // 1. List Invoices with search and filters
+  static async listInvoices(filters?: {
+    customerId?: string;
+    status?: string;
+    billingPeriod?: string;
+    search?: string;
+  }) {
+    const where = BillingService.buildInvoiceWhere(filters);
+    const invoices = await prisma.invoice.findMany({
+      where,
+      include: {
+        customer: true,
+        items: true,
+      },
+      orderBy: { issueDate: 'desc' },
+    });
+
+    return invoices.map(BillingService.formatInvoiceRecord);
+  }
+
+  static async listInvoicesPaged(filters: {
+    customerId?: string;
+    status?: string;
+    billingPeriod?: string;
+    search?: string;
+    invoiceNumber?: string;
+    customerName?: string;
+    minAmount?: number | string;
+    maxAmount?: number | string;
+    page?: number | string;
+    limit?: number | string;
+    sortBy?: string;
+    sortDir?: string;
+  } = {}) {
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filters.limit) || 25));
+    const skip = (page - 1) * limit;
+    const where = BillingService.buildInvoiceWhere(filters);
+
+    const sortDir = filters.sortDir === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.InvoiceOrderByWithRelationInput = { issueDate: 'desc' };
+    if (filters.sortBy === 'invoiceNumber') orderBy = { invoiceNumber: sortDir };
+    else if (filters.sortBy === 'customerName') orderBy = { customer: { fullName: sortDir } };
+    else if (filters.sortBy === 'date') orderBy = { issueDate: sortDir };
+    else if (filters.sortBy === 'dueDate') orderBy = { dueDate: sortDir };
+    else if (filters.sortBy === 'amount') orderBy = { amount: sortDir };
+    else if (filters.sortBy === 'status') orderBy = { status: sortDir };
+
+    const [total, invoices, allAgg, paidAgg, overdueAgg] = await prisma.$transaction([
+      prisma.invoice.count({ where }),
+      prisma.invoice.findMany({
+        where,
+        include: {
+          customer: true,
+          items: true,
+        },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      prisma.invoice.aggregate({
+        where: { status: { not: 'CANCELLED' } },
+        _sum: { amount: true },
+      }),
+      prisma.invoice.aggregate({
+        where: { status: 'PAID' },
+        _sum: { amount: true },
+      }),
+      prisma.invoice.aggregate({
+        where: { status: 'OVERDUE' },
+        _sum: { balanceDue: true },
+      }),
+    ]);
+
+    return {
+      items: invoices.map(BillingService.formatInvoiceRecord),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      stats: {
+        totalBilled: Number(allAgg._sum.amount || 0),
+        totalPaid: Number(paidAgg._sum.amount || 0),
+        totalOverdue: Number(overdueAgg._sum.balanceDue || 0),
+      },
+    };
   }
 
   // 2. Generate Single Invoice with Duplicate Prevention & Accrual Accounting
