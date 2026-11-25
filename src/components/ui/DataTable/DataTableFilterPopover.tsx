@@ -129,9 +129,16 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
   }, [isOpen, onOpenChange]);
 
   // Extract distinct filter values from columns or data
+  const hasCustomerFields = useMemo(
+    () => columns.some((c) => ['planName', 'plan', 'balanceDue', 'connectionType'].includes(c.id)),
+    [columns]
+  );
+
+  const statusColumn = useMemo(() => columns.find((c) => c.id === 'status'), [columns]);
+
   const statusOptions = useMemo(() => {
-    const col = columns.find((c) => c.id === 'status');
-    if (col?.filter?.options) return col.filter.options;
+    if (statusColumn?.filter?.options) return statusColumn.filter.options;
+    if (!hasCustomerFields) return [];
     return [
       { value: 'Active', label: 'Active' },
       { value: 'Suspended', label: 'Suspended' },
@@ -139,18 +146,42 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
       { value: 'Pending', label: 'Pending' },
       { value: 'Disconnected', label: 'Disconnected' },
     ];
+  }, [statusColumn, hasCustomerFields]);
+
+  const customMultiColumns = useMemo(() => {
+    const reservedIds = new Set([
+      'status',
+      'planName',
+      'plan',
+      'connectionType',
+      'type',
+      'city',
+      'assignedTechnician',
+      'technician',
+      'balanceDue',
+    ]);
+    return columns.filter(
+      (c) =>
+        !reservedIds.has(c.id) &&
+        c.filter &&
+        (c.filter.type === 'multi' || c.filter.type === 'select') &&
+        Array.isArray(c.filter.options) &&
+        c.filter.options.length > 0
+    );
   }, [columns]);
 
   const planOptions = useMemo(() => {
     const col = columns.find((c) => c.id === 'planName' || c.id === 'plan');
     if (col?.filter?.options) return col.filter.options;
+    if (!col && !hasCustomerFields) return [];
     const values = Array.from(new Set(data.map((d) => d.planName || d.plan).filter(Boolean)));
     return values.map((v) => ({ value: String(v), label: String(v) }));
-  }, [columns, data]);
+  }, [columns, data, hasCustomerFields]);
 
   const connectionOptions = useMemo(() => {
     const col = columns.find((c) => c.id === 'connectionType' || c.id === 'type');
     if (col?.filter?.options) return col.filter.options;
+    if (!col && !hasCustomerFields) return [];
     const values = Array.from(new Set(data.map((d) => d.connectionType).filter(Boolean)));
     if (values.length > 0) return values.map((v) => ({ value: String(v), label: String(v) }));
     return [
@@ -158,23 +189,25 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
       { value: 'Wireless', label: 'Wireless' },
       { value: 'DSL', label: 'DSL' },
     ];
-  }, [columns, data]);
+  }, [columns, data, hasCustomerFields]);
 
   const cityOptions = useMemo(() => {
     const col = columns.find((c) => c.id === 'city');
     if (col?.filter?.options) return col.filter.options;
+    if (!col && !hasCustomerFields) return [];
     const values = Array.from(new Set(data.map((d) => d.city).filter(Boolean))).sort();
     return values.map((v) => ({ value: String(v), label: String(v) }));
-  }, [columns, data]);
+  }, [columns, data, hasCustomerFields]);
 
   const technicianOptions = useMemo(() => {
     const col = columns.find((c) => c.id === 'assignedTechnician' || c.id === 'technician');
     if (col?.filter?.options) return col.filter.options;
+    if (!col && !hasCustomerFields) return [];
     const values = Array.from(
       new Set(data.map((d) => d.assignedTechnician || d.technician).filter(Boolean))
     ).sort();
     return values.map((v) => ({ value: String(v), label: String(v) }));
-  }, [columns, data]);
+  }, [columns, data, hasCustomerFields]);
 
   // Live count preview using draft filters
   const previewCount = useMemo(() => {
@@ -182,7 +215,10 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
       // 1. Status
       const st = draftFilters['status'];
       if (Array.isArray(st) && st.length > 0) {
-        if (!st.includes(row.status)) return false;
+        const rowStatus =
+          row.status ??
+          (row.isActive === true ? 'active' : row.isActive === false ? 'disabled' : undefined);
+        if (!st.includes(rowStatus)) return false;
       }
 
       // 2. Plan
@@ -242,7 +278,11 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
 
         const rowVal = row[k];
         if (Array.isArray(v)) {
-          if (!v.includes(rowVal)) return false;
+          if (Array.isArray(rowVal)) {
+            if (!v.some((item) => rowVal.includes(item))) return false;
+          } else if (!v.includes(rowVal)) {
+            return false;
+          }
         } else if (typeof v === 'object' && ('min' in v || 'max' in v)) {
           const num = Number(rowVal);
           if (v.min !== undefined && v.min !== '' && num < Number(v.min)) return false;
@@ -354,11 +394,61 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
 
           {/* Scrollable Filter Fields */}
           <div className="p-4 overflow-y-auto scrollbar-thin space-y-4 flex-1">
+            {/* Custom multi/select filter columns (e.g., Roles) */}
+            {customMultiColumns.map((col) => {
+              const opts = col.filter?.options || [];
+              const selectedVals: string[] = Array.isArray(draftFilters[col.id])
+                ? draftFilters[col.id]
+                : draftFilters[col.id]
+                  ? [draftFilters[col.id]]
+                  : [];
+              const label = typeof col.header === 'string' ? col.header : col.id;
+              return (
+                <div key={col.id}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                      {label}
+                    </label>
+                    {selectedVals.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setDraftFilters((prev) => ({ ...prev, [col.id]: [] }))}
+                        className="text-[10px] text-[var(--brand)] hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto scrollbar-thin p-0.5">
+                    {opts.map((opt) => {
+                      const isSelected = selectedVals.includes(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => toggleMultiItem(col.id, opt.value)}
+                          className={cn(
+                            'h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors duration-[120ms] flex items-center gap-1.5 border',
+                            isSelected
+                              ? 'bg-[var(--option-selected-bg)] border-[var(--option-selected-border)] text-[var(--option-selected-text)] hover:bg-[var(--option-selected-hover-bg)]'
+                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--option-hover-bg)] hover:text-[var(--text)]'
+                          )}
+                        >
+                          {isSelected && <Check className="w-3 h-3 stroke-[2.5] text-[var(--option-selected-icon)]" />}
+                          <span>{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
             {/* 1. Status Filter */}
             {statusOptions.length > 0 && (
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block mb-1.5">
-                  Subscriber Status
+                  {hasCustomerFields ? 'Subscriber Status' : (typeof statusColumn?.header === 'string' ? statusColumn.header : 'Status')}
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   {statusOptions.map((opt) => {
@@ -554,6 +644,7 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
             )}
 
             {/* 6. Balance Due Range */}
+            {columns.some((c) => c.id === 'balanceDue') && (
             <div>
               <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block mb-1.5">
                 Balance Due Range ($)
@@ -667,6 +758,7 @@ export const DataTableFilterPopover = <T extends Record<string, any>>({
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           {/* Footer Actions */}

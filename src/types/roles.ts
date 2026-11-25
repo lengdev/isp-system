@@ -38,6 +38,8 @@ export interface UserWithRoles {
   denyCount?: number;
   isActive: boolean;
   hasAuditHistory?: boolean;
+  isLastSuperAdmin?: boolean;
+  isLastActiveSuperAdmin?: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;

@@ -21,6 +21,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   return (
     <>
       <UsersWorkspace
+        key={initialRoleFilter || 'all'}
         embedded
         initialRoleFilter={initialRoleFilter}
         showPermissionsButton

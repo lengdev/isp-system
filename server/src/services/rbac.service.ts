@@ -1095,7 +1095,7 @@ export class RbacService {
         orderBy = { createdAt: sortDir };
     }
 
-    const [total, users] = await Promise.all([
+    const [total, users, allSuperAdminIds, activeSuperAdminIds] = await Promise.all([
       prisma.user.count({ where }),
       prisma.user.findMany({
         where,
@@ -1133,6 +1133,8 @@ export class RbacService {
           },
         },
       }),
+      this.getSuperAdminUserIds(false),
+      this.getSuperAdminUserIds(true),
     ]);
 
     const items = users.map((u) => {
@@ -1160,6 +1162,8 @@ export class RbacService {
         denyCount: denies.length,
         isActive: u.isActive,
         hasAuditHistory: u._count.auditLogs > 0,
+        isLastSuperAdmin: allSuperAdminIds.has(u.id) && allSuperAdminIds.size <= 1,
+        isLastActiveSuperAdmin: activeSuperAdminIds.has(u.id) && activeSuperAdminIds.size <= 1,
         lastLoginAt: u.lastLoginAt?.toISOString() || null,
         createdAt: u.createdAt.toISOString(),
         updatedAt: u.updatedAt.toISOString(),
