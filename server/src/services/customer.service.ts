@@ -281,7 +281,7 @@ export class CustomerService {
       `,
       prisma.$queryRaw<Array<{ city: string }>>`
         SELECT DISTINCT city
-        FROM "Address"
+        FROM "CustomerAddress"
         WHERE city IS NOT NULL AND BTRIM(city) <> ''
         ORDER BY city ASC
       `,
