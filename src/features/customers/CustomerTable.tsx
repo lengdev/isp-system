@@ -1,6 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
 import {
-  MoreHorizontal,
   Star,
   Eye,
   Edit2,
@@ -153,9 +152,9 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
               <div className="w-7 h-7 rounded-full bg-[var(--surface-subtle)] border border-[var(--border)] flex items-center justify-center shrink-0 text-[11px] font-semibold text-[var(--text)]">
                 {c.initials || getInitials(c.nameEn || c.nameKm || c.fullName)}
               </div>
-              <div className="min-w-0 flex-1">
-                <Tooltip content={tooltipName}>
-                  <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-[var(--text)] hover:text-[var(--brand)] transition-colors leading-[1.5]">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <Tooltip content={tooltipName} className="block w-full min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0 w-full text-[12px] text-[var(--text)] hover:text-[var(--brand)] transition-colors leading-[1.5]">
                     {nameKm && (
                       <span lang="km" className="font-semibold truncate">
                         {nameKm}
@@ -179,11 +178,11 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                     )}
                   </div>
                 </Tooltip>
-                <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] truncate">
-                  <span className="font-mono text-[10px]">{c.code}</span>
-                  <span>•</span>
-                  <Tooltip content={c.email}>
-                    <span className="truncate">{c.email}</span>
+                <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] min-w-0">
+                  <span className="font-mono text-[10px] shrink-0">{c.code}</span>
+                  <span className="shrink-0">•</span>
+                  <Tooltip content={c.email} className="min-w-0 flex-1">
+                    <span className="truncate block">{c.email}</span>
                   </Tooltip>
                 </div>
               </div>
@@ -607,7 +606,8 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   const renderCard = (
     c: Customer,
     isSelected: boolean,
-    onSelect: () => void
+    onSelect: () => void,
+    actionMenu?: React.ReactNode
   ) => {
     const usagePercent = c.dataCapGB
       ? Math.min(100, Math.round((c.dataUsageGB / c.dataCapGB) * 100))
@@ -626,8 +626,8 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
       >
         <div>
           {/* Top header row: Checkbox, Avatar, Name/Email, Actions dropdown */}
-          <div className="flex items-start justify-between gap-2.5">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
               <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center">
                 <DataTableCheckbox
                   checked={isSelected}
@@ -641,9 +641,12 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                 size="md"
                 online={c.onlineStatus === 'online'}
               />
-              <div className="min-w-0 flex-1">
-                <Tooltip content={c.nameKm && c.nameEn ? `${c.nameKm} • ${c.nameEn}` : c.fullName}>
-                  <div className="min-w-0">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <Tooltip
+                  content={c.nameKm && c.nameEn ? `${c.nameKm} • ${c.nameEn}` : c.fullName}
+                  className="block w-full min-w-0"
+                >
+                  <div className="min-w-0 w-full">
                     {c.nameKm && (
                       <h4 lang="km" className="text-[13px] font-semibold text-[var(--text)] truncate leading-[1.55] group-hover:text-[var(--brand)] transition-colors">
                         {c.nameKm}
@@ -661,11 +664,11 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                     )}
                   </div>
                 </Tooltip>
-                <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] truncate">
-                  <span className="font-mono text-[10px]">{c.code}</span>
-                  <span>•</span>
-                  <Tooltip content={c.email}>
-                    <span className="truncate">{c.email}</span>
+                <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] min-w-0">
+                  <span className="font-mono text-[10px] shrink-0">{c.code}</span>
+                  <span className="shrink-0">•</span>
+                  <Tooltip content={c.email} className="min-w-0 flex-1">
+                    <span className="truncate block">{c.email}</span>
                   </Tooltip>
                 </div>
               </div>
@@ -677,38 +680,28 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
               className="flex items-center gap-1 shrink-0"
             >
               <StatusChangePopover currentStatus={c.status} customerId={c.id} />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openDrawer(c.id);
-                }}
-                className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-subtle)] transition-colors"
-                title="Customer options"
-              >
-                <MoreHorizontal className="w-3.5 h-3.5" />
-              </button>
+              {actionMenu}
             </div>
           </div>
 
           {/* Details list */}
           <div className="mt-3.5 pt-2.5 border-t border-[var(--border-subtle)] space-y-1.5 text-[11px]">
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-muted)]">Plan:</span>
-              <span className="font-semibold text-[var(--text)] truncate max-w-[170px]">
+            <div className="flex items-center justify-between gap-3 min-w-0">
+              <span className="text-[var(--text-muted)] shrink-0">Plan:</span>
+              <span className="font-semibold text-[var(--text)] truncate min-w-0 text-right">
                 {c.planName} <span className="font-normal text-[var(--text-muted)]">({c.connectionType})</span>
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-muted)]">Price:</span>
-              <span className="font-bold text-[var(--text)] tabular-nums">
+            <div className="flex items-center justify-between gap-3 min-w-0">
+              <span className="text-[var(--text-muted)] shrink-0">Price:</span>
+              <span className="font-bold text-[var(--text)] tabular-nums shrink-0">
                 {currency}{c.monthlyPrice.toFixed(2)}/mo
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-muted)]">Usage:</span>
-              <div className="flex items-center gap-2">
-                <div className="w-16 bg-[var(--surface-subtle)] border border-[var(--border-subtle)] h-1.5 rounded-full overflow-hidden">
+            <div className="flex items-center justify-between gap-3 min-w-0">
+              <span className="text-[var(--text-muted)] shrink-0">Usage:</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-16 bg-[var(--surface-subtle)] border border-[var(--border-subtle)] h-1.5 rounded-full overflow-hidden shrink-0">
                   <div
                     className={cn(
                       'h-full rounded-full transition-all',
@@ -721,7 +714,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                     style={{ width: `${usagePercent}%` }}
                   />
                 </div>
-                <span className="tabular-nums font-medium text-[var(--text-secondary)]">
+                <span className="tabular-nums font-medium text-[var(--text-secondary)] truncate">
                   {formatNumber(c.dataUsageGB)} GB
                   {c.dataCapGB ? ` / ${formatNumber(c.dataCapGB)}` : ''}
                 </span>

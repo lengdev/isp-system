@@ -2,17 +2,47 @@ export type CustomerStatus = 'Active' | 'Suspended' | 'Pending' | 'Disconnected'
 
 export type ConnectionType = 'Fiber' | 'Wireless' | 'DSL';
 
+export interface PlanBandwidthTier {
+  id?: string;
+  packageId?: string;
+  label: string;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  speedMbps?: number;
+  uploadMbps?: number;
+  price: number;
+  costing: number;
+  durationDays: number;
+  durationLabel?: string;
+  dataAllowanceGB?: number | null;
+  dataCapGB?: number | null;
+  description?: string;
+  sortOrder?: number;
+  isDefault?: boolean;
+  isActive?: boolean;
+}
+
 export interface Plan {
   id: string;
   name: string;
   speedMbps: number; // Downlink
   uploadMbps: number;
   monthlyPrice: number;
+  installationFee?: number;
+  costing?: number;
+  durationDays?: number;
   dataCapGB: number | null; // null = Unlimited
   type: ConnectionType;
   description?: string;
   isPopular?: boolean;
+  isActive?: boolean;
   subscribersCount?: number;
+  revenueAccountCode?: string | null;
+  receivableAccountCode?: string | null;
+  costAccountCode?: string | null;
+  deferredRevenueAccountCode?: string | null;
+  taxAccountCode?: string | null;
+  bandwidthTiers?: PlanBandwidthTier[];
 }
 
 export interface Customer {
@@ -29,6 +59,8 @@ export interface Customer {
   city: string;
   planId: string;
   planName: string;
+  bandwidthTierId?: string;
+  bandwidthTierLabel?: string;
   monthlyPrice: number;
   connectionType: ConnectionType;
   ipAddress: string;

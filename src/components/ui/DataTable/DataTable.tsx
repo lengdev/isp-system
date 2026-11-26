@@ -82,7 +82,7 @@ interface ActionMenuButtonProps<T> {
   onClose: () => void;
 }
 
-const ActionMenuButton = <T,>({
+export const ActionMenuButton = <T,>({
   row,
   actions,
   isOpen,
@@ -1458,6 +1458,138 @@ export const DataTable = <T extends Record<string, any>>({
     );
   };
 
+  const renderPaginationBar = () => (
+    <div className="min-h-[44px] py-2 sm:py-0 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-3 px-4 border-t border-[var(--border)] bg-[var(--surface)] text-[12px] text-[var(--text-muted)] select-none">
+      {/* Left: Showing 1-10 of 240 + per page + Updated 16s ago + refresh */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {isTotalUnknownWhileLoading ? (
+          <Skeleton className="h-3.5 w-32 rounded" />
+        ) : (
+          <span className="whitespace-nowrap font-medium text-[var(--text-secondary)]">
+            Showing{' '}
+            <span className="font-semibold text-[var(--text)] tabular-nums">
+              {totalRecords === 0 ? 0 : pageIndex * pageSize + 1}-{Math.min((pageIndex + 1) * pageSize, totalRecords)}
+            </span>{' '}
+            of{' '}
+            <span className="font-semibold text-[var(--text)] tabular-nums">
+              {totalRecords}
+            </span>
+          </span>
+        )}
+
+        {/* Per page combobox (32px) */}
+        <div className="flex items-center gap-1.5 pl-3 border-l border-[var(--border)]">
+          <span className="text-[var(--text-muted)] hidden sm:inline">Per page:</span>
+          <div className="w-[72px]">
+            <Combobox
+              options={[
+                { value: '10', label: '10' },
+                { value: '25', label: '25' },
+                { value: '50', label: '50' },
+                { value: '100', label: '100' },
+              ]}
+              value={String(pageSize)}
+              onChange={(val) => table.setPageSize(Number(val))}
+              searchable={false}
+              clearable={false}
+              size="sm"
+            />
+          </div>
+        </div>
+
+        {/* Updated Ns ago + refresh icon button */}
+        {onRefresh && (
+          <div className="flex items-center gap-1 pl-3 border-l border-[var(--border)] text-[var(--text-muted)]">
+            <span className="hidden md:inline tabular-nums text-[11px]">
+              Updated {lastUpdated}s ago
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onRefresh();
+                setLastUpdated(0);
+              }}
+              className="p-1 rounded-[6px] hover:bg-[var(--surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              title="Refresh data"
+            >
+              <RefreshCw className={cn('w-3.5 h-3.5', isBusy && 'animate-spin')} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Right: Navigation buttons (28px square buttons, "Page N of M") */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            pendingQueryChangeRef.current = true;
+            setShowSkeleton(true);
+            skeletonShownAtRef.current = Date.now();
+            table.setPageIndex(0);
+          }}
+          disabled={showSkeleton || !table.getCanPreviousPage()}
+          className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
+          title="First Page"
+        >
+          <ChevronsLeft className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            pendingQueryChangeRef.current = true;
+            setShowSkeleton(true);
+            skeletonShownAtRef.current = Date.now();
+            table.previousPage();
+          }}
+          disabled={showSkeleton || !table.getCanPreviousPage()}
+          className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
+          title="Previous Page"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+
+        {isTotalUnknownWhileLoading ? (
+          <Skeleton className="h-3.5 w-16 mx-2 rounded" />
+        ) : (
+          <span className="px-2 text-[12px] font-medium text-[var(--text-secondary)] whitespace-nowrap">
+            Page <span className="font-semibold text-[var(--text)]">{pageIndex + 1}</span> of{' '}
+            <span className="font-semibold text-[var(--text)]">{Math.max(1, totalPages)}</span>
+          </span>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            pendingQueryChangeRef.current = true;
+            setShowSkeleton(true);
+            skeletonShownAtRef.current = Date.now();
+            table.nextPage();
+          }}
+          disabled={showSkeleton || !table.getCanNextPage()}
+          className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
+          title="Next Page"
+        >
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            pendingQueryChangeRef.current = true;
+            setShowSkeleton(true);
+            skeletonShownAtRef.current = Date.now();
+            table.setPageIndex(totalPages - 1);
+          }}
+          disabled={showSkeleton || !table.getCanNextPage()}
+          className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
+          title="Last Page"
+        >
+          <ChevronsRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div
       onKeyDown={handleKeyDown}
@@ -1590,7 +1722,7 @@ export const DataTable = <T extends Record<string, any>>({
 
       {/* 4. Main Table Card Container or Card View */}
       {viewMode === 'cards' ? (
-        <div className="w-full select-none">
+        <div className="w-full select-none space-y-4">
           {showSkeleton ? (
             <div className={cn(cardGridClassName || 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4')}>
               {Array.from({ length: pageSize }).map((_, i) => (
@@ -1671,6 +1803,20 @@ export const DataTable = <T extends Record<string, any>>({
                   );
                 }
 
+                const cardActions = rowActions ? rowActions(row.original) : [];
+                const cardActionMenu =
+                  rowActions && cardActions.length > 0 ? (
+                    <ActionMenuButton
+                      row={row}
+                      actions={cardActions}
+                      isOpen={activeActionRowId === row.id}
+                      onToggle={() =>
+                        setActiveActionRowId(activeActionRowId === row.id ? null : row.id)
+                      }
+                      onClose={() => setActiveActionRowId(null)}
+                    />
+                  ) : null;
+
                 return (
                   <motion.div
                     key={row.id}
@@ -1683,7 +1829,8 @@ export const DataTable = <T extends Record<string, any>>({
                       renderCard(
                         row.original,
                         row.getIsSelected(),
-                        () => row.toggleSelected()
+                        () => row.toggleSelected(),
+                        cardActionMenu
                       )
                     ) : (
                       // Default universal fallback card
@@ -1696,8 +1843,8 @@ export const DataTable = <T extends Record<string, any>>({
                             : 'border-[var(--border)]'
                         )}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-start justify-between gap-2 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
                             <DataTableCheckbox
                               checked={row.getIsSelected()}
                               onChange={() => row.toggleSelected()}
@@ -1718,11 +1865,17 @@ export const DataTable = <T extends Record<string, any>>({
                               )}
                             </div>
                           </div>
-                          {row.original.status && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
-                              {String(row.original.status)}
-                            </span>
-                          )}
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 shrink-0"
+                          >
+                            {row.original.status && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
+                                {String(row.original.status)}
+                              </span>
+                            )}
+                            {cardActionMenu}
+                          </div>
                         </div>
 
                         <div className="space-y-1.5 text-[11px] pt-2 border-t border-[var(--border-subtle)]">
@@ -1747,7 +1900,7 @@ export const DataTable = <T extends Record<string, any>>({
                               return (
                                 <div
                                   key={col.id}
-                                  className="flex items-center justify-between gap-2"
+                                  className="flex items-center justify-between gap-2 min-w-0"
                                 >
                                   <span className="text-[var(--text-muted)] truncate">
                                     {typeof col.header === 'string' ? col.header : col.id}:
@@ -1764,6 +1917,13 @@ export const DataTable = <T extends Record<string, any>>({
                   </motion.div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Standard Pagination Bar in Card Grid View */}
+          {!error && (rows.length > 0 || showSkeleton) && (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-[var(--shadow-card)] [&>div]:border-t-0">
+              {renderPaginationBar()}
             </div>
           )}
         </div>
@@ -2273,135 +2433,7 @@ export const DataTable = <T extends Record<string, any>>({
           </div>
 
           {/* 5. Pagination Bar (44px) */}
-          <div className="h-[44px] flex items-center justify-between gap-3 px-4 border-t border-[var(--border)] bg-[var(--surface)] text-[12px] text-[var(--text-muted)] select-none">
-            {/* Left: Showing 1-10 of 240 + per page + Updated 16s ago + refresh */}
-            <div className="flex items-center gap-3">
-              {isTotalUnknownWhileLoading ? (
-                <Skeleton className="h-3.5 w-32 rounded" />
-              ) : (
-                <span className="whitespace-nowrap font-medium text-[var(--text-secondary)]">
-                  Showing{' '}
-                  <span className="font-semibold text-[var(--text)] tabular-nums">
-                    {totalRecords === 0 ? 0 : pageIndex * pageSize + 1}-{Math.min((pageIndex + 1) * pageSize, totalRecords)}
-                  </span>{' '}
-                  of{' '}
-                  <span className="font-semibold text-[var(--text)] tabular-nums">
-                    {totalRecords}
-                  </span>
-                </span>
-              )}
-
-              {/* Per page combobox (32px) */}
-              <div className="flex items-center gap-1.5 pl-3 border-l border-[var(--border)]">
-                <span className="text-[var(--text-muted)] hidden sm:inline">Per page:</span>
-                <div className="w-[72px]">
-                  <Combobox
-                    options={[
-                      { value: '10', label: '10' },
-                      { value: '25', label: '25' },
-                      { value: '50', label: '50' },
-                      { value: '100', label: '100' },
-                    ]}
-                    value={String(pageSize)}
-                    onChange={(val) => table.setPageSize(Number(val))}
-                    searchable={false}
-                    clearable={false}
-                    size="sm"
-                  />
-                </div>
-              </div>
-
-              {/* Updated Ns ago + refresh icon button */}
-              {onRefresh && (
-                <div className="flex items-center gap-1 pl-3 border-l border-[var(--border)] text-[var(--text-muted)]">
-                  <span className="hidden md:inline tabular-nums text-[11px]">
-                    Updated {lastUpdated}s ago
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onRefresh();
-                      setLastUpdated(0);
-                    }}
-                    className="p-1 rounded-[6px] hover:bg-[var(--surface-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-                    title="Refresh data"
-                  >
-                    <RefreshCw className={cn('w-3.5 h-3.5', isBusy && 'animate-spin')} />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Navigation buttons (28px square buttons, "Page N of M") */}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  pendingQueryChangeRef.current = true;
-                  setShowSkeleton(true);
-                  skeletonShownAtRef.current = Date.now();
-                  table.setPageIndex(0);
-                }}
-                disabled={showSkeleton || !table.getCanPreviousPage()}
-                className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
-                title="First Page"
-              >
-                <ChevronsLeft className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  pendingQueryChangeRef.current = true;
-                  setShowSkeleton(true);
-                  skeletonShownAtRef.current = Date.now();
-                  table.previousPage();
-                }}
-                disabled={showSkeleton || !table.getCanPreviousPage()}
-                className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
-                title="Previous Page"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-
-              {isTotalUnknownWhileLoading ? (
-                <Skeleton className="h-3.5 w-16 mx-2 rounded" />
-              ) : (
-                <span className="px-2 text-[12px] font-medium text-[var(--text-secondary)] whitespace-nowrap">
-                  Page <span className="font-semibold text-[var(--text)]">{pageIndex + 1}</span> of{' '}
-                  <span className="font-semibold text-[var(--text)]">{Math.max(1, totalPages)}</span>
-                </span>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  pendingQueryChangeRef.current = true;
-                  setShowSkeleton(true);
-                  skeletonShownAtRef.current = Date.now();
-                  table.nextPage();
-                }}
-                disabled={showSkeleton || !table.getCanNextPage()}
-                className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
-                title="Next Page"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  pendingQueryChangeRef.current = true;
-                  setShowSkeleton(true);
-                  skeletonShownAtRef.current = Date.now();
-                  table.setPageIndex(totalPages - 1);
-                }}
-                disabled={showSkeleton || !table.getCanNextPage()}
-                className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-subtle)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--text-secondary)] transition-colors"
-                title="Last Page"
-              >
-                <ChevronsRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+          {renderPaginationBar()}
         </div>
       )}
 

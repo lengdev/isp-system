@@ -100,7 +100,12 @@ export interface DataTableProps<T> {
   rowId?: (row: T) => string;
   onRowClick?: (row: T, e: React.MouseEvent) => void;
   renderExpanded?: (row: T) => React.ReactNode;
-  renderCard?: (row: T, isSelected: boolean, onSelect: () => void) => React.ReactNode;
+  renderCard?: (
+    row: T,
+    isSelected: boolean,
+    onSelect: () => void,
+    actionMenu?: React.ReactNode
+  ) => React.ReactNode;
   bulkActions?: React.ReactNode | ((selectedRows: T[], clearSelection: () => void) => React.ReactNode);
   onSelectionChange?: (selectedRows: T[]) => void;
   rowActions?: (row: T) => RowAction<T>[];

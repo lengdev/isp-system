@@ -482,10 +482,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ reason, actor }),
       }),
+    getJournalsPaged: (params?: Record<string, any>) =>
+      fetchJson<PagedResponse<any>>(`/accounting/journals?${buildPagedQuery(params)}`),
     getLedger: (params?: any) => {
       const query = new URLSearchParams(params).toString();
       return fetchJson<any[]>(`/accounting/ledger${query ? `?${query}` : ''}`);
     },
+    getLedgerPaged: (params?: Record<string, any>) =>
+      fetchJson<PagedResponse<any>>(`/accounting/ledger?${buildPagedQuery({ paged: 1, ...params })}`),
     getTrialBalance: () => fetchJson<any>('/accounting/trial-balance'),
     getPnL: () => fetchJson<any>('/accounting/pnl'),
     getBalanceSheet: () => fetchJson<any>('/accounting/balance-sheet'),

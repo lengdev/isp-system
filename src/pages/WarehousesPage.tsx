@@ -304,7 +304,7 @@ export const WarehousesPage: React.FC = () => {
               onChange={(val) => setMoveType(val)}
               searchable={MOVE_TYPE_OPTIONS.length > 6}
               clearable={false}
-              size="sm"
+              size="md"
             />
           </Field>
 
@@ -316,7 +316,7 @@ export const WarehousesPage: React.FC = () => {
               searchable={productOptions.length > 6}
               clearable={false}
               placeholder="Select product..."
-              size="sm"
+              size="md"
             />
           </Field>
 
@@ -329,7 +329,7 @@ export const WarehousesPage: React.FC = () => {
                 searchable={warehouseOptions.length > 6}
                 clearable={false}
                 placeholder="Select origin warehouse..."
-                size="sm"
+                size="md"
               />
             </Field>
           )}
@@ -343,7 +343,7 @@ export const WarehousesPage: React.FC = () => {
                 searchable={warehouseOptions.length > 6}
                 clearable={false}
                 placeholder="Select destination warehouse..."
-                size="sm"
+                size="md"
               />
             </Field>
           )}

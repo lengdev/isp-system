@@ -240,11 +240,11 @@ const OptionRow = memo(({
       aria-selected={isSelected}
       disabled={opt.disabled}
       data-index={absIdx}
-      style={{ height: ITEM_HEIGHT }}
+      style={{ minHeight: ITEM_HEIGHT, height: opt.description ? 'auto' : ITEM_HEIGHT }}
       onClick={() => onSelect(opt.value)}
       onMouseEnter={() => onHover(absIdx)}
       className={cn(
-        'flex items-center justify-between w-full px-3 rounded-[8px] text-left select-none transition-colors duration-100',
+        'flex items-center justify-between w-full px-3 py-1 rounded-[8px] text-left select-none transition-colors duration-100',
         size === 'sm' ? 'text-[12px]' : 'text-[13px]',
         opt.disabled
           ? 'opacity-50 cursor-not-allowed pointer-events-none'
@@ -277,20 +277,28 @@ const OptionRow = memo(({
           </span>
         )}
 
-        <div className="min-w-0 flex-1 flex items-center gap-1.5 truncate">
-          <span
-            className={cn(
-              'truncate font-normal',
-              isSelected ? 'text-[#006FEE] font-medium' : 'text-[var(--text)]',
-              size === 'sm' ? 'text-[12px]' : 'text-[13px]'
-            )}
-          >
-            {highlightMatch(opt.label, searchQuery)}
-          </span>
+        <div className="min-w-0 flex-1 flex flex-col justify-center py-0.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className={cn(
+                'truncate font-normal',
+                isSelected ? 'text-[#006FEE] font-medium' : 'text-[var(--text)]',
+                size === 'sm' ? 'text-[12px]' : 'text-[13px]'
+              )}
+              title={opt.label}
+            >
+              {highlightMatch(opt.label, searchQuery)}
+            </span>
+          </div>
+          {opt.description && (
+            <span className="text-[11px] text-[var(--text-muted)] truncate block leading-tight">
+              {opt.description}
+            </span>
+          )}
         </div>
 
         {opt.badge && (
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 border border-zinc-200/60 dark:border-white/10">
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 border border-zinc-200/60 dark:border-white/10 shrink-0">
             {opt.badge}
           </span>
         )}
@@ -441,7 +449,16 @@ export const Combobox: React.FC<ComboboxProps> = ({
     const collisionPadding = 12;
     const offset = 4;
 
-    const width = Math.max(rect.width, 220);
+    let targetWidth = rect.width;
+    if (popoverWidth) {
+      const match = /^(\d+)px$/.exec(popoverWidth);
+      if (match) {
+        targetWidth = Math.max(targetWidth, parseInt(match[1], 10));
+      } else if (popoverWidth.includes('min(')) {
+        targetWidth = Math.max(targetWidth, 400);
+      }
+    }
+    const width = Math.min(Math.max(targetWidth, 220), window.innerWidth - collisionPadding * 2);
     let left = rect.left;
     if (left + width > window.innerWidth - collisionPadding) {
       left = window.innerWidth - width - collisionPadding;
@@ -451,14 +468,14 @@ export const Combobox: React.FC<ComboboxProps> = ({
     const spaceBelow = window.innerHeight - rect.bottom - collisionPadding - offset;
     const spaceAbove = rect.top - collisionPadding - offset;
     const openUpward = spaceBelow < 220 && spaceAbove > spaceBelow;
-    const maxHeight  = Math.min(320, Math.max(140, openUpward ? spaceAbove : spaceBelow));
+    const maxHeight  = Math.min(360, Math.max(140, openUpward ? spaceAbove : spaceBelow));
 
     setCoords(
       openUpward
         ? { bottom: window.innerHeight - rect.top + offset, top: undefined, left, width, maxHeight, openUpward: true }
         : { top: rect.bottom + offset, bottom: undefined, left, width, maxHeight, openUpward: false }
     );
-  }, []);
+  }, [popoverWidth]);
 
   // ── Derived state (all memoized) ─────────────────────────────────────────
   const selectedValues = useMemo<string[]>(() => {
@@ -817,7 +834,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   {singleSelectedOption.icon}
                 </span>
               )}
-              <span className="font-normal text-[var(--text)] truncate">
+              <span className="font-normal text-[var(--text)] truncate" title={singleSelectedOption.label}>
                 {singleSelectedOption.shortLabel || singleSelectedOption.label}
               </span>
             </div>

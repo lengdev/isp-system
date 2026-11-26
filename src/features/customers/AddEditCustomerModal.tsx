@@ -63,6 +63,7 @@ export const AddEditCustomerModal: React.FC = () => {
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [selectedTierId, setSelectedTierId] = useState<string>('');
 
   const {
     register,
@@ -103,6 +104,7 @@ export const AddEditCustomerModal: React.FC = () => {
       setIsSuccess(false);
 
       if (isEdit && existingCustomer) {
+        setSelectedTierId((existingCustomer as any).bandwidthTierId || '');
         const hasKm = Boolean(existingCustomer.nameKm?.trim());
         const hasEn = Boolean(existingCustomer.nameEn?.trim());
         const fallbackHasKm = /[\u1780-\u17FF]/.test(existingCustomer.fullName || '');
@@ -124,6 +126,9 @@ export const AddEditCustomerModal: React.FC = () => {
           notes: existingCustomer.notes || '',
         });
       } else {
+        const defPlan = plans[0];
+        const defTier = defPlan?.bandwidthTiers?.find((t) => t.isDefault) || defPlan?.bandwidthTiers?.[0];
+        setSelectedTierId(defTier?.id || '');
         reset({
           nameKm: '',
           nameEn: '',
@@ -220,6 +225,14 @@ export const AddEditCustomerModal: React.FC = () => {
   const onSubmit = async (data: CustomerFormData) => {
     setIsSubmitting(true);
     const chosenPlan = plans.find((p) => p.id === data.planId) || plans[0];
+    const availableTiers = chosenPlan?.bandwidthTiers || [];
+    const chosenTier =
+      availableTiers.find((t) => t.id === selectedTierId) ||
+      availableTiers.find((t) => t.isDefault) ||
+      availableTiers[0];
+    const monthlyPrice = chosenTier ? Number(chosenTier.price) : chosenPlan.monthlyPrice;
+    const dataCapGB = chosenTier?.dataCapGB !== undefined ? chosenTier.dataCapGB : chosenPlan.dataCapGB;
+
     const nameKm = (data.nameKm || '').trim().normalize('NFC') || null;
     const nameEn = (data.nameEn || '').trim().normalize('NFC') || null;
     const fullName = nameEn || nameKm || '';
@@ -234,14 +247,16 @@ export const AddEditCustomerModal: React.FC = () => {
       city: data.city.trim(),
       planId: chosenPlan.id,
       planName: chosenPlan.name,
-      monthlyPrice: chosenPlan.monthlyPrice,
+      bandwidthTierId: chosenTier?.id || undefined,
+      bandwidthTierLabel: chosenTier?.label || undefined,
+      monthlyPrice,
       connectionType: data.connectionType,
       ipAddress: data.ipAddress,
       macAddress: data.macAddress,
       installationDate: new Date().toISOString().split('T')[0],
       dueDate: data.dueDate,
       dataUsageGB: isEdit && existingCustomer ? existingCustomer.dataUsageGB : 12,
-      dataCapGB: chosenPlan.dataCapGB,
+      dataCapGB,
       balanceDue: isEdit && existingCustomer ? existingCustomer.balanceDue : 0,
       status: data.status,
       rating: isEdit && existingCustomer ? existingCustomer.rating : 5.0,
@@ -550,7 +565,12 @@ export const AddEditCustomerModal: React.FC = () => {
                       <Combobox
                         options={planOptions}
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(val) => {
+                          field.onChange(val);
+                          const nextPlan = plans.find((p) => p.id === val);
+                          const defTier = nextPlan?.bandwidthTiers?.find((t) => t.isDefault) || nextPlan?.bandwidthTiers?.[0];
+                          if (defTier?.id) setSelectedTierId(defTier.id);
+                        }}
                         groupBy={true}
                         placeholder="Choose subscription plan..."
                         size="md"
@@ -558,6 +578,30 @@ export const AddEditCustomerModal: React.FC = () => {
                     )}
                   />
                 </Field>
+
+                {(() => {
+                  const currentPlan = plans.find((p) => p.id === watchedData.planId) || plans[0];
+                  const currentTiers = currentPlan?.bandwidthTiers || [];
+                  if (currentTiers.length <= 1) return null;
+                  const tierOptions = currentTiers.map((t) => ({
+                    value: t.id || `${t.downloadSpeed}M`,
+                    label: `${t.label || `${t.downloadSpeed} Mbps`} — $${Number(t.price).toFixed(2)}/cycle`,
+                    description: `${t.downloadSpeed} Mbps Down / ${t.uploadSpeed} Mbps Up • ${t.durationLabel || `${t.durationDays || 30} Days`}`,
+                  }));
+                  return (
+                    <Field label="Bandwidth Option / Speed Tier">
+                      <Combobox
+                        options={tierOptions}
+                        value={selectedTierId || currentTiers.find((t) => t.isDefault)?.id || currentTiers[0]?.id || ''}
+                        onChange={(val) => setSelectedTierId(val)}
+                        searchable={false}
+                        clearable={false}
+                        size="md"
+                        placeholder="Select bandwidth tier..."
+                      />
+                    </Field>
+                  );
+                })()}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <Field label="Connection medium">

@@ -10,6 +10,7 @@ import {
 function formatCustomerRecord(c: any) {
   const primaryAddr = c.addresses?.find((a: any) => a.isPrimary) || c.addresses?.[0];
   const sub = c.subscriptions?.[0];
+  const tier = sub?.bandwidthTier;
   return {
     id: c.id,
     code: c.code,
@@ -26,8 +27,13 @@ function formatCustomerRecord(c: any) {
     rating: Number(c.rating),
     planId: sub?.packageId || '',
     planName: sub?.package?.name || 'Fiber Ultra 300M',
-    monthlyPrice: Number(sub?.monthlyFee || sub?.package?.monthlyPrice || 55.0),
-    dataCapGB: sub?.package?.dataAllowanceGB ?? null,
+    bandwidthTierId: sub?.bandwidthTierId || '',
+    bandwidthTierLabel: tier?.label || (tier ? `${tier.downloadSpeed} Mbps` : ''),
+    speedMbps: tier?.downloadSpeed ?? sub?.package?.downloadSpeed,
+    uploadMbps: tier?.uploadSpeed ?? sub?.package?.uploadSpeed,
+    durationDays: tier?.durationDays ?? 30,
+    monthlyPrice: Number(sub?.monthlyFee || tier?.price || sub?.package?.monthlyPrice || 55.0),
+    dataCapGB: tier?.dataAllowanceGB ?? sub?.package?.dataAllowanceGB ?? null,
     connectionType: sub?.technology || 'FIBER',
     ipAddress: sub?.pppoeAccount?.ipAddress || '10.20.1.42',
     macAddress: sub?.pppoeAccount?.macAddress || '48:8F:5A:12:44:01',
@@ -217,6 +223,7 @@ export class CustomerService {
         take: 1,
         include: {
           package: true,
+          bandwidthTier: true,
           pppoeAccount: true,
         },
       },
@@ -342,6 +349,7 @@ export class CustomerService {
         subscriptions: {
           include: {
             package: true,
+            bandwidthTier: true,
             pppoeAccount: true,
             router: true,
           },
@@ -409,15 +417,36 @@ export class CustomerService {
           ...(data.planName ? [{ name: data.planName }] : []),
         ],
       },
+      include: {
+        bandwidthTiers: {
+          orderBy: [{ sortOrder: 'asc' }, { downloadSpeed: 'asc' }],
+        },
+      },
     });
     if (!pkg) {
-      pkg = await prisma.package.findFirst();
+      pkg = await prisma.package.findFirst({
+        include: {
+          bandwidthTiers: {
+            orderBy: [{ sortOrder: 'asc' }, { downloadSpeed: 'asc' }],
+          },
+        },
+      });
     }
     if (!pkg) {
       throw new Error('No internet service package configured in database.');
     }
 
-    const monthlyPrice = data.monthlyPrice !== undefined ? Number(data.monthlyPrice) : Number(pkg.monthlyPrice);
+    const tiers = (pkg as any).bandwidthTiers || [];
+    const selectedTier =
+      (data.bandwidthTierId ? tiers.find((t: any) => t.id === data.bandwidthTierId) : null) ||
+      tiers.find((t: any) => t.isDefault) ||
+      tiers[0] ||
+      null;
+
+    const monthlyPrice =
+      data.monthlyPrice !== undefined
+        ? Number(data.monthlyPrice)
+        : Number(selectedTier?.price ?? pkg.monthlyPrice);
     const connectionType = (data.connectionType || pkg.technology || 'FIBER').toUpperCase();
     const initialStatus = (data.status || 'PENDING').toUpperCase();
     const ipAddress = data.ipAddress || `10.20.1.${Math.floor(Math.random() * 200) + 10}`;
@@ -491,6 +520,7 @@ export class CustomerService {
             create: {
               subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
               packageId: pkg!.id,
+              bandwidthTierId: selectedTier?.id ?? null,
               routerId: router.id,
               technology: connectionType as any,
               status: (initialStatus === 'ACTIVE' ? 'ACTIVE' : initialStatus === 'SUSPENDED' ? 'SUSPENDED' : 'PENDING') as any,
@@ -589,19 +619,34 @@ export class CustomerService {
         }
       }
 
-      if (updates.planId || updates.planName || updates.monthlyPrice !== undefined || updates.connectionType) {
-        let resolvedPackage: { id: string; monthlyPrice: any } | null = null;
+      if (
+        updates.planId ||
+        updates.planName ||
+        updates.bandwidthTierId !== undefined ||
+        updates.monthlyPrice !== undefined ||
+        updates.connectionType
+      ) {
+        let resolvedPackage: { id: string; monthlyPrice: any; bandwidthTiers?: any[] } | null = null;
         if (updates.planId || updates.planName) {
+          const pkgInclude = {
+            select: {
+              id: true,
+              monthlyPrice: true,
+              bandwidthTiers: {
+                orderBy: [{ sortOrder: 'asc' as const }, { downloadSpeed: 'asc' as const }],
+              },
+            },
+          };
           if (updates.planId) {
             resolvedPackage = await tx.package.findUnique({
               where: { id: updates.planId },
-              select: { id: true, monthlyPrice: true },
+              ...pkgInclude,
             });
             if (!resolvedPackage) {
               const mappedId = updates.planId.replace(/^plan-/, 'pkg-');
               resolvedPackage = await tx.package.findUnique({
                 where: { id: mappedId },
-                select: { id: true, monthlyPrice: true },
+                ...pkgInclude,
               });
             }
           }
@@ -615,24 +660,42 @@ export class CustomerService {
                   { name: { contains: nameToSearch, mode: 'insensitive' } },
                 ],
               },
-              select: { id: true, monthlyPrice: true },
+              ...pkgInclude,
             });
           }
 
           if (!resolvedPackage && updates.planId) {
-            resolvedPackage = await tx.package.findFirst({
-              select: { id: true, monthlyPrice: true },
-            });
+            resolvedPackage = await tx.package.findFirst(pkgInclude);
           }
         }
 
         const sub = existing.subscriptions[0];
+        let resolvedTier: any = null;
+        if (resolvedPackage) {
+          const tiers = resolvedPackage.bandwidthTiers || [];
+          resolvedTier =
+            (updates.bandwidthTierId ? tiers.find((t: any) => t.id === updates.bandwidthTierId) : null) ||
+            tiers.find((t: any) => t.isDefault) ||
+            tiers[0] ||
+            null;
+        } else if (updates.bandwidthTierId && sub) {
+          resolvedTier = await tx.packageBandwidthTier.findFirst({
+            where: { id: updates.bandwidthTierId, packageId: sub.packageId },
+          });
+        }
+
         if (sub) {
           const subData: any = {};
           if (resolvedPackage) {
             subData.packageId = resolvedPackage.id;
+            subData.bandwidthTierId = resolvedTier?.id ?? null;
             if (updates.monthlyPrice === undefined) {
-              subData.monthlyFee = resolvedPackage.monthlyPrice;
+              subData.monthlyFee = resolvedTier?.price ?? resolvedPackage.monthlyPrice;
+            }
+          } else if (resolvedTier) {
+            subData.bandwidthTierId = resolvedTier.id;
+            if (updates.monthlyPrice === undefined) {
+              subData.monthlyFee = resolvedTier.price;
             }
           }
           if (updates.monthlyPrice !== undefined) {
@@ -655,6 +718,7 @@ export class CustomerService {
               subscriptionNumber: `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
               customerId: existing.id,
               packageId: resolvedPackage.id,
+              bandwidthTierId: resolvedTier?.id ?? null,
               routerId: router?.id || null,
               technology: (updates.connectionType ? updates.connectionType.toUpperCase() : 'FIBER') as any,
               status: (existing.status === 'ACTIVE' ? 'ACTIVE' : existing.status === 'SUSPENDED' ? 'SUSPENDED' : 'PENDING') as any,

@@ -317,29 +317,33 @@ export const BillingPage: React.FC = () => {
   const renderCard = (
     inv: Invoice,
     isSelected: boolean,
-    onSelect: () => void
+    _onSelect: () => void,
+    actionMenu?: React.ReactNode
   ) => (
     <div
       onClick={() => openDrawer(inv.customerId, 'billing')}
-      className={`p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border shadow-xs cursor-pointer transition-all flex flex-col justify-between ${isSelected
+      className={`min-w-0 p-5 rounded-2xl bg-white dark:bg-[#1C1C1F] border shadow-xs cursor-pointer transition-all flex flex-col justify-between ${isSelected
         ? 'border-[#F26B3A] bg-[#FFF6F2] dark:bg-orange-950/20'
         : 'border-gray-200/80 dark:border-gray-800 hover:border-gray-300'
         }`}
     >
-      <div>
-        <div className="flex items-center justify-between">
-          <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">
+      <div className="min-w-0">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100 truncate">
             {inv.invoiceNumber}
           </span>
-          <Chip
-            size="sm"
-            color={inv.status === 'Paid' ? 'success' : inv.status === 'Overdue' ? 'danger' : 'warning'}
-          >
-            {inv.status}
-          </Chip>
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Chip
+              size="sm"
+              color={inv.status === 'Paid' ? 'success' : inv.status === 'Overdue' ? 'danger' : 'warning'}
+            >
+              {inv.status}
+            </Chip>
+            {actionMenu}
+          </div>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-3 min-w-0">
           <h4 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
             {inv.customerName}
           </h4>

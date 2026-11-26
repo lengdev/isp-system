@@ -13,7 +13,7 @@ export interface ModalProps {
   subtitle?: string;
   icon?: React.ReactNode;
   iconColor?: 'orange' | 'red' | 'green' | 'amber';
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   children: React.ReactNode;
   footer?: React.ReactNode;
   isDirty?: boolean;
@@ -130,12 +130,15 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen, showDiscardConfirm, handleAttemptClose]);
 
-  // Spec sizes: sm 440 / md 560 / lg 720 / xl 880 (min(size, 100vw-32px))
+  // Spec sizes: sm 440 / md 560 / lg 720 / xl 880 / 2xl 1080 / 3xl 1260 / 4xl 1380 (min(size, 100vw-32px))
   const sizeMap = {
     sm: 'sm:max-w-[440px]',
     md: 'sm:max-w-[560px]',
     lg: 'sm:max-w-[720px]',
     xl: 'sm:max-w-[880px]',
+    '2xl': 'sm:max-w-[1080px]',
+    '3xl': 'sm:max-w-[1260px]',
+    '4xl': 'sm:max-w-[1380px]',
   };
 
   const iconColorStyles = {

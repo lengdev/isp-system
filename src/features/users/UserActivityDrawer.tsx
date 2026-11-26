@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, ExternalLink, Globe, History, RotateCcw, Shield, User } from 'lucide-react';
+import { Clock, ExternalLink, Globe, History, RotateCcw, Shield, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '../../components/ui/Drawer';
 import { Button } from '../../components/ui/Button';
 import { Chip, ChipColor } from '../../components/ui/Chip';
+import { DatePicker } from '../../components/ui/DatePicker';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Tooltip } from '../../components/ui/Tooltip';
@@ -135,6 +136,7 @@ export const UserActivityDrawer: React.FC<UserActivityDrawerProps> = ({ user, on
       isOpen={Boolean(user)}
       onClose={onClose}
       width="lg"
+      bodyClassName="px-6 py-5 max-sm:px-4"
       title={user ? `Activity: ${user.fullName}` : 'Activity'}
       subtitle={user ? `@${user.username} • ${user.email}` : undefined}
       headerRight={
@@ -142,7 +144,7 @@ export const UserActivityDrawer: React.FC<UserActivityDrawerProps> = ({ user, on
           <Link
             to={auditLogsLink}
             onClick={onClose}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--brand)] transition-colors"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 mr-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--brand)] whitespace-nowrap shrink-0 transition-colors shadow-[var(--shadow-xs)]"
           >
             <span>Open in Audit Logs</span>
             <ExternalLink className="w-3 h-3" />
@@ -162,45 +164,48 @@ export const UserActivityDrawer: React.FC<UserActivityDrawerProps> = ({ user, on
     >
       <div className="space-y-4">
         {/* Date Filter Controls */}
-        <div className="p-3 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border)] flex flex-wrap items-end gap-2.5 text-xs">
-          <div className="flex-1 min-w-[135px]">
-            <label className="text-[11px] font-medium text-[var(--text-muted)] block mb-1">
-              From date
-            </label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+        <div className="p-3.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border)] space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Filter by date
+            </span>
+            {(fromDate || toDate) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFromDate('');
+                  setToDate('');
+                }}
+                className="text-[11px] font-medium text-[var(--brand)] hover:underline cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <DatePicker
+              label={<span className="text-[11px] font-medium text-[var(--text-muted)]">From date</span>}
               aria-label="From date"
-              className="w-full h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--brand)]"
-            />
-          </div>
-          <div className="flex-1 min-w-[135px]">
-            <label className="text-[11px] font-medium text-[var(--text-muted)] block mb-1">
-              To date
-            </label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              aria-label="To date"
-              className="w-full h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--brand)]"
-            />
-          </div>
-          {(fromDate || toDate) && (
-            <Button
-              type="button"
-              variant="outline"
               size="sm"
-              onClick={() => {
-                setFromDate('');
-                setToDate('');
-              }}
-              className="h-8"
-            >
-              Clear
-            </Button>
-          )}
+              variant="bordered"
+              value={fromDate}
+              onChange={(_, dateStr) => setFromDate(dateStr)}
+              maxDate={toDate || undefined}
+              placeholder="mm / dd / yyyy"
+              showFooter
+            />
+            <DatePicker
+              label={<span className="text-[11px] font-medium text-[var(--text-muted)]">To date</span>}
+              aria-label="To date"
+              size="sm"
+              variant="bordered"
+              value={toDate}
+              onChange={(_, dateStr) => setToDate(dateStr)}
+              minDate={fromDate || undefined}
+              placeholder="mm / dd / yyyy"
+              showFooter
+            />
+          </div>
         </div>
 
         {/* Event List */}
@@ -209,7 +214,7 @@ export const UserActivityDrawer: React.FC<UserActivityDrawerProps> = ({ user, on
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-2"
+                className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-2.5"
               >
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-5 w-28 rounded-full" />
@@ -247,10 +252,11 @@ export const UserActivityDrawer: React.FC<UserActivityDrawerProps> = ({ user, on
             {logs.map((log) => {
               const summary = formatDetailsSummary(log.details);
               const eventDate = new Date(log.time || log.timestamp || log.createdAt);
+              const ipAddr = log.ip || log.ipAddress;
               return (
                 <div
                   key={log.id}
-                  className="p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-1.5 text-xs"
+                  className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)] shadow-[var(--shadow-xs)] transition-colors space-y-2 text-xs"
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
@@ -258,35 +264,45 @@ export const UserActivityDrawer: React.FC<UserActivityDrawerProps> = ({ user, on
                         {log.action}
                       </Chip>
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--text-secondary)]">
-                        <Shield className="w-3 h-3 text-[var(--text-muted)]" />
-                        {log.resource}
+                        <Shield className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                        <span>{log.resource}</span>
                       </span>
                     </div>
 
                     <Tooltip content={eventDate.toLocaleString()}>
-                      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
-                        <Calendar className="w-3 h-3" />
-                        {formatDistanceToNow(eventDate, { addSuffix: true })}
+                      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)] tabular-nums shrink-0">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span>{formatDistanceToNow(eventDate, { addSuffix: true })}</span>
                       </span>
                     </Tooltip>
                   </div>
 
                   {summary && (
-                    <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
+                    <p className="text-[12px] text-[var(--text)] leading-relaxed break-words">
                       {summary}
                     </p>
                   )}
 
-                  <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-[var(--text-muted)]">
-                    <span className="inline-flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      <span>Actor: {log.actor}</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 tabular-nums">
-                      <Globe className="w-3 h-3" />
-                      <span>{log.ip || log.ipAddress}</span>
-                    </span>
-                  </div>
+                  {(log.actor || ipAddr) && (
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)]">
+                      {log.actor ? (
+                        <span className="inline-flex items-center gap-1.5 min-w-0 truncate">
+                          <User className="w-3 h-3 shrink-0" />
+                          <span className="truncate">
+                            Actor: <span className="font-medium text-[var(--text-secondary)]">{log.actor}</span>
+                          </span>
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      {ipAddr && (
+                        <span className="inline-flex items-center gap-1 font-mono text-[11px] tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-[var(--surface-subtle)] border border-[var(--border-subtle)]">
+                          <Globe className="w-3 h-3 shrink-0" />
+                          <span>{ipAddr}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

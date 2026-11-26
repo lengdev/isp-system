@@ -289,19 +289,19 @@ export const PaymentsPage: React.FC = () => {
   const renderCard = (p: PaymentRecord, isSelected: boolean, onSelect: () => void) => (
     <div
       onClick={onSelect}
-      className={`p-4 rounded-2xl border bg-[var(--surface)] shadow-[var(--shadow-card)] flex flex-col justify-between gap-3 cursor-pointer transition-colors ${
+      className={`min-w-0 p-4 rounded-2xl border bg-[var(--surface)] shadow-[var(--shadow-card)] flex flex-col justify-between gap-3 cursor-pointer transition-colors ${
         isSelected ? 'border-[var(--brand)] ring-1 ring-[var(--brand)]' : 'border-[var(--border)]'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-start justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
           <Avatar name={p.customerName || 'Customer'} size="sm" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-[var(--text)] truncate">{p.customerName}</div>
-            <div className="text-[11px] font-mono text-[var(--brand)]">{p.paymentNumber}</div>
+            <div className="text-[11px] font-mono text-[var(--brand)] truncate">{p.paymentNumber}</div>
           </div>
         </div>
-        <Chip size="sm" color={p.method === 'KHQR_BAKONG' ? 'primary' : 'default'}>
+        <Chip size="sm" className="shrink-0" color={p.method === 'KHQR_BAKONG' ? 'primary' : 'default'}>
           {p.method}
         </Chip>
       </div>
@@ -395,7 +395,7 @@ export const PaymentsPage: React.FC = () => {
               searchable={true}
               clearable={false}
               placeholder="Select customer..."
-              size="sm"
+              size="md"
             />
           </Field>
 
@@ -406,7 +406,7 @@ export const PaymentsPage: React.FC = () => {
               onChange={(val) => setPayMethod(val as 'CASH' | 'BANK_TRANSFER' | 'KHQR_BAKONG')}
               searchable={false}
               clearable={false}
-              size="sm"
+              size="md"
             />
           </Field>
 

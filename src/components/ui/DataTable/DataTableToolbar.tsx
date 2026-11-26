@@ -210,9 +210,9 @@ export function DataTableToolbar<T extends Record<string, any>>({
   return (
     <div className="space-y-2 select-none">
       {/* Controls Row (32px / 12px unified tokens) */}
-      <div className="flex items-center gap-2 flex-nowrap">
+      <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
         {/* LEFT: Search - HeroUI clean styling */}
-        <div className="search-control relative flex items-center h-[40px] w-full sm:w-[320px] focus-within:sm:w-[400px] shrink-0 transition-all duration-200 ease-out rounded-[10px] border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-[#18181b] hover:border-zinc-300 dark:hover:border-zinc-600 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus-within:border-[#006FEE] focus-within:[box-shadow:inset_0_0_0_1px_#006FEE] focus-within:outline-none">
+        <div className="search-control relative flex items-center h-[40px] w-full sm:w-[320px] focus-within:sm:w-[400px] max-w-full shrink-0 transition-all duration-200 ease-out rounded-[10px] border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-[#18181b] hover:border-zinc-300 dark:hover:border-zinc-600 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus-within:border-[#006FEE] focus-within:[box-shadow:inset_0_0_0_1px_#006FEE] focus-within:outline-none">
           {isSearching ? (
             <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#006FEE] pointer-events-none" />
           ) : (
@@ -273,10 +273,10 @@ export function DataTableToolbar<T extends Record<string, any>>({
         </span>
 
         {/* Spacer */}
-        <div className="flex-1" />
+        <div className="hidden lg:block flex-1" />
 
         {/* RIGHT Controls */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap ml-auto lg:ml-0">
           {toolbarExtras}
 
           {/* Filter button & Portaled Filter Popover */}

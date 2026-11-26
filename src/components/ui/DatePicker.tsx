@@ -104,6 +104,10 @@ export interface DatePickerProps {
   id?: string;
   /** Name attribute */
   name?: string;
+  /** Accessible label for the input element */
+  'aria-label'?: string;
+  /** Alias for aria-label */
+  ariaLabel?: string;
   /** On blur event */
   onBlur?: () => void;
   /** On focus event */
@@ -120,7 +124,7 @@ export function parseDateSafe(val: DateValue): Date | null {
     const trimmed = val.trim();
     if (!trimmed) return null;
     // Check YYYY-MM-DD format directly to prevent timezone offset shifts
-    const ymdMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const ymdMatch = trimmed.match(/^(\d{4})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})/);
     if (ymdMatch) {
       const year = parseInt(ymdMatch[1], 10);
       const month = parseInt(ymdMatch[2], 10) - 1;
@@ -128,8 +132,8 @@ export function parseDateSafe(val: DateValue): Date | null {
       const date = new Date(year, month, day);
       return isValid(date) ? date : null;
     }
-    // Check MM/DD/YYYY format
-    const mdyMatch = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+    // Check MM/DD/YYYY format (including spaced displayFormat like "11 / 26 / 2026")
+    const mdyMatch = trimmed.match(/^(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{4})/);
     if (mdyMatch) {
       const month = parseInt(mdyMatch[1], 10) - 1;
       const day = parseInt(mdyMatch[2], 10);
@@ -216,6 +220,8 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
       calendarClassName,
       id,
       name,
+      'aria-label': ariaLabelProp,
+      ariaLabel,
       onBlur,
       onFocus,
     },
@@ -223,6 +229,8 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
   ) => {
     const generatedId = useId();
     const inputId = id || generatedId;
+    const resolvedAriaLabel =
+      ariaLabelProp || ariaLabel || (typeof label === 'string' ? label : undefined);
 
     const isFieldRequired = isRequired || required;
     const isFieldDisabled = isDisabled || disabled;
@@ -292,35 +300,50 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
 
     // Dynamic coordinates for popover
     const [coords, setCoords] = useState<{
-      top: number;
+      top?: number;
+      bottom?: number;
       left: number;
+      maxHeight: number;
       openUpward: boolean;
     } | null>(null);
 
-    // Reposition popover
+    // Reposition popover anchored directly adjacent to the input element
     const updatePosition = useCallback(() => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const popoverWidth = 288;
-      const popoverHeight = 345;
+      const estimatedHeight = showFooter ? 352 : 312;
       const padding = 12;
       const offset = 6;
 
       const spaceBelow = window.innerHeight - rect.bottom - padding;
       const spaceAbove = rect.top - padding;
-      const openUpward = spaceBelow < popoverHeight && spaceAbove > spaceBelow;
-
-      const top = openUpward
-        ? Math.max(padding, rect.top - popoverHeight - offset)
-        : Math.min(window.innerHeight - popoverHeight - padding, rect.bottom + offset);
+      const openUpward = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
 
       let left = rect.left;
       if (left + popoverWidth > window.innerWidth - padding) {
         left = Math.max(padding, window.innerWidth - popoverWidth - padding);
       }
+      if (left < padding) {
+        left = padding;
+      }
 
-      setCoords({ top, left, openUpward });
-    }, []);
+      if (openUpward) {
+        setCoords({
+          bottom: Math.max(padding, window.innerHeight - rect.top + offset),
+          left,
+          maxHeight: Math.max(200, spaceAbove - offset),
+          openUpward: true,
+        });
+      } else {
+        setCoords({
+          top: Math.max(padding, rect.bottom + offset),
+          left,
+          maxHeight: Math.max(200, spaceBelow - offset),
+          openUpward: false,
+        });
+      }
+    }, [showFooter]);
 
     // Open/Close toggle
     const handleOpen = () => {
@@ -360,6 +383,10 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
     useEffect(() => {
       if (!isOpen) return;
 
+      const raf = requestAnimationFrame(() => {
+        updatePosition();
+      });
+
       const handleScrollOrResize = () => {
         updatePosition();
       };
@@ -380,6 +407,8 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
           handleClose();
         }
       };
@@ -387,13 +416,14 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
       window.addEventListener('resize', handleScrollOrResize);
       window.addEventListener('scroll', handleScrollOrResize, true);
       document.addEventListener('mousedown', handleClickOutside, true);
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleKeyDown, true);
 
       return () => {
+        cancelAnimationFrame(raf);
         window.removeEventListener('resize', handleScrollOrResize);
         window.removeEventListener('scroll', handleScrollOrResize, true);
         document.removeEventListener('mousedown', handleClickOutside, true);
-        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keydown', handleKeyDown, true);
       };
     }, [isOpen, handleClose, updatePosition]);
 
@@ -488,42 +518,68 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
       return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
     }, [currentMonth, startOfWeekDay]);
 
+    // Weekday headers rotated to match startOfWeekDay
+    const weekdayHeaders = useMemo(() => {
+      if (startOfWeekDay === 0) return WEEKDAY_NAMES;
+      return [...WEEKDAY_NAMES.slice(startOfWeekDay), ...WEEKDAY_NAMES.slice(0, startOfWeekDay)];
+    }, [startOfWeekDay]);
+
+    // Year grid range (12 years centered around current decade/year)
+    const yearGridStart = Math.floor(currentMonth.getFullYear() / 12) * 12;
+    const yearOptions = useMemo(
+      () => Array.from({ length: 12 }, (_, idx) => yearGridStart + idx),
+      [yearGridStart]
+    );
+
     // Month Navigation
     const handlePrevMonth = (e: React.MouseEvent) => {
       e.stopPropagation();
-      setCurrentMonth((prev) => subMonths(prev, 1));
+      if (viewMode === 'years') {
+        setCurrentMonth((prev) => new Date(prev.getFullYear() - 12, prev.getMonth(), 1));
+      } else if (viewMode === 'months') {
+        setCurrentMonth((prev) => new Date(prev.getFullYear() - 1, prev.getMonth(), 1));
+      } else {
+        setCurrentMonth((prev) => subMonths(prev, 1));
+      }
     };
 
     const handleNextMonth = (e: React.MouseEvent) => {
       e.stopPropagation();
-      setCurrentMonth((prev) => addMonths(prev, 1));
+      if (viewMode === 'years') {
+        setCurrentMonth((prev) => new Date(prev.getFullYear() + 12, prev.getMonth(), 1));
+      } else if (viewMode === 'months') {
+        setCurrentMonth((prev) => new Date(prev.getFullYear() + 1, prev.getMonth(), 1));
+      } else {
+        setCurrentMonth((prev) => addMonths(prev, 1));
+      }
     };
 
-    // Sizes
+    // Sizes (aligned with Combobox and Input design tokens)
     const sizeStyles = {
-      sm: 'h-[36px] text-[12px] px-3 rounded-lg',
-      md: 'h-[40px] text-[13px] sm:text-[14px] px-3.5 rounded-xl',
-      lg: 'h-[44px] text-[14px] sm:text-[15px] px-4 rounded-xl',
+      sm: 'h-8 min-h-[32px] text-[12px] px-2.5 rounded-[8px]',
+      md: 'h-[40px] min-h-[40px] text-[13px] sm:text-[14px] px-3.5 rounded-[10px]',
+      lg: 'h-[44px] min-h-[44px] text-[14px] sm:text-[15px] px-4 rounded-[10px]',
     };
 
-    // Variants (matching HeroUI style tokens)
+    // Variants (matching HeroUI & Form Field style tokens)
     const variantStyles = {
       flat: cn(
-        'bg-zinc-100/70 hover:bg-zinc-100/90 dark:bg-[#18181b] dark:hover:bg-zinc-800/80',
-        'border border-transparent',
-        'shadow-xs shadow-black/[0.02] dark:shadow-none'
+        'bg-zinc-100/70 hover:bg-zinc-100/90 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]',
+        'border border-zinc-200 dark:border-zinc-700/80 hover:border-zinc-300 dark:hover:border-zinc-600'
       ),
       bordered: cn(
-        'bg-white dark:bg-[#18181b]',
-        'border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700',
-        'shadow-xs'
+        'bg-[var(--surface)] dark:bg-[#18181b]',
+        'border border-[var(--border)] hover:border-[var(--border-strong)]',
+        'shadow-[var(--shadow-xs)]'
       ),
       faded: cn(
         'bg-zinc-100/60 dark:bg-white/[0.04]',
         'border border-zinc-200/80 dark:border-zinc-800/80 hover:bg-zinc-100/90 dark:hover:bg-white/[0.08]',
-        'shadow-xs'
+        'shadow-[var(--shadow-xs)]'
       ),
     };
+
+    const isTodayDisabled = isDateDisabled(new Date());
 
     return (
       <div ref={ref} className={cn('w-full flex flex-col', className)}>
@@ -531,7 +587,7 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-[13px] font-medium leading-[18px] text-[var(--text-secondary)] mb-1.5 flex items-center select-none"
+            className="text-[13px] font-medium leading-[18px] text-[var(--text-secondary)] mb-1.5 flex items-center select-none cursor-pointer"
           >
             {label}
             {isFieldRequired && (
@@ -548,6 +604,9 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
         {/* Input Trigger Field */}
         <div
           ref={containerRef}
+          data-variant={variant}
+          data-state={isOpen ? 'open' : 'closed'}
+          data-disabled={isFieldDisabled ? 'true' : undefined}
           onClick={() => {
             if (!isOpen) handleOpen();
             inputElRef.current?.focus();
@@ -580,6 +639,7 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
             id={inputId}
             type="text"
             role="combobox"
+            aria-label={resolvedAriaLabel}
             aria-expanded={isOpen}
             aria-haspopup="dialog"
             disabled={isFieldDisabled}
@@ -601,14 +661,19 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
               }
             }}
             className={cn(
-              'w-full h-full bg-transparent focus:outline-none tabular-nums font-normal caret-[#006FEE]',
+              'min-w-0 flex-1 h-full bg-transparent focus:outline-none tabular-nums font-normal caret-[#006FEE]',
               'text-[var(--text)] dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
               isFieldDisabled && 'cursor-not-allowed'
             )}
           />
 
           {/* Action icons */}
-          <div className="flex items-center gap-1.5 ml-2 shrink-0">
+          <div
+            className={cn(
+              'flex items-center shrink-0',
+              size === 'sm' ? 'gap-0.5 ml-1' : 'gap-1.5 ml-2'
+            )}
+          >
             {/* Clear Button */}
             {isClearable && selectedDate && !isFieldDisabled && !isFieldReadOnly && (
               <button
@@ -616,7 +681,7 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
                 tabIndex={-1}
                 aria-label="Clear date"
                 onClick={handleClear}
-                className="p-1 rounded-full text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-white/10 transition-colors focus:outline-none cursor-pointer"
+                className="p-0.5 rounded-full text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-white/10 transition-colors focus:outline-none cursor-pointer"
               >
                 <X className="w-3.5 h-3.5 stroke-[2]" />
               </button>
@@ -628,11 +693,12 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
               tabIndex={-1}
               aria-label="Open calendar"
               onClick={handleToggle}
-              className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer"
+              className="p-0.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer"
             >
               <CalendarIcon
                 className={cn(
-                  'w-4 h-4 stroke-[1.8] transition-colors',
+                  'stroke-[1.8] transition-colors',
+                  size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4',
                   isOpen
                     ? 'text-[#006FEE]'
                     : 'text-zinc-400 dark:text-zinc-400'
@@ -668,223 +734,269 @@ export const DatePicker = forwardRef<HTMLDivElement, DatePickerProps>(
         </AnimatePresence>
 
         {/* Popover Calendar via Portal */}
-        {isOpen &&
-          coords &&
+        {typeof document !== 'undefined' &&
           createPortal(
             <AnimatePresence>
-              <div
-                style={{
-                  position: 'fixed',
-                  top: coords.top,
-                  left: coords.left,
-                  zIndex: 9999,
-                }}
-              >
-                <motion.div
-                  ref={popoverRef}
-                  role="dialog"
-                  aria-label="Calendar"
-                  initial={{ opacity: 0, scale: 0.96, y: coords.openUpward ? 4 : -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                  className={cn(
-                    'w-[288px] rounded-2xl p-4 select-none',
-                    'bg-white dark:bg-[#18181b]',
-                    'border border-zinc-200/90 dark:border-zinc-800',
-                    'shadow-xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.7)]',
-                    'text-zinc-900 dark:text-zinc-100',
-                    calendarClassName
-                  )}
+              {isOpen && coords && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    top: coords.top,
+                    bottom: coords.bottom,
+                    left: coords.left,
+                    zIndex: 9999,
+                  }}
                 >
-                  {/* Calendar Header (November 2026 >) */}
-                  <div className="flex items-center justify-between mb-3 px-0.5">
-                    {/* Month Year Toggle Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (showMonthAndYearPickers) {
-                          setViewMode((prev) => (prev === 'days' ? 'months' : 'days'));
-                        }
-                      }}
-                      className={cn(
-                        'flex items-center gap-1 text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 px-1.5 py-0.5 -ml-1 rounded-lg transition-colors',
-                        showMonthAndYearPickers &&
-                          'hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer active:scale-95'
-                      )}
-                    >
-                      <span>
-                        {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-                      </span>
-                      {showMonthAndYearPickers && (
-                        <ChevronRight
-                          className={cn(
-                            'w-3.5 h-3.5 text-zinc-400 dark:text-zinc-400 transition-transform duration-200 stroke-[2.2]',
-                            viewMode !== 'days' && 'rotate-90'
-                          )}
-                        />
-                      )}
-                    </button>
-
-                    {/* Prev / Next Month Navigation */}
-                    <div className="flex items-center gap-0.5">
+                  <motion.div
+                    ref={popoverRef}
+                    role="dialog"
+                    aria-label="Calendar"
+                    initial={{ opacity: 0, scale: 0.96, y: coords.openUpward ? 4 : -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: coords.openUpward ? 4 : -4 }}
+                    transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                    style={{
+                      maxHeight: coords.maxHeight,
+                      transformOrigin: coords.openUpward ? 'bottom left' : 'top left',
+                    }}
+                    className={cn(
+                      'w-[288px] rounded-2xl p-4 select-none overflow-y-auto',
+                      'bg-[var(--surface)] dark:bg-[#18181b]',
+                      'border border-[var(--border)] dark:border-zinc-800',
+                      'shadow-[var(--shadow-lg)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.7)]',
+                      'text-[var(--text)] dark:text-zinc-100',
+                      calendarClassName
+                    )}
+                  >
+                    {/* Calendar Header (November 2026 >) */}
+                    <div className="flex items-center justify-between mb-3 px-0.5">
+                      {/* Month Year Toggle Button */}
                       <button
                         type="button"
-                        aria-label="Previous month"
-                        onClick={handlePrevMonth}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors focus:outline-none cursor-pointer"
-                      >
-                        <ChevronLeft className="w-4 h-4 stroke-[2.2]" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Next month"
-                        onClick={handleNextMonth}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors focus:outline-none cursor-pointer"
-                      >
-                        <ChevronRight className="w-4 h-4 stroke-[2.2]" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Days View */}
-                  {viewMode === 'days' && (
-                    <>
-                      {/* Weekday Row (Sun Mon Tue Wed Thu Fri Sat) */}
-                      <div className="grid grid-cols-7 mb-2 text-center">
-                        {WEEKDAY_NAMES.map((name, i) => (
-                          <div
-                            key={name + i}
-                            className="text-[12px] font-normal text-zinc-400 dark:text-zinc-500 h-7 flex items-center justify-center select-none"
-                          >
-                            {name}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Days Grid */}
-                      <div className="grid grid-cols-7 gap-1 place-items-center">
-                        {calendarDays.map((day) => {
-                          const isCurrentMonth = isSameMonth(day, currentMonth);
-                          const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
-                          const isDayToday = isToday(day);
-                          const disabled = isDateDisabled(day);
-
-                          return (
-                            <button
-                              key={day.toISOString()}
-                              type="button"
-                              disabled={disabled}
-                              onClick={() => handleDateSelect(day)}
-                              className={cn(
-                                'w-8 h-8 rounded-full flex items-center justify-center text-[13px] select-none transition-all duration-150 relative cursor-pointer',
-                                // Disabled
-                                disabled &&
-                                  'opacity-30 cursor-not-allowed hover:bg-transparent pointer-events-none',
-                                // Selected (Matches HeroUI solid circle)
-                                isSelected
-                                  ? '!bg-[#006FEE] !text-white font-medium shadow-sm hover:!bg-[#006FEE]'
-                                  : isCurrentMonth
-                                  ? 'text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 font-normal'
-                                  : 'text-zinc-400/70 dark:text-zinc-600 font-normal hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40',
-                                // Today outline (only if unselected)
-                                isDayToday &&
-                                  !isSelected &&
-                                  'font-semibold text-[#006FEE] ring-1 ring-[#006FEE]/30'
-                              )}
-                            >
-                              {day.getDate()}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-
-                  {/* Months View */}
-                  {viewMode === 'months' && (
-                    <div className="py-1">
-                      {/* Quick Year Control */}
-                      <div className="flex items-center justify-between mb-3 px-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentMonth(
-                              (prev) => new Date(prev.getFullYear() - 1, prev.getMonth(), 1)
-                            )
+                        onClick={() => {
+                          if (showMonthAndYearPickers) {
+                            setViewMode((prev) => (prev === 'days' ? 'months' : 'days'));
                           }
-                          className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
-                        >
-                          <ChevronLeft className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-100">
-                          {currentMonth.getFullYear()}
+                        }}
+                        className={cn(
+                          'flex items-center gap-1 text-[14px] font-semibold text-[var(--text)] dark:text-zinc-100 px-1.5 py-0.5 -ml-1 rounded-lg transition-colors',
+                          showMonthAndYearPickers &&
+                            'hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800 cursor-pointer active:scale-95'
+                        )}
+                      >
+                        <span>
+                          {viewMode === 'years'
+                            ? `${yearGridStart} – ${yearGridStart + 11}`
+                            : `${MONTH_NAMES[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentMonth(
-                              (prev) => new Date(prev.getFullYear() + 1, prev.getMonth(), 1)
-                            )
-                          }
-                          className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
-                        >
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {/* 12 Months Grid */}
-                      <div className="grid grid-cols-3 gap-2">
-                        {MONTH_SHORT_NAMES.map((m, idx) => {
-                          const isCurrent = currentMonth.getMonth() === idx;
-                          return (
-                            <button
-                              key={m}
-                              type="button"
-                              onClick={() => {
-                                setCurrentMonth(
-                                  (prev) => new Date(prev.getFullYear(), idx, 1)
-                                );
-                                setViewMode('days');
-                              }}
-                              className={cn(
-                                'h-9 rounded-xl text-[13px] font-medium transition-colors cursor-pointer',
-                                isCurrent
-                                  ? 'bg-[#006FEE] text-white'
-                                  : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                              )}
-                            >
-                              {m}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Optional Footer */}
-                  {showFooter && (
-                    <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[12px]">
-                      <button
-                        type="button"
-                        onClick={handleSelectToday}
-                        className="text-[#006FEE] font-medium hover:underline focus:outline-none cursor-pointer"
-                      >
-                        Today
+                        {showMonthAndYearPickers && (
+                          <ChevronRight
+                            className={cn(
+                              'w-3.5 h-3.5 text-[var(--text-muted)] transition-transform duration-200 stroke-[2.2]',
+                              viewMode !== 'days' && 'rotate-90'
+                            )}
+                          />
+                        )}
                       </button>
-                      {selectedDate && (
+
+                      {/* Prev / Next Navigation */}
+                      <div className="flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={handleClear}
-                          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer"
+                          aria-label={viewMode === 'years' ? 'Previous years' : 'Previous month'}
+                          onClick={handlePrevMonth}
+                          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] dark:hover:text-zinc-100 hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800 transition-colors focus:outline-none cursor-pointer"
                         >
-                          Clear
+                          <ChevronLeft className="w-4 h-4 stroke-[2.2]" />
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          aria-label={viewMode === 'years' ? 'Next years' : 'Next month'}
+                          onClick={handleNextMonth}
+                          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] dark:hover:text-zinc-100 hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800 transition-colors focus:outline-none cursor-pointer"
+                        >
+                          <ChevronRight className="w-4 h-4 stroke-[2.2]" />
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </motion.div>
-              </div>
+
+                    {/* Days View */}
+                    {viewMode === 'days' && (
+                      <>
+                        {/* Weekday Row */}
+                        <div className="grid grid-cols-7 mb-2 text-center">
+                          {weekdayHeaders.map((dayName, i) => (
+                            <div
+                              key={dayName + i}
+                              className="text-[11px] font-medium text-[var(--text-muted)] h-7 flex items-center justify-center select-none"
+                            >
+                              {dayName}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Days Grid */}
+                        <div className="grid grid-cols-7 gap-1 place-items-center">
+                          {calendarDays.map((day) => {
+                            const isCurrentMonth = isSameMonth(day, currentMonth);
+                            const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+                            const isDayToday = isToday(day);
+                            const disabled = isDateDisabled(day);
+
+                            return (
+                              <button
+                                key={day.toISOString()}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => handleDateSelect(day)}
+                                className={cn(
+                                  'w-8 h-8 rounded-full flex items-center justify-center text-[12.5px] select-none transition-all duration-150 relative cursor-pointer tabular-nums',
+                                  disabled &&
+                                    'opacity-30 cursor-not-allowed hover:bg-transparent pointer-events-none',
+                                  isSelected
+                                    ? '!bg-[#006FEE] !text-white font-medium shadow-xs hover:!bg-[#006FEE]'
+                                    : isCurrentMonth
+                                    ? 'text-[var(--text)] dark:text-zinc-200 hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800 font-normal'
+                                    : 'text-[var(--text-subtle)] opacity-60 dark:text-zinc-600 font-normal hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800/40',
+                                  isDayToday &&
+                                    !isSelected &&
+                                    'font-semibold text-[#006FEE] ring-1 ring-[#006FEE]/30'
+                                )}
+                              >
+                                {day.getDate()}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Months View */}
+                    {viewMode === 'months' && (
+                      <div className="py-1">
+                        {/* Quick Year Control */}
+                        <div className="flex items-center justify-between mb-3 px-2">
+                          <button
+                            type="button"
+                            aria-label="Previous year"
+                            onClick={() =>
+                              setCurrentMonth(
+                                (prev) => new Date(prev.getFullYear() - 1, prev.getMonth(), 1)
+                              )
+                            }
+                            className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] dark:hover:text-zinc-100 hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800 cursor-pointer"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setViewMode('years')}
+                            className="text-[14px] font-semibold text-[var(--text)] dark:text-zinc-100 px-2 py-0.5 rounded-lg hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800 cursor-pointer transition-colors"
+                          >
+                            {currentMonth.getFullYear()}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Next year"
+                            onClick={() =>
+                              setCurrentMonth(
+                                (prev) => new Date(prev.getFullYear() + 1, prev.getMonth(), 1)
+                              )
+                            }
+                            className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] dark:hover:text-zinc-100 hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800 cursor-pointer"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* 12 Months Grid */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {MONTH_SHORT_NAMES.map((m, idx) => {
+                            const isCurrent = currentMonth.getMonth() === idx;
+                            return (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => {
+                                  setCurrentMonth(
+                                    (prev) => new Date(prev.getFullYear(), idx, 1)
+                                  );
+                                  setViewMode('days');
+                                }}
+                                className={cn(
+                                  'h-9 rounded-xl text-[13px] font-medium transition-colors cursor-pointer',
+                                  isCurrent
+                                    ? 'bg-[#006FEE] text-white'
+                                    : 'text-[var(--text-secondary)] dark:text-zinc-300 hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800'
+                                )}
+                              >
+                                {m}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Years View */}
+                    {viewMode === 'years' && (
+                      <div className="py-1">
+                        <div className="grid grid-cols-3 gap-2">
+                          {yearOptions.map((year) => {
+                            const isCurrent = currentMonth.getFullYear() === year;
+                            return (
+                              <button
+                                key={year}
+                                type="button"
+                                onClick={() => {
+                                  setCurrentMonth(
+                                    (prev) => new Date(year, prev.getMonth(), 1)
+                                  );
+                                  setViewMode('months');
+                                }}
+                                className={cn(
+                                  'h-9 rounded-xl text-[13px] font-medium tabular-nums transition-colors cursor-pointer',
+                                  isCurrent
+                                    ? 'bg-[#006FEE] text-white'
+                                    : 'text-[var(--text-secondary)] dark:text-zinc-300 hover:bg-[var(--surface-subtle)] dark:hover:bg-zinc-800'
+                                )}
+                              >
+                                {year}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Optional Footer */}
+                    {showFooter && (
+                      <div className="mt-3 pt-2.5 border-t border-[var(--border-subtle)] dark:border-zinc-800/80 flex items-center justify-between text-[12px]">
+                        <button
+                          type="button"
+                          disabled={isTodayDisabled}
+                          onClick={handleSelectToday}
+                          className={cn(
+                            'text-[#006FEE] font-medium hover:underline focus:outline-none',
+                            isTodayDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                          )}
+                        >
+                          Today
+                        </button>
+                        {selectedDate && (
+                          <button
+                            type="button"
+                            onClick={handleClear}
+                            className="text-[var(--text-muted)] hover:text-[var(--text)] dark:hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              )}
             </AnimatePresence>,
             document.body
           )}

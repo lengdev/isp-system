@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
+import { DatePicker, formatToISODate } from '../components/ui/DatePicker';
 import { Field, Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { Combobox, ComboboxOption } from '../components/ui/Combobox';
@@ -42,7 +43,7 @@ export const InstallationsPage: React.FC = () => {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [selectedTech, setSelectedTech] = useState('tech-1');
-  const [schedDate, setSchedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [schedDate, setSchedDate] = useState(() => formatToISODate(new Date()));
   const [timeSlot, setTimeSlot] = useState('09:00 - 11:00 AM');
   const [instNotes, setInstNotes] = useState('');
 
@@ -249,7 +250,7 @@ export const InstallationsPage: React.FC = () => {
               searchable={customerOptions.length > 6}
               clearable={false}
               placeholder="Select customer..."
-              size="sm"
+              size="md"
             />
           </Field>
 
@@ -261,18 +262,20 @@ export const InstallationsPage: React.FC = () => {
               searchable={technicianOptions.length > 6}
               clearable={false}
               placeholder="Select technician..."
-              size="sm"
+              size="md"
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Installation Date">
-              <Input
-                type="date"
-                value={schedDate}
-                onChange={(e) => setSchedDate(e.target.value)}
-              />
-            </Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <DatePicker
+              label="Installation Date"
+              aria-label="Installation Date"
+              value={schedDate}
+              onChange={(_, dateStr) => setSchedDate(dateStr)}
+              size="md"
+              isClearable={false}
+              showFooter
+            />
 
             <Field label="Time Window">
               <Combobox
@@ -281,7 +284,7 @@ export const InstallationsPage: React.FC = () => {
                 onChange={(val) => setTimeSlot(val)}
                 searchable={TIME_SLOT_OPTIONS.length > 6}
                 clearable={false}
-                size="sm"
+                size="md"
               />
             </Field>
           </div>

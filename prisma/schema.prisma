@@ -328,23 +328,53 @@ enum TechnologyType {
 }
 
 model Package {
-  id               String         @id @default(uuid())
-  name             String         @unique
-  technology       TechnologyType @default(FIBER)
-  downloadSpeed    Int            // Mbps
-  uploadSpeed      Int            // Mbps
-  monthlyPrice     Decimal        @db.Decimal(10, 2)
-  installationFee  Decimal        @default(0.00) @db.Decimal(10, 2)
-  dataAllowanceGB  Int?           // null = Unlimited
-  pppoeProfileName String         @default("default")
-  description      String?
-  isPopular        Boolean        @default(false)
-  isActive         Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                         String         @id @default(uuid())
+  name                       String         @unique
+  technology                 TechnologyType @default(FIBER)
+  downloadSpeed              Int            // Mbps (synced from default bandwidth tier)
+  uploadSpeed                Int            // Mbps (synced from default bandwidth tier)
+  monthlyPrice               Decimal        @db.Decimal(10, 2) // Synced from default bandwidth tier
+  installationFee            Decimal        @default(0.00) @db.Decimal(10, 2)
+  dataAllowanceGB            Int?           // null = Unlimited
+  pppoeProfileName           String         @default("default")
+  description                String?
+  revenueAccountCode         String?        // e.g. "4010" Fiber Revenue
+  receivableAccountCode      String?        // e.g. "1100" Accounts Receivable
+  costAccountCode            String?        // e.g. "5010" Upstream Transit & Bandwidth Cost
+  deferredRevenueAccountCode String?        // e.g. "2100" Deferred Subscription Revenue
+  taxAccountCode             String?        // e.g. "2200" VAT / Tax Payable
+  isPopular                  Boolean        @default(false)
+  isActive                   Boolean        @default(true)
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
 
-  subscriptions    Subscription[]
-  invoiceItems     InvoiceItem[]
+  bandwidthTiers             PackageBandwidthTier[]
+  subscriptions              Subscription[]
+  invoiceItems               InvoiceItem[]
+}
+
+model PackageBandwidthTier {
+  id              String   @id @default(uuid())
+  packageId       String
+  label           String?
+  downloadSpeed   Int      // Mbps (e.g. 15, 30, 50)
+  uploadSpeed     Int      // Mbps
+  price           Decimal  @db.Decimal(10, 2)
+  costing         Decimal  @default(0.00) @db.Decimal(10, 2)
+  durationDays    Int      @default(30)
+  durationLabel   String?
+  dataAllowanceGB Int?     // null = Unlimited
+  description     String?
+  sortOrder       Int      @default(0)
+  isDefault       Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  package         Package        @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  subscriptions   Subscription[]
+
+  @@index([packageId])
 }
 
 enum SubscriptionStatus {
@@ -361,6 +391,7 @@ model Subscription {
   subscriptionNumber String           @unique // e.g. "SUB-2026-001"
   customerId       String
   packageId        String
+  bandwidthTierId  String?
   routerId         String?
   vlanId           String?
   technology       TechnologyType     @default(FIBER)
@@ -375,6 +406,7 @@ model Subscription {
 
   customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
   package          Package            @relation(fields: [packageId], references: [id])
+  bandwidthTier    PackageBandwidthTier? @relation(fields: [bandwidthTierId], references: [id], onDelete: SetNull)
   router           Router?            @relation(fields: [routerId], references: [id], onDelete: SetNull)
   vlan             VLAN?              @relation(fields: [vlanId], references: [id], onDelete: SetNull)
   pppoeAccount     PPPoEAccount?
@@ -383,6 +415,7 @@ model Subscription {
   installations    Installation[]
 
   @@index([customerId])
+  @@index([bandwidthTierId])
   @@index([status])
 }
 

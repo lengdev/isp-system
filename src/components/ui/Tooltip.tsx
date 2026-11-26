@@ -92,7 +92,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   return (
     <div
       ref={triggerRef}
-      className={cn('relative inline-flex items-center', className)}
+      className={cn('relative inline-flex items-center min-w-0 max-w-full', className)}
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}

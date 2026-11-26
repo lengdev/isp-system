@@ -905,7 +905,7 @@ export const NetworkPage: React.FC = () => {
                 onChange={(val) => setVlanPurpose(val)}
                 searchable={VLAN_PURPOSE_OPTIONS.length > 6}
                 clearable={false}
-                size="sm"
+                size="md"
               />
             </Field>
           </div>
@@ -925,7 +925,7 @@ export const NetworkPage: React.FC = () => {
                 onChange={(val) => setVlanRouter(val)}
                 searchable={VLAN_ROUTER_OPTIONS.length > 6}
                 clearable={false}
-                size="sm"
+                size="md"
               />
             </Field>
 
@@ -936,7 +936,7 @@ export const NetworkPage: React.FC = () => {
                 onChange={(val) => setVlanInterface(val)}
                 searchable={VLAN_INTERFACE_OPTIONS.length > 6}
                 clearable={false}
-                size="sm"
+                size="md"
               />
             </Field>
           </div>
@@ -967,7 +967,7 @@ export const NetworkPage: React.FC = () => {
               searchable={ipPoolOptions.length > 6}
               clearable={false}
               placeholder="Select IP Pool..."
-              size="sm"
+              size="md"
             />
           </Field>
 

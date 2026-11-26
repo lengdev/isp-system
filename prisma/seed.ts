@@ -72,6 +72,10 @@ const BASE_PACKAGES = [
     dataAllowanceGB: null,
     pppoeProfileName: 'profile-fiber-100m',
     description: 'Perfect for small households and regular streaming',
+    revenueAccountCode: '4010',
+    receivableAccountCode: '1100',
+    costAccountCode: '5100',
+    taxAccountCode: '2200',
     isPopular: false,
     isActive: true,
   },
@@ -86,6 +90,10 @@ const BASE_PACKAGES = [
     dataAllowanceGB: null,
     pppoeProfileName: 'profile-fiber-300m',
     description: 'High-speed broadband for multi-device smart homes',
+    revenueAccountCode: '4010',
+    receivableAccountCode: '1100',
+    costAccountCode: '5100',
+    taxAccountCode: '2200',
     isPopular: true,
     isActive: true,
   },
@@ -100,6 +108,10 @@ const BASE_PACKAGES = [
     dataAllowanceGB: null,
     pppoeProfileName: 'profile-fiber-1g',
     description: 'Ultra-low latency symmetrical fiber for power users & creators',
+    revenueAccountCode: '4010',
+    receivableAccountCode: '1100',
+    costAccountCode: '5100',
+    taxAccountCode: '2200',
     isPopular: false,
     isActive: true,
   },
@@ -114,6 +126,10 @@ const BASE_PACKAGES = [
     dataAllowanceGB: null,
     pppoeProfileName: 'profile-wisp-50m',
     description: 'Point-to-Multipoint wireless connection for suburban areas',
+    revenueAccountCode: '4020',
+    receivableAccountCode: '1100',
+    costAccountCode: '5100',
+    taxAccountCode: '2200',
     isPopular: false,
     isActive: true,
   },
@@ -128,6 +144,10 @@ const BASE_PACKAGES = [
     dataAllowanceGB: null,
     pppoeProfileName: 'profile-biz-500m',
     description: 'SLA guaranteed 99.9% uptime with static public IPv4',
+    revenueAccountCode: '4010',
+    receivableAccountCode: '1100',
+    costAccountCode: '5100',
+    taxAccountCode: '2200',
     isPopular: false,
     isActive: true,
   },
@@ -353,11 +373,51 @@ export async function seed() {
     for (const pkg of BASE_PACKAGES) {
       const existing = await prisma.package.findFirst({
         where: { OR: [{ id: pkg.id }, { name: pkg.name }] },
+        include: { bandwidthTiers: true },
       });
       if (existing) {
         packageIdsByKey[pkg.id] = existing.id;
+        if (existing.bandwidthTiers.length === 0) {
+          await prisma.packageBandwidthTier.create({
+            data: {
+              packageId: existing.id,
+              label: `${existing.downloadSpeed} Mbps`,
+              downloadSpeed: existing.downloadSpeed,
+              uploadSpeed: existing.uploadSpeed,
+              price: existing.monthlyPrice,
+              costing: new Prisma.Decimal(Math.round(Number(existing.monthlyPrice) * 0.4 * 100) / 100),
+              durationDays: 30,
+              durationLabel: '30 Days',
+              dataAllowanceGB: existing.dataAllowanceGB,
+              description: existing.description,
+              sortOrder: 0,
+              isDefault: true,
+              isActive: existing.isActive,
+            },
+          });
+        }
       } else {
-        const created = await prisma.package.create({ data: pkg });
+        const created = await prisma.package.create({
+          data: {
+            ...pkg,
+            bandwidthTiers: {
+              create: {
+                label: `${pkg.downloadSpeed} Mbps`,
+                downloadSpeed: pkg.downloadSpeed,
+                uploadSpeed: pkg.uploadSpeed,
+                price: pkg.monthlyPrice,
+                costing: new Prisma.Decimal(Math.round(Number(pkg.monthlyPrice) * 0.4 * 100) / 100),
+                durationDays: 30,
+                durationLabel: '30 Days',
+                dataAllowanceGB: pkg.dataAllowanceGB,
+                description: pkg.description,
+                sortOrder: 0,
+                isDefault: true,
+                isActive: pkg.isActive,
+              },
+            },
+          },
+        });
         packageIdsByKey[pkg.id] = created.id;
       }
     }

@@ -259,33 +259,82 @@ export class AccountingService {
     return result;
   }
 
-  // 4. General Ledger
-  static async getGeneralLedger(filters?: { accountCode?: string; startDate?: string; endDate?: string }) {
-    const where: any = {};
-    if (filters?.accountCode) {
-      where.account = { code: filters.accountCode };
+  // 4. General Ledger (Supports server-side pagination + filtering + sorting)
+  static async getGeneralLedger(filters?: {
+    accountCode?: string;
+    accountType?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    sortBy?: string;
+    sortDir?: string;
+    page?: string | number;
+    limit?: string | number;
+    pageSize?: string | number;
+    paged?: string;
+  }) {
+    const andClauses: Prisma.JournalEntryLineWhereInput[] = [];
+
+    if (filters?.accountCode && filters.accountCode !== 'ALL') {
+      andClauses.push({ account: { code: filters.accountCode } });
+    }
+    if (filters?.accountType && filters.accountType !== 'ALL') {
+      andClauses.push({ account: { type: filters.accountType.toUpperCase() as any } });
     }
     if (filters?.startDate || filters?.endDate) {
-      where.journalEntry = {
-        entryDate: {
-          ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
-          ...(filters.endDate ? { lte: new Date(filters.endDate) } : {}),
+      const end = filters.endDate ? new Date(filters.endDate) : undefined;
+      if (end && filters.endDate && /^\d{4}-\d{2}-\d{2}$/.test(filters.endDate)) {
+        end.setUTCHours(23, 59, 59, 999);
+      }
+      andClauses.push({
+        journalEntry: {
+          entryDate: {
+            ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
+            ...(end ? { lte: end } : {}),
+          },
         },
-      };
+      });
+    }
+    const q = filters?.search?.trim();
+    if (q) {
+      andClauses.push({
+        OR: [
+          { description: { contains: q, mode: 'insensitive' } },
+          { account: { code: { contains: q, mode: 'insensitive' } } },
+          { account: { name: { contains: q, mode: 'insensitive' } } },
+          { journalEntry: { entryNumber: { contains: q, mode: 'insensitive' } } },
+          { journalEntry: { reference: { contains: q, mode: 'insensitive' } } },
+          { journalEntry: { description: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
     }
 
-    const lines = await prisma.journalEntryLine.findMany({
-      where,
-      include: {
-        account: true,
-        journalEntry: true,
-      },
-      orderBy: {
-        journalEntry: { entryDate: 'desc' },
-      },
-    });
+    const where: Prisma.JournalEntryLineWhereInput = andClauses.length > 0 ? { AND: andClauses } : {};
+    const dir: Prisma.SortOrder = filters?.sortDir === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.JournalEntryLineOrderByWithRelationInput[] = [
+      { journalEntry: { entryDate: dir } },
+      { journalEntry: { createdAt: dir } },
+    ];
+    switch (filters?.sortBy) {
+      case 'entryNumber':
+        orderBy = [{ journalEntry: { entryNumber: dir } }];
+        break;
+      case 'accountCode':
+        orderBy = [{ account: { code: dir } }, { journalEntry: { entryDate: 'desc' } }];
+        break;
+      case 'debit':
+        orderBy = [{ debit: dir }, { journalEntry: { entryDate: 'desc' } }];
+        break;
+      case 'credit':
+        orderBy = [{ credit: dir }, { journalEntry: { entryDate: 'desc' } }];
+        break;
+      case 'entryDate':
+      default:
+        orderBy = [{ journalEntry: { entryDate: dir } }, { journalEntry: { createdAt: dir } }];
+        break;
+    }
 
-    return lines.map((l) => ({
+    const formatLine = (l: any) => ({
       id: l.id,
       journalEntryId: l.journalEntryId,
       accountId: l.accountId,
@@ -299,7 +348,185 @@ export class AccountingService {
       entryDate: l.journalEntry.entryDate.toISOString(),
       reference: l.journalEntry.reference,
       isReversed: l.journalEntry.isReversed,
-    }));
+    });
+
+    const hasPagination =
+      filters?.page !== undefined ||
+      filters?.limit !== undefined ||
+      filters?.pageSize !== undefined ||
+      filters?.paged === '1' ||
+      filters?.paged === 'true';
+
+    if (hasPagination) {
+      const page = Math.max(1, parseInt(String(filters?.page ?? '1'), 10) || 1);
+      const limit = Math.min(
+        200,
+        Math.max(1, parseInt(String(filters?.limit ?? filters?.pageSize ?? '25'), 10) || 25)
+      );
+      const skip = (page - 1) * limit;
+
+      const [total, lines] = await Promise.all([
+        prisma.journalEntryLine.count({ where }),
+        prisma.journalEntryLine.findMany({
+          where,
+          skip,
+          take: limit,
+          include: {
+            account: true,
+            journalEntry: true,
+          },
+          orderBy,
+        }),
+      ]);
+
+      return {
+        items: lines.map(formatLine),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    }
+
+    const lines = await prisma.journalEntryLine.findMany({
+      where,
+      include: {
+        account: true,
+        journalEntry: true,
+      },
+      orderBy,
+    });
+
+    return lines.map(formatLine);
+  }
+
+  // 4b. Paginated Journal Entries List
+  static async getJournalEntriesPaged(filters?: {
+    search?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    sortBy?: string;
+    sortDir?: string;
+    page?: string | number;
+    limit?: string | number;
+    pageSize?: string | number;
+  }) {
+    const andClauses: Prisma.JournalEntryWhereInput[] = [];
+
+    if (filters?.status === 'REVERSED') {
+      andClauses.push({ isReversed: true });
+    } else if (filters?.status === 'POSTED') {
+      andClauses.push({ isReversed: false });
+    }
+
+    if (filters?.startDate || filters?.endDate) {
+      const end = filters.endDate ? new Date(filters.endDate) : undefined;
+      if (end && filters.endDate && /^\d{4}-\d{2}-\d{2}$/.test(filters.endDate)) {
+        end.setUTCHours(23, 59, 59, 999);
+      }
+      andClauses.push({
+        entryDate: {
+          ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
+          ...(end ? { lte: end } : {}),
+        },
+      });
+    }
+
+    const q = filters?.search?.trim();
+    if (q) {
+      andClauses.push({
+        OR: [
+          { entryNumber: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+          { reference: { contains: q, mode: 'insensitive' } },
+          { createdBy: { contains: q, mode: 'insensitive' } },
+          {
+            lines: {
+              some: {
+                OR: [
+                  { description: { contains: q, mode: 'insensitive' } },
+                  { account: { code: { contains: q, mode: 'insensitive' } } },
+                  { account: { name: { contains: q, mode: 'insensitive' } } },
+                ],
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.JournalEntryWhereInput = andClauses.length > 0 ? { AND: andClauses } : {};
+    const dir: Prisma.SortOrder = filters?.sortDir === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.JournalEntryOrderByWithRelationInput[] = [{ entryDate: dir }, { createdAt: dir }];
+    switch (filters?.sortBy) {
+      case 'entryNumber':
+        orderBy = [{ entryNumber: dir }];
+        break;
+      case 'reference':
+        orderBy = [{ reference: dir }, { entryDate: 'desc' }];
+        break;
+      case 'createdBy':
+        orderBy = [{ createdBy: dir }, { entryDate: 'desc' }];
+        break;
+      case 'entryDate':
+      default:
+        orderBy = [{ entryDate: dir }, { createdAt: dir }];
+        break;
+    }
+
+    const page = Math.max(1, parseInt(String(filters?.page ?? '1'), 10) || 1);
+    const limit = Math.min(
+      200,
+      Math.max(1, parseInt(String(filters?.limit ?? filters?.pageSize ?? '25'), 10) || 25)
+    );
+    const skip = (page - 1) * limit;
+
+    const [total, entries] = await Promise.all([
+      prisma.journalEntry.count({ where }),
+      prisma.journalEntry.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          lines: {
+            include: { account: true },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      items: entries.map((je) => ({
+        id: je.id,
+        entryNumber: je.entryNumber,
+        entryDate: je.entryDate.toISOString(),
+        createdAt: je.createdAt.toISOString(),
+        description: je.description,
+        reference: je.reference,
+        createdBy: je.createdBy,
+        isReversed: je.isReversed,
+        reversalEntryId: (je as any).reversalEntryId ?? null,
+        totalAmount:
+          Math.round(je.lines.reduce((sum, l) => sum + Number(l.debit), 0) * 100) / 100,
+        lineCount: je.lines.length,
+        lines: je.lines.map((l) => ({
+          id: l.id,
+          accountId: l.accountId,
+          accountCode: l.account.code,
+          accountName: l.account.name,
+          accountType: l.account.type,
+          debit: Number(l.debit),
+          credit: Number(l.credit),
+          description: l.description || '',
+        })),
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   // 5. Trial Balance (Must balance: Total Debits == Total Credits)

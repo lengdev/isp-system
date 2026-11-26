@@ -217,7 +217,11 @@ export class BillingService {
     return prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findFirst({
         where: { OR: [{ id: input.customerId }, { code: input.customerId }] },
-        include: { subscriptions: true },
+        include: {
+          subscriptions: {
+            include: { package: true },
+          },
+        },
       });
       if (!customer) throw new Error(`Customer ${input.customerId} not found.`);
 
@@ -277,11 +281,16 @@ export class BillingService {
         },
       });
 
-      const connectionType = customer.subscriptions[0]?.technology || 'FIBER';
-      const revenueAccountCode = connectionType === 'WIRELESS' ? '4020' : '4010';
+      const primarySub = customer.subscriptions[0];
+      const pkg = primarySub?.package;
+      const connectionType = primarySub?.technology || 'FIBER';
+      const receivableAccountCode = pkg?.receivableAccountCode || '1100';
+      const revenueAccountCode =
+        pkg?.revenueAccountCode || (connectionType === 'WIRELESS' ? '4020' : '4010');
+      const taxAccountCode = pkg?.taxAccountCode || '2200';
       const lines = [
         {
-          accountCode: '1100',
+          accountCode: receivableAccountCode,
           debit: totalAmount,
           credit: 0.0,
           description: `Invoice ${invoiceNumber} issued to ${customer.fullName}`,
@@ -296,7 +305,7 @@ export class BillingService {
 
       if (taxAmount > 0) {
         lines.push({
-          accountCode: '2200',
+          accountCode: taxAccountCode,
           debit: 0.0,
           credit: taxAmount,
           description: `VAT payable (${taxRate}%) on invoice ${invoiceNumber}`,
@@ -406,7 +415,9 @@ export class BillingService {
         include: {
           customer: true,
           items: true,
-          subscription: true,
+          subscription: {
+            include: { package: true },
+          },
         },
       });
       if (!inv) throw new Error(`Invoice ${invoiceId} not found.`);
@@ -420,7 +431,11 @@ export class BillingService {
       const itemsTotal =
         Math.round(inv.items.reduce((sum, it) => sum + Number(it.amount), 0) * 100) / 100 || totalAmount;
       const taxAmount = Math.max(0, Math.round((totalAmount - itemsTotal) * 100) / 100);
-      const revenueAccountCode = inv.subscription?.technology === 'WIRELESS' ? '4020' : '4010';
+      const pkg = inv.subscription?.package;
+      const receivableAccountCode = pkg?.receivableAccountCode || '1100';
+      const revenueAccountCode =
+        pkg?.revenueAccountCode || (inv.subscription?.technology === 'WIRELESS' ? '4020' : '4010');
+      const taxAccountCode = pkg?.taxAccountCode || '2200';
 
       const updated = await tx.invoice.update({
         where: { id: inv.id },
@@ -449,7 +464,7 @@ export class BillingService {
           description: `Reverse revenue for voided invoice ${inv.invoiceNumber}`,
         },
         {
-          accountCode: '1100',
+          accountCode: receivableAccountCode,
           debit: 0,
           credit: totalAmount,
           description: `Reverse AR for voided invoice ${inv.invoiceNumber}`,
@@ -457,7 +472,7 @@ export class BillingService {
       ];
       if (taxAmount > 0) {
         lines.push({
-          accountCode: '2200',
+          accountCode: taxAccountCode,
           debit: taxAmount,
           credit: 0,
           description: `Reverse VAT for voided invoice ${inv.invoiceNumber}`,

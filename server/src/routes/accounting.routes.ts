@@ -43,6 +43,15 @@ router.post('/journal/:entryNumber/reverse', async (req, res) => {
   }
 });
 
+// GET /api/v1/accounting/journals
+router.get('/journals', async (req, res) => {
+  try {
+    res.json(await AccountingService.getJournalEntriesPaged(req.query as any));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/v1/accounting/ledger
 router.get('/ledger', async (req, res) => {
   try {

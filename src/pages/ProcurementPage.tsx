@@ -307,7 +307,7 @@ export const ProcurementPage: React.FC = () => {
               searchable={supplierOptions.length > 6}
               clearable={false}
               placeholder="Select supplier..."
-              size="sm"
+              size="md"
             />
           </Field>
 
@@ -323,7 +323,7 @@ export const ProcurementPage: React.FC = () => {
               searchable={productOptions.length > 6}
               clearable={false}
               placeholder="Select product..."
-              size="sm"
+              size="md"
             />
           </Field>
 
